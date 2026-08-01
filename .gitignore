@@ -25,3 +25,4 @@ Thumbs.db
 
 # Docker
 docker-data/
+/generated/prisma
