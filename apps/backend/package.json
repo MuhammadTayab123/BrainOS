@@ -1,23 +1,27 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "BrainOS Backend API",
   "main": "index.js",
   "scripts": {
-  "dev": "tsx watch src/server.ts",
-  "start": "node dist/server.js"
-},
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+"start": "node dist/src/server.js"  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@prisma/client": "^6.16.3",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^26.1.2",
+    "prisma": "^6.16.3",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.9",
-    "typescript": "^7.0.2"
+    "typescript": "^5.9.2"
   }
 }
