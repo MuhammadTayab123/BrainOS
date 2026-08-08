@@ -20,5 +20,5 @@ export function verifyClerkWebhook(
     "svix-id": headers.svixId,
     "svix-timestamp": headers.svixTimestamp,
     "svix-signature": headers.svixSignature,
-  });
+  }) as any;
 }
