@@ -1,11 +1,15 @@
 import express from "express";
-import { AppError } from "./errors";
+import { clerkMiddleware } from "@clerk/express";
+import { env } from "./config/env";
+
 
 import healthRoutes from "./routes/health.routes";
 import webhookRoutes from "./routes/webhook.routes";
 
 import { requestLogger } from "./middleware/logger.middleware";
+import { notFoundHandler } from "./middleware/not-found.middleware";
 import { errorHandler } from "./middleware/error.middleware";
+import userRoutes from "./routes/user.routes";
 
 const app = express();
 
@@ -19,6 +23,17 @@ app.use(
 // JSON parser
 app.use(express.json());
 
+
+
+// Clerk Authentication
+
+
+app.use(
+  clerkMiddleware({
+    publishableKey: env.CLERK_PUBLISHABLE_KEY,
+  })
+);
+
 // Request logging
 app.use(requestLogger);
 
@@ -30,9 +45,13 @@ app.get("/", (req, res) => {
 // Health routes
 app.use("/", healthRoutes);
 
+// User routes
+app.use("/api/v1/users", userRoutes);
 
+// 404 Middleware
+app.use(notFoundHandler);
 
-// ⭐ Error middleware MUST be LAST
+// Error Middleware (ALWAYS LAST)
 app.use(errorHandler);
 
 export default app;
