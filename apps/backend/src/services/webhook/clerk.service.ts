@@ -1,4 +1,5 @@
 import { Webhook } from "svix";
+import { env } from "../../config/env";
 
 export function verifyClerkWebhook(
   body: Buffer,
@@ -8,8 +9,7 @@ export function verifyClerkWebhook(
     svixSignature: string;
   }
 ) {
-  const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
-
+const webhookSecret = env.CLERK_WEBHOOK_SECRET;
   if (!webhookSecret) {
     throw new Error("Missing CLERK_WEBHOOK_SECRET");
   }

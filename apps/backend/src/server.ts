@@ -1,7 +1,9 @@
 import "dotenv/config";
-import app from "./app";
 
-const PORT = Number(process.env.PORT) || 3000;
+import app from "./app";
+import { env } from "./config/env";
+
+const PORT = env.PORT;
 
 app.listen(PORT, () => {
   console.log(`🚀 BrainOS Backend running at http://localhost:${PORT}`);
