@@ -1,6 +1,7 @@
 import express from "express";
 import healthRoutes from "./routes/health.routes";
 import webhookRoutes from "./routes/webhook.routes";
+import { requestLogger } from "./middleware/logger.middleware";
 
 const app = express();
 
@@ -12,6 +13,7 @@ app.use(
 );
 // JSON parser for the rest of the API
 app.use(express.json());
+app.use(requestLogger);
 
 app.get("/", (req, res) => {
   res.send("Welcome to BrainOS 🚀");

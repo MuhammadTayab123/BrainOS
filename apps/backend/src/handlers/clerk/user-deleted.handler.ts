@@ -1,7 +1,7 @@
 import { ClerkWebhookEvent } from "../../types/clerk";
-
+import { logger } from "../../logger";
 export async function handleUserDeleted(
   event: ClerkWebhookEvent
 ) {
-  console.log("🟡 user.deleted not implemented yet");
+  logger.info(`User deleted: ${event.data.id}`);
 }

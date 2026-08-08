@@ -1,5 +1,5 @@
 import { ClerkWebhookEvent } from "../../types/clerk";
-
+import { logger } from "../../logger";
 import { handleUserCreated } from "./user-created.handler";
 import { handleUserUpdated } from "./user-updated.handler";
 import { handleUserDeleted } from "./user-deleted.handler";
@@ -21,6 +21,6 @@ export async function dispatchClerkEvent(
       break;
 
     default:
-      console.log(`⚪ Ignored Clerk event: ${event.type}`);
+      logger.info(`Ignored Clerk event: ${event.type}`);
   }
 }

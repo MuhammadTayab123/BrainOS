@@ -1,6 +1,6 @@
 import { ClerkWebhookEvent } from "../../types/clerk";
 import { createUser } from "../../services/user/user.service";
-
+import { logger } from "../../logger";
 export async function handleUserCreated(event: ClerkWebhookEvent) {
   const data = event.data;
 
@@ -18,7 +18,7 @@ export async function handleUserCreated(event: ClerkWebhookEvent) {
     imageUrl: data.image_url ?? undefined,
   });
 
-  console.log(
+  logger.info(
     `✅ User synchronized: ${primaryEmail} (${data.id})`
   );
 }
