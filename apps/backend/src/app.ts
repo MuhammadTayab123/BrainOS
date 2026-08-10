@@ -11,8 +11,21 @@ import { requestLogger } from "./middleware/logger.middleware";
 import { notFoundHandler } from "./middleware/not-found.middleware";
 import { errorHandler } from "./middleware/error.middleware";
 import userRoutes from "./routes/user.routes";
+import memoryRoutes from "./routes/memory.routes";
 
+
+
+// Clerk webhooks
 const app = express();
+
+// Clerk Authentication
+app.use(
+  clerkMiddleware({
+    publishableKey: env.CLERK_PUBLISHABLE_KEY,
+    secretKey: env.CLERK_SECRET_KEY,
+    debug: true,
+  })
+);
 
 // Clerk webhooks
 app.use(
@@ -23,17 +36,6 @@ app.use(
 
 // JSON parser
 app.use(express.json());
-
-
-
-// Clerk Authentication
-
-
-app.use(
-  clerkMiddleware({
-    publishableKey: env.CLERK_PUBLISHABLE_KEY,
-  })
-);
 
 // Request logging
 app.use(requestLogger);
@@ -48,6 +50,9 @@ app.use("/", healthRoutes);
 
 // User routes
 app.use("/api/v1/users", userRoutes);
+// Memory routes
+
+app.use("/api/v1/memories", memoryRoutes);
 
 // Development routes
 app.use("/api/v1/dev", devRoutes);
