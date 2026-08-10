@@ -68,6 +68,8 @@ model Memory {
 
   content String
 
+  embedding Unsupported("vector")?
+
   importance Float @default(0.5)
 
   lastAccessedAt DateTime?
