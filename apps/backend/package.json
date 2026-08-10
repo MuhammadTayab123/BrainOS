@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "description": "BrainOS Backend API",
   "main": "index.js",
-  "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "build": "tsc",
-    "start": "node dist/src/server.js"
-  },
+ "scripts": {
+  "dev": "tsx watch src/server.ts",
+  "build": "tsc",
+  "typecheck": "tsc --noEmit",
+  "start": "node dist/src/server.js"
+},
   "keywords": [],
   "author": "",
   "license": "ISC",

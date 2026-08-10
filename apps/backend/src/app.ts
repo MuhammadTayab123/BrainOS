@@ -1,3 +1,4 @@
+import devRoutes from "./routes/dev.routes";
 import express from "express";
 import { clerkMiddleware } from "@clerk/express";
 import { env } from "./config/env";
@@ -47,6 +48,9 @@ app.use("/", healthRoutes);
 
 // User routes
 app.use("/api/v1/users", userRoutes);
+
+// Development routes
+app.use("/api/v1/dev", devRoutes);
 
 // 404 Middleware
 app.use(notFoundHandler);

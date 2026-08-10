@@ -24,17 +24,29 @@ const envSchema = z.object({
     .string()
     .min(1, "CLERK_WEBHOOK_SECRET is required"),
 
-  // Reserved for future phases
-  OLLAMA_BASE_URL: z.string().optional(),
+ // ==========================
+// AI Providers
+// ==========================
 
-  OPENAI_API_KEY: z.string().optional(),
+OLLAMA_HOST: z
+  .string()
+  .default("http://localhost:11434"),
 
-  AZURE_OPENAI_API_KEY: z.string().optional(),
+OLLAMA_CHAT_MODEL: z
+  .string()
+  .default("qwen2.5:3b"),
 
-  AZURE_OPENAI_ENDPOINT: z.string().optional(),
+OLLAMA_EMBEDDING_MODEL: z
+  .string()
+  .default("nomic-embed-text"),
 
-  GOOGLE_API_KEY: z.string().optional(),
+OPENAI_API_KEY: z.string().optional(),
 
+AZURE_OPENAI_API_KEY: z.string().optional(),
+
+AZURE_OPENAI_ENDPOINT: z.string().optional(),
+
+GOOGLE_API_KEY: z.string().optional(),
   LOG_LEVEL: z
     .enum(["trace", "debug", "info", "warn", "error"])
     .default("info"),
