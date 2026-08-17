@@ -23,7 +23,6 @@ app.use(
   clerkMiddleware({
     publishableKey: env.CLERK_PUBLISHABLE_KEY,
     secretKey: env.CLERK_SECRET_KEY,
-    debug: true,
   })
 );
 

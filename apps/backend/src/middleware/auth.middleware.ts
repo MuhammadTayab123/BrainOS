@@ -8,15 +8,8 @@ export async function requireAuth(
 ) {
   try {
     req.user = await getAuthenticatedUser(req);
-
     next();
-  } catch {
-    return res.status(401).json({
-      success: false,
-      error: {
-        code: "UNAUTHORIZED",
-        message: "Authentication required.",
-      },
-    });
+  } catch (error) {
+    next(error);
   }
 }

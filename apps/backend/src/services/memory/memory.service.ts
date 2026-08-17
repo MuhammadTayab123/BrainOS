@@ -42,10 +42,11 @@ export class MemoryService {
 
       const memory = await memoryRepository.create(data);
 
-      await memoryRepository.updateEmbedding(
-        memory.id,
-        embeddingResult.vector,
-      );
+       await memoryRepository.updateEmbedding(
+  data.userId,
+  memory.id,
+  embeddingResult.vector,
+);
 
       return memory;
     });

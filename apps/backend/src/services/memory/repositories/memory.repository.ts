@@ -32,6 +32,7 @@ export class MemoryRepository {
 
   async updateEmbedding(
     memoryId: string,
+    userId: string,
     embedding: number[],
   ): Promise<void> {
     if (
@@ -56,6 +57,8 @@ export class MemoryRepository {
         UPDATE "Memory"
         SET "embedding" = ${vector}::vector
         WHERE "id" = ${memoryId}
+        AND "userId" = ${userId}
+        AND "deletedAt" IS NULL
       `,
     );
   }
