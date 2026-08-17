@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "description": "BrainOS Backend API",
   "main": "index.js",
- "scripts": {
-  "dev": "tsx watch src/server.ts",
-  "build": "tsc",
-  "typecheck": "tsc --noEmit",
-  "start": "node dist/src/server.js"
-},
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/src/server.js",
+    "test": "vitest --passWithNoTests",
+    "test:run": "vitest run --passWithNoTests"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -25,9 +27,12 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.2",
+    "@types/supertest": "^7.2.1",
     "prisma": "^6.16.3",
+    "supertest": "^7.2.2",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.9",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.10"
   }
 }
