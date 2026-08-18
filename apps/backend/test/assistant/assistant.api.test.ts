@@ -12,6 +12,10 @@ vi.mock("@clerk/express", () => ({
     _res: unknown,
     next: () => void,
   ) => next(),
+
+  getAuth: () => ({
+    userId: "clerk-a",
+  }),
 }));
 
 vi.mock("../../src/services/auth/auth.service", () => ({

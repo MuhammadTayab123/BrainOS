@@ -15,6 +15,12 @@ const fakes = vi.hoisted(() => ({
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: () => (_req: unknown, _res: unknown, next: () => void) =>
     next(),
+
+  getAuth: () => ({
+    userId: "user-a",
+    sessionId: "test-session",
+    isAuthenticated: true,
+  }),
 }));
 
 vi.mock("../../src/services/auth/auth.service", () => ({

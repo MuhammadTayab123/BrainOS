@@ -4,6 +4,8 @@ import {
   LLMMessageRole,
   LLMProvider,
   LLMResponse,
+  LLMToolCall,
+  LLMToolDefinition,
 } from "../provider.interface";
 
 export {
@@ -12,4 +14,6 @@ export {
   LLMMessageRole,
   LLMProvider,
   LLMResponse,
+  LLMToolCall,
+  LLMToolDefinition,
 };

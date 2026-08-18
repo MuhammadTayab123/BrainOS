@@ -26,9 +26,14 @@ describe("AssistantService", () => {
       }),
     };
 
+    const toolExecutor = {
+      execute: vi.fn(),
+    };
+
     const assistantService = new AssistantService(
       llmService as any,
       memoryService as any,
+      toolExecutor as any,
     );
 
     const result = await assistantService.ask({
@@ -80,9 +85,14 @@ describe("AssistantService", () => {
       }),
     };
 
+    const toolExecutor = {
+      execute: vi.fn(),
+    };
+
     const assistantService = new AssistantService(
       llmService as any,
       memoryService as any,
+      toolExecutor as any,
     );
 
     await assistantService.ask({
@@ -96,5 +106,107 @@ describe("AssistantService", () => {
     ).not.toHaveBeenCalled();
 
     expect(llmService.generate).toHaveBeenCalledTimes(1);
+  });
+    it("executes an LLM tool call and sends the tool result back to the LLM", async () => {
+    const memoryService = {
+      searchMemories: vi.fn().mockResolvedValue([]),
+    };
+
+    const llmService = {
+      generate: vi
+        .fn()
+        .mockResolvedValueOnce({
+          text: "",
+          model: "test-model",
+          provider: "test",
+          toolCalls: [
+            {
+              id: "call-1",
+              name: "test_tool",
+              arguments: {
+                message: "Hello from BrainOS",
+              },
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          text: "The test tool executed successfully.",
+          model: "test-model",
+          provider: "test",
+        }),
+    };
+
+    const toolExecutor = {
+      execute: vi.fn().mockResolvedValue({
+        success: true,
+        message: "BrainOS tool execution is working.",
+        input: {
+          message: "Hello from BrainOS",
+        },
+        userId: "user-a",
+      }),
+    };
+
+    const assistantService = new AssistantService(
+      llmService as any,
+      memoryService as any,
+      toolExecutor as any,
+    );
+
+    const result = await assistantService.ask({
+      userId: "user-a",
+      message: "Use the test tool.",
+      enableMemoryRetrieval: false,
+    });
+
+    expect(
+      toolExecutor.execute,
+    ).toHaveBeenCalledTimes(1);
+
+    expect(
+      toolExecutor.execute,
+    ).toHaveBeenCalledWith(
+      "test_tool",
+      {
+        message: "Hello from BrainOS",
+      },
+      {
+        userId: "user-a",
+      },
+    );
+
+    expect(llmService.generate).toHaveBeenCalledTimes(2);
+
+    const secondLlmInput =
+      llmService.generate.mock.calls[1][0];
+
+    expect(secondLlmInput.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "assistant",
+          toolCalls: [
+            {
+              id: "call-1",
+              name: "test_tool",
+              arguments: {
+                message: "Hello from BrainOS",
+              },
+            },
+          ],
+        }),
+        expect.objectContaining({
+          role: "tool",
+          toolCallId: "call-1",
+          toolName: "test_tool",
+        }),
+      ]),
+    );
+
+    expect(result).toEqual({
+      text: "The test tool executed successfully.",
+      model: "test-model",
+      provider: "test",
+      retrievedMemories: [],
+    });
   });
 });

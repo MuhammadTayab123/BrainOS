@@ -1,5 +1,10 @@
+import path from "node:path";
+import dotenv from "dotenv";
 import { z } from "zod";
 
+dotenv.config({
+  path: path.resolve(__dirname, "../../.env"),
+});
 // Define environment schema
 const envSchema = z.object({
   NODE_ENV: z
