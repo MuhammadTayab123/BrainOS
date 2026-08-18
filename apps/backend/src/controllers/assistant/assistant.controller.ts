@@ -6,7 +6,8 @@ import { EmbeddingsService } from "../../services/memory/embeddings.service";
 import { MemoryService } from "../../services/memory/memory.service";
 import { OllamaProvider } from "../../services/memory/providers";
 import { AssistantService } from "../../services/assistant/assistant.service";
-
+import { ToolExecutor } from "../../services/tools/tool.executor";
+import { createToolRegistry } from "../../services/tools/tool.container";
 const llmService = new LLMService(
   new OllamaLLMProvider(),
 );
@@ -19,9 +20,16 @@ const memoryService = new MemoryService(
   embeddingsService,
 );
 
+const toolRegistry = createToolRegistry();
+
+const toolExecutor = new ToolExecutor(
+  toolRegistry,
+);
+
 const assistantService = new AssistantService(
   llmService,
   memoryService,
+  toolExecutor,
 );
 
 export async function askAssistant(

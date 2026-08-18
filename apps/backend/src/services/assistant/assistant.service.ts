@@ -1,17 +1,19 @@
 import { LLMService } from "../ai";
 import { MemoryService } from "../memory/memory.service";
 import { MemorySearchResult } from "../memory/memory.types";
+import { ToolExecutor } from "../tools/tool.executor";
+
 import {
   AssistantMessageInput,
   AssistantResponse,
 } from "./assistant.types";
 import { assembleAssistantContext } from "./context.builder";
-
 export class AssistantService {
-  constructor(
-    private readonly llmService: LLMService,
-    private readonly memoryService: MemoryService,
-  ) {}
+ constructor(
+  private readonly llmService: LLMService,
+  private readonly memoryService: MemoryService,
+  private readonly toolExecutor: ToolExecutor,
+) {} 
 
   async ask(
     input: AssistantMessageInput,
