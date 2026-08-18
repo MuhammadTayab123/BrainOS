@@ -56,12 +56,12 @@ export class OllamaLLMProvider implements LLMProvider {
       }
     }
 
-    if (input.prompt) {
-      messages.push({
-        role: "user",
-        content: input.prompt,
-      });
-    }
+   if (input.prompt) {
+  messages.push({
+    role: "user",
+    content: input.prompt,
+  });
+}
 
     if (messages.length === 0) {
       throw new Error(

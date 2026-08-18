@@ -5,3 +5,6 @@ export const DEFAULT_MEMORY_IMPORTANCE = 0.5;
 export const DEFAULT_MEMORY_SEARCH_LIMIT = 5;
 export const MAX_MEMORY_SEARCH_LIMIT = 50;
 export const MIN_MEMORY_SIMILARITY = 0.45;
+
+export const DEFAULT_MEMORY_LIST_LIMIT = 20;
+export const MAX_MEMORY_LIST_LIMIT = 50;

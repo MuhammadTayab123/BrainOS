@@ -22,6 +22,42 @@ export interface SearchMemoryInput {
   limit?: number;
 }
 
+export interface ListMemoriesInput {
+  userId: string;
+  limit?: number;
+}
+
+export interface GetMemoryByIdInput {
+  memoryId: string;
+  userId: string;
+}
+
+export interface DeleteMemoryInput {
+  memoryId: string;
+  userId: string;
+}
+
+export interface UpdateMemoryInput {
+  memoryId: string;
+  userId: string;
+  content?: string;
+  importance?: number;
+}
+
+export interface UpdateMemoryData {
+  content?: string;
+  importance?: number;
+}
+
+export interface MemoryListResult {
+  id: string;
+  content: string;
+  importance: number;
+  lastAccessedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface MemorySearchResult {
   id: string;
   content: string;
