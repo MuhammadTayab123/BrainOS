@@ -3,13 +3,13 @@
 
 **Project:** BrainOS  
 **Purpose:** Personal AI Operating System / Second Brain / Personal Assistant  
-**Current phase:** Phase 16 — Automated Memory Regression Testing and Test Database Safety  
-**Status:** COMPLETE  
+**Current phase:** Phase 18 — Conversation + Persistent Context  
+**Phase 17 status:** COMPLETE  
 **Repository:** `D:\Project\BrainOS`  
 **Branch:** `main`  
 **OS:** Windows  
 **Editor:** VS Code  
-**Last updated:** 2026-08-17
+**Last verified local commit:** `afc51f4 feat: add assistant tool calling with Ollama`
 
 ---
 
