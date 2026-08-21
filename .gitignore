@@ -28,3 +28,4 @@ docker-data/
 /generated/prisma
 
 .env.test
+.aider*

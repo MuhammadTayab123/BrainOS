@@ -14,6 +14,7 @@ import { MemorySearchResult } from "../memory/memory.types";
 export interface AssistantMessageInput {
   userId: string;
   message: string;
+  conversationId?: string;
   systemPrompt?: string;
   conversationHistory?: LLMMessage[];
   enableMemoryRetrieval?: boolean;

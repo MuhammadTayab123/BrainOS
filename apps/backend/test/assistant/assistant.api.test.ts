@@ -104,7 +104,8 @@ describe("assistant API", () => {
 
       expect(fakes.ask).toHaveBeenCalledWith({
         userId: "user-a",
-        message: "Hello BrainOS",
+       message: "Hello BrainOS",
+       conversationId: undefined,
         systemPrompt: undefined,
         conversationHistory: undefined,
         enableMemoryRetrieval: undefined,
@@ -115,37 +116,39 @@ describe("assistant API", () => {
 
     it("passes optional assistant parameters through", async () => {
       const response = await request(app)
-        .post("/api/v1/assistant/ask")
-        .send({
-          message: "What do you remember?",
-          systemPrompt: "Be concise.",
-          conversationHistory: [
-            {
-              role: "user",
-              content: "Hello",
-            },
-          ],
-          enableMemoryRetrieval: true,
-          memorySearchLimit: 5,
-          model: "test-model",
-        });
+  .post("/api/v1/assistant/ask")
+  .send({
+    message: "What do you remember?",
+    conversationId: "conversation-a",
+    systemPrompt: "Be concise.",
+    conversationHistory: [
+      {
+        role: "user",
+        content: "Hello",
+      },
+    ],
+    enableMemoryRetrieval: true,
+    memorySearchLimit: 5,
+    model: "test-model",
+  });
 
       expect(response.status).toBe(200);
 
       expect(fakes.ask).toHaveBeenCalledWith({
-        userId: "user-a",
-        message: "What do you remember?",
-        systemPrompt: "Be concise.",
-        conversationHistory: [
-          {
-            role: "user",
-            content: "Hello",
-          },
-        ],
-        enableMemoryRetrieval: true,
-        memorySearchLimit: 5,
-        model: "test-model",
-      });
+  userId: "user-a",
+  message: "What do you remember?",
+  conversationId: "conversation-a",
+  systemPrompt: "Be concise.",
+  conversationHistory: [
+    {
+      role: "user",
+      content: "Hello",
+    },
+  ],
+  enableMemoryRetrieval: true,
+  memorySearchLimit: 5,
+  model: "test-model",
+});
     });
 
     it("rejects an empty message", async () => {

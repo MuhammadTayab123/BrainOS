@@ -1,3 +1,6 @@
+
+import { ConversationRepository } from "../../services/conversation/repositories/conversation.repository";
+import { MessageRepository } from "../../services/conversation/repositories/message.repository";
 import { Request, Response } from "express";
 
 import { LLMService } from "../../services/ai";
@@ -26,10 +29,18 @@ const toolExecutor = new ToolExecutor(
   toolRegistry,
 );
 
+const conversationRepository =
+  new ConversationRepository();
+
+const messageRepository =
+  new MessageRepository();
+
 const assistantService = new AssistantService(
   llmService,
   memoryService,
   toolExecutor,
+  conversationRepository,
+  messageRepository,
 );
 
 export async function askAssistant(
@@ -46,8 +57,9 @@ export async function askAssistant(
     });
   }
 
-  const {
+   const {
     message,
+    conversationId,
     systemPrompt,
     conversationHistory,
     enableMemoryRetrieval,
@@ -64,6 +76,20 @@ export async function askAssistant(
       error: {
         code: "INVALID_MESSAGE",
         message: "Message is required.",
+      },
+    });
+  }
+    if (
+    conversationId !== undefined &&
+    (typeof conversationId !== "string" ||
+      conversationId.trim().length === 0)
+  ) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: "INVALID_CONVERSATION_ID",
+        message:
+          "conversationId must be a non-empty string.",
       },
     });
   }
@@ -126,6 +152,10 @@ export async function askAssistant(
   const result = await assistantService.ask({
     userId: req.user.id,
     message,
+        conversationId:
+      typeof conversationId === "string"
+        ? conversationId.trim()
+        : undefined,
     systemPrompt,
     conversationHistory,
     enableMemoryRetrieval,
