@@ -14,6 +14,8 @@ import { errorHandler } from "./middleware/error.middleware";
 import userRoutes from "./routes/user.routes";
 import memoryRoutes from "./routes/memory.routes";
 import assistantRoutes from "./routes/assistant.routes";
+import conversationRoutes from "./routes/conversation.routes";
+
 
 
 // Clerk webhooks
@@ -62,6 +64,12 @@ app.use("/api/v1/memories", memoryRoutes);
 
 // Assistant routes
 app.use("/api/v1/assistant", assistantRoutes);
+
+// Conversation routes
+app.use(
+  "/api/v1/conversations",
+  conversationRoutes,
+); 
 
 // Development routes
 app.use("/api/v1/dev", devRoutes);
