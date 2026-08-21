@@ -1,16 +1,16 @@
-# BrainOS — MASTER PROJECT CONTEXT
+﻿# BrainOS — MASTER PROJECT CONTEXT
 ## Single Source of Truth for Future Development Chats
 
 **Project:** BrainOS  
 **Purpose:** Personal AI Operating System / Second Brain / Personal Assistant  
 **Current phase:** Phase 18 — Conversation + Persistent Context  
 **Phase 17 status:** COMPLETE  
+**Phase 18 status:** IN PROGRESS — Conversation persistence foundation complete  
 **Repository:** `D:\Project\BrainOS`  
 **Branch:** `main`  
 **OS:** Windows  
 **Editor:** VS Code  
-**Last verified local commit:** `afc51f4 feat: add assistant tool calling with Ollama`
-
+**Last verified local commit:** `c7780e0 feat: add conversation persistence`
 ---
 
 # 0. CRITICAL RULE FOR EVERY FUTURE CHAT
