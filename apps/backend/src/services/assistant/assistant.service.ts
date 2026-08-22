@@ -40,30 +40,25 @@ export class AssistantService {
     const userId = input.userId.trim();
     const trimmedMessage = input.message.trim();
 
-    let retrievedMemories: MemorySearchResult[] = [];
+    const retrievedMemories: MemorySearchResult[] = [];
 
     const shouldRetrieveMemories =
       input.enableMemoryRetrieval ?? true;
 
     if (shouldRetrieveMemories) {
-      retrievedMemories =
+      const memories =
         await this.memoryService.searchMemories({
           userId,
           query: trimmedMessage,
           limit: input.memorySearchLimit,
         });
+
+      retrievedMemories.push(...memories);
     }
 
     let conversationHistory: LLMMessage[] =
       input.conversationHistory ?? [];
 
-    /*
-     * Persistent conversation mode.
-     *
-     * When conversationId is supplied, the conversation must belong
-     * to the authenticated user and its stored messages become the
-     * source of truth for conversation history.
-     */
     if (input.conversationId) {
       if (
         !this.conversationRepository ||
@@ -129,12 +124,25 @@ export class AssistantService {
     let prompt: string | undefined =
       assembledContext.prompt;
 
-    let llmResponse = await this.llmService.generate({
-      systemPrompt: assembledContext.systemPrompt,
-      messages,
-      prompt,
-      model: input.model,
-    });
+    /*
+     * Registered BrainOS tools are exposed to the LLM.
+     *
+     * The same tool definitions must be supplied on every
+     * generation round so the model can continue making tool
+     * calls after receiving tool results.
+     */
+    const tools =
+      this.toolExecutor.getToolDefinitions();
+
+    let llmResponse =
+      await this.llmService.generate({
+        systemPrompt:
+          assembledContext.systemPrompt,
+        messages,
+        prompt,
+        model: input.model,
+        tools,
+      });
 
     for (
       let round = 0;
@@ -149,9 +157,9 @@ export class AssistantService {
       }
 
       /*
-       * Once a tool round begins, the current user message needs to
-       * be part of the message history because subsequent LLM calls
-       * no longer receive the standalone `prompt`.
+       * Once a tool round begins, the current user message
+       * becomes part of the message history because subsequent
+       * LLM calls no longer receive the standalone prompt.
        */
       if (prompt !== undefined) {
         messages.push({
@@ -186,18 +194,16 @@ export class AssistantService {
 
       llmResponse =
         await this.llmService.generate({
-          systemPrompt: assembledContext.systemPrompt,
+          systemPrompt:
+            assembledContext.systemPrompt,
           messages,
           model: input.model,
+          tools,
         });
 
       prompt = undefined;
     }
 
-    /*
-     * Persist the final assistant response only when a persistent
-     * conversation is being used.
-     */
     if (
       input.conversationId &&
       this.messageRepository

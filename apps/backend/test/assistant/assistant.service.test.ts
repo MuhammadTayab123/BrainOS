@@ -27,6 +27,7 @@ describe("AssistantService", () => {
     };
 
     const toolExecutor = {
+      getToolDefinitions: vi.fn().mockReturnValue([]),
       execute: vi.fn(),
     };
 
@@ -86,6 +87,7 @@ describe("AssistantService", () => {
     };
 
     const toolExecutor = {
+      getToolDefinitions: vi.fn().mockReturnValue([]),
       execute: vi.fn(),
     };
 
@@ -107,7 +109,8 @@ describe("AssistantService", () => {
 
     expect(llmService.generate).toHaveBeenCalledTimes(1);
   });
-    it("executes an LLM tool call and sends the tool result back to the LLM", async () => {
+
+  it("executes an LLM tool call and sends the tool result back to the LLM", async () => {
     const memoryService = {
       searchMemories: vi.fn().mockResolvedValue([]),
     };
@@ -137,9 +140,11 @@ describe("AssistantService", () => {
     };
 
     const toolExecutor = {
+      getToolDefinitions: vi.fn().mockReturnValue([]),
       execute: vi.fn().mockResolvedValue({
         success: true,
-        message: "BrainOS tool execution is working.",
+        message:
+          "BrainOS tool execution is working.",
         input: {
           message: "Hello from BrainOS",
         },
@@ -209,7 +214,7 @@ describe("AssistantService", () => {
       retrievedMemories: [],
     });
   });
-});
+
   it("loads persistent conversation history and saves user and assistant messages", async () => {
     const memoryService = {
       searchMemories: vi.fn().mockResolvedValue([]),
@@ -224,6 +229,7 @@ describe("AssistantService", () => {
     };
 
     const toolExecutor = {
+      getToolDefinitions: vi.fn().mockReturnValue([]),
       execute: vi.fn(),
     };
 
@@ -231,8 +237,12 @@ describe("AssistantService", () => {
       findByIdForUser: vi.fn().mockResolvedValue({
         id: "conversation-a",
         title: "BrainOS conversation",
-        createdAt: new Date("2026-01-01T00:00:00.000Z"),
-        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+        createdAt: new Date(
+          "2026-01-01T00:00:00.000Z",
+        ),
+        updatedAt: new Date(
+          "2026-01-01T00:00:00.000Z",
+        ),
       }),
     };
 
@@ -243,26 +253,37 @@ describe("AssistantService", () => {
           conversationId: "conversation-a",
           role: "USER",
           content: "Hello BrainOS",
-          createdAt: new Date("2026-01-01T00:00:00.000Z"),
-          updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+          createdAt: new Date(
+            "2026-01-01T00:00:00.000Z",
+          ),
+          updatedAt: new Date(
+            "2026-01-01T00:00:00.000Z",
+          ),
         },
         {
           id: "message-2",
           conversationId: "conversation-a",
           role: "ASSISTANT",
           content: "Hello! How can I help?",
-          createdAt: new Date("2026-01-01T00:01:00.000Z"),
-          updatedAt: new Date("2026-01-01T00:01:00.000Z"),
+          createdAt: new Date(
+            "2026-01-01T00:01:00.000Z",
+          ),
+          updatedAt: new Date(
+            "2026-01-01T00:01:00.000Z",
+          ),
         },
       ]),
-      create: vi.fn().mockImplementation(async (data) => ({
-        id: "new-message",
-        conversationId: data.conversationId,
-        role: data.role,
-        content: data.content,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })),
+
+      create: vi.fn().mockImplementation(
+        async (data) => ({
+          id: "new-message",
+          conversationId: data.conversationId,
+          role: data.role,
+          content: data.content,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
+      ),
     };
 
     const assistantService = new AssistantService(
@@ -289,18 +310,25 @@ describe("AssistantService", () => {
 
     expect(
       messageRepository.listByConversation,
-    ).toHaveBeenCalledWith("conversation-a");
+    ).toHaveBeenCalledWith(
+      "conversation-a",
+    );
 
-    expect(messageRepository.create).toHaveBeenNthCalledWith(
+    expect(
+      messageRepository.create,
+    ).toHaveBeenNthCalledWith(
       1,
       {
         conversationId: "conversation-a",
         role: "USER",
-        content: "What can you help me with?",
+        content:
+          "What can you help me with?",
       },
     );
 
-    expect(llmService.generate).toHaveBeenCalledTimes(1);
+    expect(
+      llmService.generate,
+    ).toHaveBeenCalledTimes(1);
 
     const llmInput =
       llmService.generate.mock.calls[0][0];
@@ -312,7 +340,8 @@ describe("AssistantService", () => {
       },
       {
         role: "assistant",
-        content: "Hello! How can I help?",
+        content:
+          "Hello! How can I help?",
       },
     ]);
 
@@ -320,12 +349,15 @@ describe("AssistantService", () => {
       "What can you help me with?",
     );
 
-    expect(messageRepository.create).toHaveBeenNthCalledWith(
+    expect(
+      messageRepository.create,
+    ).toHaveBeenNthCalledWith(
       2,
       {
         conversationId: "conversation-a",
         role: "ASSISTANT",
-        content: "Welcome back to BrainOS.",
+        content:
+          "Welcome back to BrainOS.",
       },
     );
 
@@ -347,6 +379,7 @@ describe("AssistantService", () => {
     };
 
     const toolExecutor = {
+      getToolDefinitions: vi.fn().mockReturnValue([]),
       execute: vi.fn(),
     };
 
@@ -386,5 +419,8 @@ describe("AssistantService", () => {
       messageRepository.create,
     ).not.toHaveBeenCalled();
 
-    expect(llmService.generate).not.toHaveBeenCalled();
+    expect(
+      llmService.generate,
+    ).not.toHaveBeenCalled();
   });
+});
