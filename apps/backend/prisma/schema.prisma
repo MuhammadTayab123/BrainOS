@@ -13,6 +13,17 @@ enum MessageRole {
   SYSTEM
 }
 
+enum TaskStatus {
+  TODO
+  COMPLETED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 model User {
   id        String  @id @default(cuid())
   clerkId   String  @unique
@@ -24,6 +35,7 @@ model User {
 
   conversations Conversation[]
   memories      Memory[]
+  tasks         Task[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -79,4 +91,28 @@ model Memory {
   deletedAt DateTime?
 
   @@index([userId])
+}
+
+model Task {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+
+  status   TaskStatus   @default(TODO)
+  priority TaskPriority @default(MEDIUM)
+
+  dueAt       DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, dueAt])
 }
