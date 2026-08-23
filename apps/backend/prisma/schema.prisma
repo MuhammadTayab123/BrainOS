@@ -24,6 +24,14 @@ enum TaskPriority {
   HIGH
 }
 
+enum ReminderStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
 model User {
   id        String  @id @default(cuid())
   clerkId   String  @unique
@@ -36,6 +44,7 @@ model User {
   conversations Conversation[]
   memories      Memory[]
   tasks         Task[]
+  reminders     Reminder[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -108,6 +117,8 @@ model Task {
   dueAt       DateTime?
   completedAt DateTime?
 
+  reminders Reminder[]
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -115,4 +126,31 @@ model Task {
   @@index([userId])
   @@index([userId, status])
   @@index([userId, dueAt])
+}
+
+model Reminder {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  message String
+
+  scheduledFor DateTime
+  status       ReminderStatus @default(PENDING)
+
+  attempts    Int       @default(0)
+  deliveredAt DateTime?
+  lastError   String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, status])
+  @@index([scheduledFor, status])
+  @@index([taskId])
 }

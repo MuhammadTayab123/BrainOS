@@ -1,86 +1,101 @@
-# BrainOS --- MASTER PROJECT CONTEXT
+# BrainOS — MASTER PROJECT CONTEXT
 
 ## Single Source of Truth for Future Development Chats
 
-**Project:** BrainOS\
-**Purpose:** Personal AI Operating System / Second Brain / Personal
-Assistant\
-**Current phase:** Phase 19 --- Tasks / Reminders / Automation\
-**Phase 17 status:** COMPLETE\
-**Phase 18 status:** COMPLETE --- Conversation persistence foundation
-verified\
-**Repository:** `D:\Project\BrainOS`\
-**Branch:** `main`\
-**OS:** Windows\
-**Editor:** VS Code\
-**Last verified local commit:**
-`34ead43 feat(tasks): add get and update task tools` ---
+**Project:** BrainOS
+**Purpose:** Personal AI Operating System / Second Brain / Personal Assistant
+**Current phase:** Phase 19 — Tasks / Reminders / Automation
+**Phase 17 status:** COMPLETE
+**Phase 18 status:** COMPLETE — Conversation persistence foundation verified
+**Repository:** `D:\Project\BrainOS`
+**Branch:** `main`
+**OS:** Windows
+**Editor:** VS Code
+**Last verified local commit:** `1ece2ed docs(context): update phase 19 task tools checkpoint`
 
-# CURRENT AUTHORITATIVE STATE --- 2026-08-23
+---
 
-This section is the present source of truth. Older sections are
-historical and are retained for project continuity. If an older section
-conflicts with this section or with the actual repository, inspect the
-repository and use the newer verified state.
+# CURRENT AUTHORITATIVE STATE — 2026-08-23
+
+This section is the present source of truth. Older sections below are historical and are retained for continuity. If an older section conflicts with this section or with the actual repository, inspect the repository and use the newer verified state.
 
 ## Current phase
 
-**Phase 19 --- Tasks / Reminders / Automation**
+**Phase 19 — Tasks / Reminders / Automation**
 
-**Verified milestone:** Task foundation + assistant task-tool
-integration.
+### Current verified milestone
 
-The broader Phase 19 roadmap is not complete yet. Reminders, scheduling,
-recurring automation, and proactive automation remain future work.
+**Task foundation + assistant task tools + Reminder persistence/service foundation COMPLETE.**
 
-## Current Git checkpoint
+The broader Phase 19 roadmap is **not** complete yet.
 
-Latest verified local HEAD:
+Still future work:
 
-``` text
-34ead43 feat(tasks): add get and update task tools
+- real assistant → task-tool end-to-end verification
+- task result handling improvements
+- richer task lifecycle
+- reminder scheduler/worker
+- reminder delivery integration
+- recurring tasks/automations
+- automation engine
+- proactive reminder behavior
+- user-facing task/reminder API/UI where required
+- final Phase 19 completion and push verification
+
+## Current Git state
+
+Latest verified local and remote HEAD:
+
+```text
+1ece2ed docs(context): update phase 19 task tools checkpoint
 ```
 
-Phase 19 commits:
+Verified:
 
-``` text
+```text
+Branch: main
+origin/main: 1ece2ed
+Working tree: clean BEFORE the current Reminder-foundation changes were started
+```
+
+Phase 19 task commits already pushed:
+
+```text
 8378a1e feat(tasks): add task foundation and persistence
 c37a159 feat(tasks): register task assistant tools
 6149b4e test(tasks): add task tool tests
+3d2452d feat(tasks): integrate task tools with assistant
+0945e5d docs(context): finalize phase 19 task checkpoint
 34ead43 feat(tasks): add get and update task tools
+1ece2ed docs(context): update phase 19 task tools checkpoint
 ```
 
-Latest verified state before updating this context:
-
-``` text
-Branch: main
-Working tree: clean
-```
-
-Do not claim these commits are pushed until a later remote/Git
-verification proves it.
+**Important:** the Reminder foundation changes described below are currently implemented and locally verified, but the final Reminder checkpoint has **not yet been committed/pushed** at the time this context is being written.
 
 ## Phase 19 verified implementation
 
-Task model:
+### Task foundation
 
-``` text
-id
-userId
-title
-description
-status
-priority
-dueAt
-completedAt
-createdAt
-updatedAt
-deletedAt
+Prisma model:
+
+```text
+Task
+  id
+  userId
+  title
+  description
+  status
+  priority
+  dueAt
+  completedAt
+  createdAt
+  updatedAt
+  deletedAt
 ```
 
 Enums:
 
-``` text
+```text
 TaskStatus
   TODO
   COMPLETED
@@ -93,33 +108,28 @@ TaskPriority
 
 Migration:
 
-``` text
+```text
 apps/backend/prisma/migrations/20260822143000_add_task_foundation/migration.sql
 ```
 
-Dedicated test database:
+Indexes:
 
-``` text
-brainos_test
+```text
+(userId)
+(userId, status)
+(userId, dueAt)
 ```
 
-Migration status was verified as:
+Ownership:
 
-``` text
-Database schema is up to date!
-```
-
-Task service/repository:
-
-``` text
-apps/backend/src/services/tasks/task.service.ts
-apps/backend/src/services/tasks/task.types.ts
-apps/backend/src/services/tasks/repositories/task.repository.ts
+```text
+Task.userId → User.id
+ON DELETE CASCADE
 ```
 
 Task operations:
 
-``` text
+```text
 createTask
 listTasks
 getTask
@@ -128,27 +138,34 @@ completeTask
 deleteTask
 ```
 
-Ownership is enforced through authenticated `userId` plus task ID and
-`deletedAt IS NULL`.
+Ownership is enforced through authenticated `userId`.
 
 Soft deletion uses `deletedAt`.
 
-Active task lists exclude soft-deleted rows.
+Active task reads/lists exclude soft-deleted rows.
 
-## Assistant task tools
+Task list limit is capped at:
+
+```text
+50
+```
+
+### Assistant task tools
 
 Implemented and registered:
 
-``` text
+```text
 create_task
 list_tasks
 complete_task
 delete_task
+get_task
+update_task
 ```
 
 Files:
 
-``` text
+```text
 apps/backend/src/services/tools/task.tools.ts
 apps/backend/src/services/tools/tool.container.ts
 apps/backend/src/services/tools/tool.executor.ts
@@ -156,9 +173,17 @@ apps/backend/src/services/tools/tool.registry.ts
 apps/backend/src/services/tools/tool.types.ts
 ```
 
-Execution path:
+Ownership always comes from:
 
-``` text
+```typescript
+context.userId
+```
+
+The model/client cannot select the task owner.
+
+Execution boundary:
+
+```text
 Assistant
  ↓
 ToolExecutor
@@ -176,61 +201,371 @@ Prisma
 PostgreSQL
 ```
 
-The task owner always comes from:
+### Reminder persistence/service foundation
 
-``` typescript
-context.userId
+The Reminder foundation has now been implemented and locally verified.
+
+Prisma enum:
+
+```text
+ReminderStatus
+  PENDING
+  PROCESSING
+  DELIVERED
+  FAILED
+  CANCELLED
 ```
 
-The model/client cannot select the task owner.
+Reminder model:
 
-## Automated verification
-
-Full backend regression:
-
-``` text
-14 test files passed
-172 tests passed
-0 failed
+```text
+Reminder
+  id
+  userId
+  taskId
+  message
+  scheduledFor
+  status
+  attempts
+  deliveredAt
+  lastError
+  createdAt
+  updatedAt
+  deletedAt
 ```
 
-Focused results:
+Relationships:
 
-``` text
-Task tool tests: 12/12 passed
-Task PostgreSQL integration: 11/11 passed
-AssistantService tests: 5/5 passed
+```text
+Reminder.userId → User.id
+ON DELETE CASCADE
+
+Reminder.taskId → Task.id
+ON DELETE CASCADE
 ```
 
-Validation:
+Indexes:
 
-``` text
-npx prisma validate  → PASS
-npx tsc --noEmit     → PASS
-npm run test:run     → PASS
-git diff --check     → PASS
+```text
+(userId, status)
+(scheduledFor, status)
+(taskId)
 ```
 
-## Real assistant → task tool verification
+Migration:
 
-Using the real local Ollama model:
-
-``` text
-qwen2.5:3b
+```text
+apps/backend/prisma/migrations/20260823150000_add_reminder_foundation/migration.sql
 ```
 
-the assistant successfully executed real PostgreSQL task operations.
+The migration was applied successfully.
 
 Verified:
 
-``` text
-Natural language request
+```powershell
+npx prisma migrate status
+```
+
+Result:
+
+```text
+6 migrations found in prisma/migrations
+Database schema is up to date!
+```
+
+Reminder implementation:
+
+```text
+apps/backend/src/services/reminders/reminder.service.ts
+apps/backend/src/services/reminders/reminder.types.ts
+apps/backend/src/services/reminders/repositories/reminder.repository.ts
+```
+
+Reminder service operations:
+
+```text
+createReminder
+listReminders
+getReminder
+markProcessing
+markDelivered
+markFailed
+cancelReminder
+deleteReminder
+```
+
+Reminder repository behavior includes:
+
+```text
+create
+listByUser
+findByIdForUser
+markProcessing
+markDelivered
+markFailed
+cancel
+softDeleteByIdForUser
+```
+
+Reminder lifecycle:
+
+```text
+PENDING
+   ↓
+PROCESSING
+   ↓
+DELIVERED
+
+PROCESSING
+   ↓
+FAILED
+
+PENDING / PROCESSING
+   ↓
+CANCELLED
+```
+
+Important semantics:
+
+- `markProcessing` only claims `PENDING` reminders and increments `attempts`.
+- `markDelivered` only succeeds for `PROCESSING` reminders and records `deliveredAt`.
+- `markFailed` only succeeds for `PROCESSING` reminders and records `lastError`.
+- cancellation is user-scoped and only applies to active `PENDING`/`PROCESSING` reminders.
+- normal reads exclude soft-deleted reminders.
+- reminder ownership is enforced through authenticated `userId`.
+
+### Reminder validation
+
+The ReminderService validates:
+
+```text
+userId
+reminderId
+optional taskId
+message
+scheduledFor
+list limit
+failure error message
+```
+
+Reminder list limit is capped at:
+
+```text
+50
+```
+
+### Reminder tests
+
+Implemented:
+
+```text
+apps/backend/test/services/reminders/reminder.service.test.ts
+apps/backend/test/services/reminders/repositories/reminder.repository.test.ts
+```
+
+Verified focused service suite:
+
+```text
+1 test file passed
+19 tests passed
+0 failed
+```
+
+Verified focused repository suite:
+
+```text
+1 test file passed
+14 tests passed
+0 failed
+```
+
+### Full backend regression
+
+Latest verified full regression:
+
+```text
+16 test files passed
+205 tests passed
+0 failed
+```
+
+Previous Phase 19 task-only checkpoint had 172 tests. The current 205-test result includes the new Reminder coverage.
+
+### Current validation
+
+Latest verified commands:
+
+```powershell
+cd D:\Project\BrainOS\apps\backend
+
+npx prisma generate
+npx prisma validate
+npx prisma migrate status
+npx tsc --noEmit
+npm run test:run
+```
+
+Results:
+
+```text
+Prisma Client generated successfully
+Prisma schema valid
+Database schema is up to date
+TypeScript compilation passes
+16 test files passed
+205 tests passed
+0 failed
+```
+
+### Reminder files currently present
+
+```text
+apps/backend/src/services/reminders/reminder.service.ts
+apps/backend/src/services/reminders/reminder.types.ts
+apps/backend/src/services/reminders/repositories/reminder.repository.ts
+
+apps/backend/test/services/reminders/reminder.service.test.ts
+apps/backend/test/services/reminders/repositories/reminder.repository.test.ts
+
+apps/backend/prisma/migrations/20260823150000_add_reminder_foundation/migration.sql
+```
+
+### Current Prisma schema addition
+
+The current uncommitted Reminder schema addition is:
+
+```text
+ReminderStatus enum
+User.reminders relation
+Task.reminders relation
+Reminder model
+Reminder indexes
+Reminder ownership relations
+```
+
+The generated SQL was verified with:
+
+```powershell
+npx prisma migrate diff `
+  --from-schema-datasource .\prisma\schema.prisma `
+  --to-schema-datamodel .\prisma\schema.prisma `
+  --script
+```
+
+and matched the intended Reminder foundation, including:
+
+```text
+ReminderStatus
+Reminder table
+deliveredAt
+attempts
+lastError
+indexes
+User foreign key
+Task foreign key
+```
+
+## Important migration incident and resolution
+
+Earlier in Phase 19, the database contained an extra historical migration record:
+
+```text
+20260810121526_add_memory_embedding
+```
+
+while the local migration directory contains:
+
+```text
+20260810121955_add_memory_embedding
+```
+
+Repository inspection established that the tracked migration file is the authoritative one created by:
+
+```text
+86c06df feat(memory): add embedding persistence and semantic search
+```
+
+The extra database migration record was investigated rather than blindly deleting/resetting the database.
+
+The current local migration history is:
+
+```text
+20260806204535_init
+20260807191756_add_clerk_user_fields
+20260809053527_add_memory_engine
+20260810121955_add_memory_embedding
+20260822143000_add_task_foundation
+20260823150000_add_reminder_foundation
+```
+
+The database now reports:
+
+```text
+Database schema is up to date!
+```
+
+**Do not reset the database or delete migration history casually.**
+
+## Important development environment note
+
+`pg_dump` and `psql` are not currently available on PATH and the expected PostgreSQL 18 `bin` directory was not found under:
+
+```text
+C:\Program Files\PostgreSQL\18
+```
+
+The PostgreSQL data directory does exist locally.
+
+For database inspection, Prisma/database access through the configured application environment is currently the verified route.
+
+Do not invent a `pg_dump` path.
+
+## Current task-tool dependency injection note
+
+`task.tools.ts` currently creates its `TaskService` internally:
+
+```typescript
+const taskService = new TaskService(
+  new TaskRepository(),
+);
+```
+
+This is acceptable for the current foundation.
+
+Do not refactor merely for style. Improve dependency injection only when architecture or testing requirements justify it.
+
+## Current known non-blocking warning
+
+Vitest/Vite may warn about:
+
+```text
+configLoader: 'native'
+```
+
+and ESM syntax in `vitest.config.ts`.
+
+This warning does not currently fail tests.
+
+Do not modify configuration merely to suppress it without a separate compatibility decision.
+
+# Phase 19 remaining work
+
+The next work should be scoped carefully.
+
+### Next milestone
+
+Verify the real assistant path with task tools:
+
+```text
+User request
  ↓
-AssistantService
+Assistant controller
  ↓
-Ollama
+Assistant service
  ↓
-Tool selection
+LLM provider
+ ↓
+tool selection
  ↓
 ToolExecutor
  ↓
@@ -242,190 +577,110 @@ TaskRepository
  ↓
 PostgreSQL
  ↓
-Tool result
+tool result
  ↓
-Ollama
- ↓
-Final response
+assistant response
 ```
 
-Verified operations:
+Do not claim this is verified until an end-to-end assistant test or manual verification proves it.
 
-``` text
-create_task  → INSERT
-list_tasks   → SELECT
-complete_task → UPDATE
-delete_task  → soft DELETE/update
-```
+### Reminder/automation work still remaining
 
-### Important model behavior finding
-
-A request that asked the model to find a task by title and immediately
-complete it caused one incorrect opaque task ID to be selected. The
-repository correctly rejected it with:
-
-``` text
-NotFoundError:
-Task not found for the authenticated user.
-```
-
-This was not an ownership or repository bug.
-
-Direct completion with the exact task ID succeeded.
-
-The reliable workflow was then verified:
-
-``` text
-list_tasks
- ↓
-identify exact returned taskId
- ↓
-complete_task / delete_task
-```
-
-Rule for future assistant-tool design:
-
-> When an operation requires an opaque resource ID, discover the
-> resource first and use the exact ID returned by the authoritative
-> tool. Never guess IDs.
-
-## Verification cleanup
-
-Temporary Phase 19 verification tasks were created during testing.
-
-They were completed/soft-deleted and cleaned up.
-
-Final active-task query for the verification user returned:
-
-``` text
-[]
-```
-
-No temporary verification tasks remain active.
-
-## Current task-tool dependency injection note
-
-`task.tools.ts` currently creates its `TaskService` internally:
-
-``` typescript
-const taskService = new TaskService(
-  new TaskRepository(),
-);
-```
-
-This is acceptable for the current foundation.
-
-Do not refactor merely for style. Improve dependency injection only when
-architecture or testing requirements justify it.
-
-## Known non-blocking warning
-
-Vitest/Vite may warn about:
-
-``` text
-configLoader: 'native'
-```
-
-and ESM syntax in `vitest.config.ts`.
-
-This warning does not currently fail tests.
-
-Do not modify configuration merely to suppress it without a separate
-compatibility decision.
-
-## Phase 19 remaining work
-
-``` text
-[ ] update_task tool
-[ ] get_task tool
-[ ] richer due-date handling
+```text
 [ ] reminder scheduler
-[ ] reminder delivery
-[ ] recurring tasks
+[ ] reminder execution worker
+[ ] reminder delivery integration
+[ ] retry/backoff policy
+[ ] recurring reminders/tasks
 [ ] automation engine
 [ ] proactive reminder behavior
-[ ] user-facing task API/UI if required
-[ ] final broader Phase 19 completion
+[ ] user-facing task/reminder API/UI if required
+[ ] final Phase 19 acceptance verification
+[ ] final Phase 19 context checkpoint
+[ ] final Phase 19 commit
 [ ] final Phase 19 push verification
 ```
 
 Do not implement all remaining items at once.
 
-## Current task files
+# Phase 19 acceptance criteria
 
-``` text
-apps/backend/src/services/tasks/task.service.ts
-apps/backend/src/services/tasks/task.types.ts
-apps/backend/src/services/tasks/repositories/task.repository.ts
+### Completed
 
-apps/backend/src/services/tools/task.tools.ts
-apps/backend/src/services/tools/tool.container.ts
-apps/backend/src/services/tools/tool.executor.ts
-apps/backend/src/services/tools/tool.registry.ts
-apps/backend/src/services/tools/tool.types.ts
-
-apps/backend/test/services/tasks/task.service.test.ts
-apps/backend/test/tasks/task.integration.test.ts
-apps/backend/test/services/tools/task.tools.test.ts
-
-apps/backend/prisma/migrations/20260822143000_add_task_foundation/migration.sql
-apps/backend/prisma/schema.prisma
+```text
+✓ Task persistence
+✓ Task ownership enforcement
+✓ Task soft deletion
+✓ Task filtering
+✓ Task service
+✓ Task repository
+✓ Task service tests
+✓ Task PostgreSQL integration tests
+✓ create_task
+✓ list_tasks
+✓ complete_task
+✓ delete_task
+✓ get_task
+✓ update_task
+✓ Task tool registration
+✓ Task tool validation tests
+✓ Reminder persistence
+✓ Reminder ownership enforcement
+✓ Reminder soft deletion
+✓ Reminder status lifecycle foundation
+✓ Reminder service
+✓ Reminder repository
+✓ Reminder service tests
+✓ Reminder repository tests
+✓ Reminder migration
+✓ Prisma generation
+✓ Prisma validation
+✓ TypeScript compilation
+✓ Full backend regression
 ```
 
-## Updated roadmap
+### Not yet complete
 
-``` text
-Phase 14
-Authenticated Semantic Memory — COMPLETE
-        ↓
-Phase 15
-Memory Production Hardening & Cleanup — COMPLETE
-        ↓
-Phase 16
-Automated Memory Regression Testing and Test Database Safety — COMPLETE
-        ↓
-Phase 17
-AI Assistant Integration / Orchestration — COMPLETE
-        ↓
-Phase 18
-Conversation + Persistent Context — COMPLETE
-        ↓
-Phase 19
-Tasks / Reminders / Automation — CURRENT
-  Task foundation + assistant task tools — VERIFIED
-        ↓
-Phase 20+
-Documents / Knowledge / Agents / Integrations / Voice / Proactive Assistant
+```text
+[ ] Real assistant → task tool execution verified end-to-end
+[ ] Complete reminder scheduling/execution system
+[ ] Reminder delivery integration
+[ ] Recurring automation
+[ ] Proactive automation
+[ ] Final Phase 19 documentation checkpoint
+[ ] Final Phase 19 commit/push
 ```
 
-------------------------------------------------------------------------
+---
 
 # 0. CRITICAL RULE FOR EVERY FUTURE CHAT
 
 Before changing BrainOS:
 
-1.  Read this context.
-2.  Inspect the actual repository.
-3.  Check `git status` and recent commits.
-4.  Inspect the relevant files.
-5.  Explain the architectural reason for a significant change.
-6.  Make the smallest correct change.
-7.  Run validation/tests.
-8.  Verify actual behavior.
-9.  Update the handoff/context.
+1. Read this context.
+2. Inspect the actual repository.
+3. Check `git status` and recent commits.
+4. Inspect the relevant files.
+5. Explain the architectural reason for a significant change.
+6. Make the smallest correct change.
+7. Run validation/tests.
+8. Verify actual behavior.
+9. Update the handoff/context.
 10. Commit completed work.
 11. Push completed phases.
 12. Verify the final Git state.
 
-Never restart completed phases, blindly overwrite working code, bypass
-authentication, put business logic in controllers, put Prisma access in
-controllers, trust client-supplied ownership IDs, expose
-secrets/tokens/session IDs in logs, or claim planned work is verified.
+Never restart completed phases, blindly overwrite working code, bypass authentication, put business logic in controllers, put Prisma access in controllers, trust client-supplied ownership IDs, expose secrets/tokens/session IDs in logs, or claim planned work is verified.
 
-If context and repository disagree, inspect the repository and resolve
-the difference first.
+If context and repository disagree, inspect the repository and resolve the difference first.
 
-------------------------------------------------------------------------
+---
+
+# HISTORICAL PROJECT CONTEXT
+
+The remaining sections of this file preserve the previous BrainOS architecture, phase history, memory/security decisions, development rules, and roadmap for continuity.
+
+**Important:** historical sections are not authoritative for current Git/test/migration state. The `CURRENT AUTHORITATIVE STATE` section above takes precedence.
 
 # 1. BRAINOS MISSION
 
