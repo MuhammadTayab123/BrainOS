@@ -14,7 +14,7 @@ verified\
 **OS:** Windows\
 **Editor:** VS Code\
 **Last verified local commit:**
-`3d2452d feat(tasks): integrate task tools with assistant` ---
+`34ead43 feat(tasks): add get and update task tools` ---
 
 # CURRENT AUTHORITATIVE STATE --- 2026-08-23
 
@@ -38,7 +38,7 @@ recurring automation, and proactive automation remain future work.
 Latest verified local HEAD:
 
 ``` text
-3d2452d feat(tasks): integrate task tools with assistant
+34ead43 feat(tasks): add get and update task tools
 ```
 
 Phase 19 commits:
@@ -47,7 +47,7 @@ Phase 19 commits:
 8378a1e feat(tasks): add task foundation and persistence
 c37a159 feat(tasks): register task assistant tools
 6149b4e test(tasks): add task tool tests
-3d2452d feat(tasks): integrate task tools with assistant
+34ead43 feat(tasks): add get and update task tools
 ```
 
 Latest verified state before updating this context:
@@ -190,7 +190,7 @@ Full backend regression:
 
 ``` text
 14 test files passed
-166 tests passed
+172 tests passed
 0 failed
 ```
 
@@ -2033,7 +2033,7 @@ Prisma Client generated successfully
 Prisma schema valid
 TypeScript compilation passes
 14 test files passed
-166 tests passed
+172 tests passed
 0 failed
 ```
 
@@ -2327,7 +2327,7 @@ Verified:
 
 ``` text
 14 test files passed
-166 tests passed
+172 tests passed
 0 failed
 ```
 
