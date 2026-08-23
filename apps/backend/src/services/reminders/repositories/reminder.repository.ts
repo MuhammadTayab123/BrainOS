@@ -64,6 +64,25 @@ export class ReminderRepository {
     });
   }
 
+  async findDuePending(
+    now: Date,
+    limit = 50,
+  ) {
+    return this.db.reminder.findMany({
+      where: {
+        deletedAt: null,
+        status: "PENDING",
+        scheduledFor: {
+          lte: now,
+        },
+      },
+      orderBy: {
+        scheduledFor: "asc",
+      },
+      take: limit,
+    });
+  }
+
   async markProcessing(
     reminderId: string,
   ): Promise<void> {
