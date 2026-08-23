@@ -1,40 +1,431 @@
-﻿# BrainOS — MASTER PROJECT CONTEXT
+# BrainOS --- MASTER PROJECT CONTEXT
+
 ## Single Source of Truth for Future Development Chats
 
-**Project:** BrainOS  
-**Purpose:** Personal AI Operating System / Second Brain / Personal Assistant  
-**Current phase:** Phase 19 — Tasks / Reminders / Automation  
-**Phase 17 status:** COMPLETE  
-**Phase 18 status:** COMPLETE — Conversation persistence foundation verified  
-**Repository:** `D:\Project\BrainOS`  
-**Branch:** `main`  
-**OS:** Windows  
-**Editor:** VS Code  
-**Last verified local commit:** `6149b4e test(tasks): add task tool tests`
----
+**Project:** BrainOS\
+**Purpose:** Personal AI Operating System / Second Brain / Personal
+Assistant\
+**Current phase:** Phase 19 --- Tasks / Reminders / Automation\
+**Phase 17 status:** COMPLETE\
+**Phase 18 status:** COMPLETE --- Conversation persistence foundation
+verified\
+**Repository:** `D:\Project\BrainOS`\
+**Branch:** `main`\
+**OS:** Windows\
+**Editor:** VS Code\
+**Last verified local commit:**
+`3d2452d feat(tasks): integrate task tools with assistant` ---
+
+# CURRENT AUTHORITATIVE STATE --- 2026-08-23
+
+This section is the present source of truth. Older sections are
+historical and are retained for project continuity. If an older section
+conflicts with this section or with the actual repository, inspect the
+repository and use the newer verified state.
+
+## Current phase
+
+**Phase 19 --- Tasks / Reminders / Automation**
+
+**Verified milestone:** Task foundation + assistant task-tool
+integration.
+
+The broader Phase 19 roadmap is not complete yet. Reminders, scheduling,
+recurring automation, and proactive automation remain future work.
+
+## Current Git checkpoint
+
+Latest verified local HEAD:
+
+``` text
+3d2452d feat(tasks): integrate task tools with assistant
+```
+
+Phase 19 commits:
+
+``` text
+8378a1e feat(tasks): add task foundation and persistence
+c37a159 feat(tasks): register task assistant tools
+6149b4e test(tasks): add task tool tests
+3d2452d feat(tasks): integrate task tools with assistant
+```
+
+Latest verified state before updating this context:
+
+``` text
+Branch: main
+Working tree: clean
+```
+
+Do not claim these commits are pushed until a later remote/Git
+verification proves it.
+
+## Phase 19 verified implementation
+
+Task model:
+
+``` text
+id
+userId
+title
+description
+status
+priority
+dueAt
+completedAt
+createdAt
+updatedAt
+deletedAt
+```
+
+Enums:
+
+``` text
+TaskStatus
+  TODO
+  COMPLETED
+
+TaskPriority
+  LOW
+  MEDIUM
+  HIGH
+```
+
+Migration:
+
+``` text
+apps/backend/prisma/migrations/20260822143000_add_task_foundation/migration.sql
+```
+
+Dedicated test database:
+
+``` text
+brainos_test
+```
+
+Migration status was verified as:
+
+``` text
+Database schema is up to date!
+```
+
+Task service/repository:
+
+``` text
+apps/backend/src/services/tasks/task.service.ts
+apps/backend/src/services/tasks/task.types.ts
+apps/backend/src/services/tasks/repositories/task.repository.ts
+```
+
+Task operations:
+
+``` text
+createTask
+listTasks
+getTask
+updateTask
+completeTask
+deleteTask
+```
+
+Ownership is enforced through authenticated `userId` plus task ID and
+`deletedAt IS NULL`.
+
+Soft deletion uses `deletedAt`.
+
+Active task lists exclude soft-deleted rows.
+
+## Assistant task tools
+
+Implemented and registered:
+
+``` text
+create_task
+list_tasks
+complete_task
+delete_task
+```
+
+Files:
+
+``` text
+apps/backend/src/services/tools/task.tools.ts
+apps/backend/src/services/tools/tool.container.ts
+apps/backend/src/services/tools/tool.executor.ts
+apps/backend/src/services/tools/tool.registry.ts
+apps/backend/src/services/tools/tool.types.ts
+```
+
+Execution path:
+
+``` text
+Assistant
+ ↓
+ToolExecutor
+ ↓
+ToolRegistry
+ ↓
+Task Tool
+ ↓
+TaskService
+ ↓
+TaskRepository
+ ↓
+Prisma
+ ↓
+PostgreSQL
+```
+
+The task owner always comes from:
+
+``` typescript
+context.userId
+```
+
+The model/client cannot select the task owner.
+
+## Automated verification
+
+Full backend regression:
+
+``` text
+14 test files passed
+166 tests passed
+0 failed
+```
+
+Focused results:
+
+``` text
+Task tool tests: 12/12 passed
+Task PostgreSQL integration: 11/11 passed
+AssistantService tests: 5/5 passed
+```
+
+Validation:
+
+``` text
+npx prisma validate  → PASS
+npx tsc --noEmit     → PASS
+npm run test:run     → PASS
+git diff --check     → PASS
+```
+
+## Real assistant → task tool verification
+
+Using the real local Ollama model:
+
+``` text
+qwen2.5:3b
+```
+
+the assistant successfully executed real PostgreSQL task operations.
+
+Verified:
+
+``` text
+Natural language request
+ ↓
+AssistantService
+ ↓
+Ollama
+ ↓
+Tool selection
+ ↓
+ToolExecutor
+ ↓
+Task tool
+ ↓
+TaskService
+ ↓
+TaskRepository
+ ↓
+PostgreSQL
+ ↓
+Tool result
+ ↓
+Ollama
+ ↓
+Final response
+```
+
+Verified operations:
+
+``` text
+create_task  → INSERT
+list_tasks   → SELECT
+complete_task → UPDATE
+delete_task  → soft DELETE/update
+```
+
+### Important model behavior finding
+
+A request that asked the model to find a task by title and immediately
+complete it caused one incorrect opaque task ID to be selected. The
+repository correctly rejected it with:
+
+``` text
+NotFoundError:
+Task not found for the authenticated user.
+```
+
+This was not an ownership or repository bug.
+
+Direct completion with the exact task ID succeeded.
+
+The reliable workflow was then verified:
+
+``` text
+list_tasks
+ ↓
+identify exact returned taskId
+ ↓
+complete_task / delete_task
+```
+
+Rule for future assistant-tool design:
+
+> When an operation requires an opaque resource ID, discover the
+> resource first and use the exact ID returned by the authoritative
+> tool. Never guess IDs.
+
+## Verification cleanup
+
+Temporary Phase 19 verification tasks were created during testing.
+
+They were completed/soft-deleted and cleaned up.
+
+Final active-task query for the verification user returned:
+
+``` text
+[]
+```
+
+No temporary verification tasks remain active.
+
+## Current task-tool dependency injection note
+
+`task.tools.ts` currently creates its `TaskService` internally:
+
+``` typescript
+const taskService = new TaskService(
+  new TaskRepository(),
+);
+```
+
+This is acceptable for the current foundation.
+
+Do not refactor merely for style. Improve dependency injection only when
+architecture or testing requirements justify it.
+
+## Known non-blocking warning
+
+Vitest/Vite may warn about:
+
+``` text
+configLoader: 'native'
+```
+
+and ESM syntax in `vitest.config.ts`.
+
+This warning does not currently fail tests.
+
+Do not modify configuration merely to suppress it without a separate
+compatibility decision.
+
+## Phase 19 remaining work
+
+``` text
+[ ] update_task tool
+[ ] get_task tool
+[ ] richer due-date handling
+[ ] reminder scheduler
+[ ] reminder delivery
+[ ] recurring tasks
+[ ] automation engine
+[ ] proactive reminder behavior
+[ ] user-facing task API/UI if required
+[ ] final broader Phase 19 completion
+[ ] final Phase 19 push verification
+```
+
+Do not implement all remaining items at once.
+
+## Current task files
+
+``` text
+apps/backend/src/services/tasks/task.service.ts
+apps/backend/src/services/tasks/task.types.ts
+apps/backend/src/services/tasks/repositories/task.repository.ts
+
+apps/backend/src/services/tools/task.tools.ts
+apps/backend/src/services/tools/tool.container.ts
+apps/backend/src/services/tools/tool.executor.ts
+apps/backend/src/services/tools/tool.registry.ts
+apps/backend/src/services/tools/tool.types.ts
+
+apps/backend/test/services/tasks/task.service.test.ts
+apps/backend/test/tasks/task.integration.test.ts
+apps/backend/test/services/tools/task.tools.test.ts
+
+apps/backend/prisma/migrations/20260822143000_add_task_foundation/migration.sql
+apps/backend/prisma/schema.prisma
+```
+
+## Updated roadmap
+
+``` text
+Phase 14
+Authenticated Semantic Memory — COMPLETE
+        ↓
+Phase 15
+Memory Production Hardening & Cleanup — COMPLETE
+        ↓
+Phase 16
+Automated Memory Regression Testing and Test Database Safety — COMPLETE
+        ↓
+Phase 17
+AI Assistant Integration / Orchestration — COMPLETE
+        ↓
+Phase 18
+Conversation + Persistent Context — COMPLETE
+        ↓
+Phase 19
+Tasks / Reminders / Automation — CURRENT
+  Task foundation + assistant task tools — VERIFIED
+        ↓
+Phase 20+
+Documents / Knowledge / Agents / Integrations / Voice / Proactive Assistant
+```
+
+------------------------------------------------------------------------
 
 # 0. CRITICAL RULE FOR EVERY FUTURE CHAT
 
 Before changing BrainOS:
 
-1. Read this context.
-2. Inspect the actual repository.
-3. Check `git status` and recent commits.
-4. Inspect the relevant files.
-5. Explain the architectural reason for a significant change.
-6. Make the smallest correct change.
-7. Run validation/tests.
-8. Verify actual behavior.
-9. Update the handoff/context.
+1.  Read this context.
+2.  Inspect the actual repository.
+3.  Check `git status` and recent commits.
+4.  Inspect the relevant files.
+5.  Explain the architectural reason for a significant change.
+6.  Make the smallest correct change.
+7.  Run validation/tests.
+8.  Verify actual behavior.
+9.  Update the handoff/context.
 10. Commit completed work.
 11. Push completed phases.
 12. Verify the final Git state.
 
-Never restart completed phases, blindly overwrite working code, bypass authentication, put business logic in controllers, put Prisma access in controllers, trust client-supplied ownership IDs, expose secrets/tokens/session IDs in logs, or claim planned work is verified.
+Never restart completed phases, blindly overwrite working code, bypass
+authentication, put business logic in controllers, put Prisma access in
+controllers, trust client-supplied ownership IDs, expose
+secrets/tokens/session IDs in logs, or claim planned work is verified.
 
-If context and repository disagree, inspect the repository and resolve the difference first.
+If context and repository disagree, inspect the repository and resolve
+the difference first.
 
----
+------------------------------------------------------------------------
 
 # 1. BRAINOS MISSION
 
@@ -42,32 +433,33 @@ BrainOS is a private personal AI operating system, not merely a chatbot.
 
 Long-term it should:
 
-- understand context
-- remember useful information
-- retrieve relevant information
-- reason over context
-- help make decisions
-- organize work/study/life
-- manage tasks and reminders
-- understand documents
-- plan
-- use AI models
-- use tools/integrations
-- automate repetitive work
-- communicate naturally
-- eventually support voice/mobile/PWA
-- proactively surface appropriate information
-- act with user control
+-   understand context
+-   remember useful information
+-   retrieve relevant information
+-   reason over context
+-   help make decisions
+-   organize work/study/life
+-   manage tasks and reminders
+-   understand documents
+-   plan
+-   use AI models
+-   use tools/integrations
+-   automate repetitive work
+-   communicate naturally
+-   eventually support voice/mobile/PWA
+-   proactively surface appropriate information
+-   act with user control
 
 North-star idea:
 
-> BrainOS should become a private second brain and personal operating system that reduces cognitive load.
+> BrainOS should become a private second brain and personal operating
+> system that reduces cognitive load.
 
----
+------------------------------------------------------------------------
 
 # 2. PRODUCT VISION
 
-```text
+``` text
 User
  ↓
 BrainOS Assistant
@@ -91,15 +483,15 @@ Maintain long-term context
 
 Long-term capabilities:
 
-1. Conversational AI
-2. Long-term memory
-3. Semantic retrieval
-4. Structured personal data
-5. Tasks/reminders
-6. Planning
-7. Documents/knowledge
-8. Automation
-9. Tools
+1.  Conversational AI
+2.  Long-term memory
+3.  Semantic retrieval
+4.  Structured personal data
+5.  Tasks/reminders
+6.  Planning
+7.  Documents/knowledge
+8.  Automation
+9.  Tools
 10. Calendar/email/messaging integrations
 11. Voice
 12. Agent workflows
@@ -108,13 +500,14 @@ Long-term capabilities:
 
 BrainOS should feel like:
 
-> “My assistant knows my context and helps me manage my life/work/study.”
+> "My assistant knows my context and helps me manage my
+> life/work/study."
 
 Not:
 
-> “A chatbot with a database attached.”
+> "A chatbot with a database attached."
 
----
+------------------------------------------------------------------------
 
 # 3. VERSION 1 SCOPE
 
@@ -122,44 +515,44 @@ The first BrainOS version is focused on one primary user.
 
 Do not prematurely build:
 
-- SaaS billing
-- public marketplace
-- enterprise RBAC
-- organization complexity
-- public social features
-- unnecessary multi-tenancy
+-   SaaS billing
+-   public marketplace
+-   enterprise RBAC
+-   organization complexity
+-   public social features
+-   unnecessary multi-tenancy
 
 Make BrainOS extremely useful for one user first.
 
----
+------------------------------------------------------------------------
 
 # 4. ENGINEERING PRINCIPLES
 
 Prefer:
 
-- clear architecture
-- explicit contracts
-- type safety
-- validation
-- testing
-- observability
-- maintainability
-- incremental changes
-- provider independence
+-   clear architecture
+-   explicit contracts
+-   type safety
+-   validation
+-   testing
+-   observability
+-   maintainability
+-   incremental changes
+-   provider independence
 
 Avoid:
 
-- quick hacks
-- duplicated business logic
-- giant controllers
-- direct DB access from transport layers
-- unvalidated external input
-- unnecessary abstractions
-- secrets in Git
+-   quick hacks
+-   duplicated business logic
+-   giant controllers
+-   direct DB access from transport layers
+-   unvalidated external input
+-   unnecessary abstractions
+-   secrets in Git
 
 Provider architecture:
 
-```text
+``` text
 AI Service
  ↓
 AI Provider Interface
@@ -176,23 +569,25 @@ Database architecture:
 
 **Supabase is explicitly NOT part of the current BrainOS architecture.**
 
-Ollama is the primary local AI provider during development because cost, privacy, and the lack of a dedicated GPU matter.
+Ollama is the primary local AI provider during development because cost,
+privacy, and the lack of a dedicated GPU matter.
 
----
+------------------------------------------------------------------------
 
 # 5. COST / DEVELOPMENT CONSTRAINTS
 
 Target development cost:
 
-**approximately $0–$5/month where practical.**
+**approximately \$0--\$5/month where practical.**
 
 Student Developer Pack resources should be preferred where appropriate.
 
-Previously considered resources include GitHub, Copilot, DigitalOcean credits, Azure credits, Clerk, JetBrains, Appwrite, Codespaces, etc.
+Previously considered resources include GitHub, Copilot, DigitalOcean
+credits, Azure credits, Clerk, JetBrains, Appwrite, Codespaces, etc.
 
 Do not add paid AI APIs merely for testing unless explicitly requested.
 
----
+------------------------------------------------------------------------
 
 # 6. DEVELOPMENT ENVIRONMENT
 
@@ -210,63 +605,41 @@ Local backend:
 
 Environment:
 
-- Windows
-- VS Code
-- Git/GitHub
-- Node.js
-- Docker
-- PostgreSQL
-- Prisma
-- Ollama
-- no dedicated GPU
+-   Windows
+-   VS Code
+-   Git/GitHub
+-   Node.js
+-   Docker
+-   PostgreSQL
+-   Prisma
+-   Ollama
+-   no dedicated GPU
 
----
+------------------------------------------------------------------------
 
 # 7. CURRENT TECHNOLOGY STACK
 
-Frontend:
-- Next.js
-- React
-- TypeScript
-- Clerk
+Frontend: - Next.js - React - TypeScript - Clerk
 
-Backend:
-- Express
-- TypeScript
-- Prisma
-- PostgreSQL
+Backend: - Express - TypeScript - Prisma - PostgreSQL
 
-Authentication:
-- Clerk
+Authentication: - Clerk
 
-Webhooks:
-- Clerk Webhooks
-- Svix
-- ngrok
+Webhooks: - Clerk Webhooks - Svix - ngrok
 
-AI:
-- Ollama
+AI: - Ollama
 
-Embeddings:
-- Ollama
-- pgvector
+Embeddings: - Ollama - pgvector
 
-Validation:
-- Zod
+Validation: - Zod
 
-Errors:
-- AppError
-- UnauthorizedError
-- ForbiddenError
-- NotFoundError
-- ValidationError
-- global error middleware
-- 404 middleware
+Errors: - AppError - UnauthorizedError - ForbiddenError -
+NotFoundError - ValidationError - global error middleware - 404
+middleware
 
-Logging:
-- centralized logger abstraction
+Logging: - centralized logger abstraction
 
----
+------------------------------------------------------------------------
 
 # 8. AUTHENTICATION ARCHITECTURE
 
@@ -274,7 +647,7 @@ Clerk owns authentication.
 
 Frontend does not synchronize users directly into PostgreSQL.
 
-```text
+``` text
 Clerk
  ↓
 Bearer session token
@@ -298,7 +671,7 @@ BrainOS database identity:
 
 Never trust client-provided user IDs for authorization.
 
----
+------------------------------------------------------------------------
 
 # 9. USER / WEBHOOK ARCHITECTURE
 
@@ -308,7 +681,7 @@ User persistence/business logic belongs in:
 
 Webhook flow:
 
-```text
+``` text
 POST /webhooks/clerk
  ↓
 Controller
@@ -330,7 +703,7 @@ PostgreSQL
 
 Conceptual dispatcher:
 
-```text
+``` text
 user.created → user-created.handler.ts
 user.updated → user-updated.handler.ts
 user.deleted → user-deleted.handler.ts
@@ -340,25 +713,25 @@ Actual repository state is authoritative.
 
 Webhook delivery may repeat, so user creation must remain idempotent.
 
----
+------------------------------------------------------------------------
 
 # 10. PRISMA RULES
 
 Database schema changes must use migrations:
 
-```powershell
+``` powershell
 npx prisma migrate dev --name <migration_name>
 ```
 
 Validation:
 
-```powershell
+``` powershell
 npx prisma validate
 ```
 
 Remember:
 
-```text
+``` text
 prisma migrate dev = Schema → Database
 prisma db pull     = Database → Schema
 ```
@@ -367,21 +740,21 @@ Do not casually use `db pull` after editing `schema.prisma`.
 
 Prisma belongs in services/repositories, not controllers.
 
----
+------------------------------------------------------------------------
 
 # 11. EXPRESS ARCHITECTURE
 
 Important ordering:
 
-1. webhook raw-body route
-2. JSON parser
-3. Clerk middleware
-4. request logger
-5. root route
-6. health routes
-7. user routes
-8. memory routes
-9. development routes
+1.  webhook raw-body route
+2.  JSON parser
+3.  Clerk middleware
+4.  request logger
+5.  root route
+6.  health routes
+7.  user routes
+8.  memory routes
+9.  development routes
 10. 404 middleware
 11. error middleware
 
@@ -389,7 +762,7 @@ Webhook raw-body handling must remain compatible with Svix verification.
 
 API areas include:
 
-```text
+``` text
 /webhooks
 /api/v1/users
 /api/v1/memories
@@ -398,7 +771,7 @@ API areas include:
 
 The actual `apps/backend/src/app.ts` is authoritative.
 
----
+------------------------------------------------------------------------
 
 # 12. ERROR ARCHITECTURE
 
@@ -406,7 +779,7 @@ Application errors are centralized.
 
 Expected response shape:
 
-```json
+``` json
 {
   "success": false,
   "error": {
@@ -416,97 +789,97 @@ Expected response shape:
 }
 ```
 
-Middleware/controllers should forward errors to the centralized error handler instead of returning competing responses.
+Middleware/controllers should forward errors to the centralized error
+handler instead of returning competing responses.
 
----
+------------------------------------------------------------------------
 
 # 13. PHASE HISTORY
 
-## Phase 0 — Clean Development Machine
+## Phase 0 --- Clean Development Machine
+
 Development machine/prerequisites established.
 
-## Phase 1 — Initial Foundation
-Git/GitHub, VS Code, environment, database tooling, BrainOS vision, cost constraints, local-first direction, documentation workflow.
+## Phase 1 --- Initial Foundation
 
-## Phase 2 — Tooling Foundation
+Git/GitHub, VS Code, environment, database tooling, BrainOS vision, cost
+constraints, local-first direction, documentation workflow.
+
+## Phase 2 --- Tooling Foundation
+
 Node.js and core tooling configured.
 
-## Phase 3 — Core Project Foundation
-Major domains established:
-- API
-- Authentication
-- Memory
-- AI
-- Tasks
-- Integrations
+## Phase 3 --- Core Project Foundation
 
-## Phase 4 — PostgreSQL / Prisma / Local Infrastructure
-Local PostgreSQL, Docker-era infrastructure, Prisma, connectivity, and monorepo foundation established.
+Major domains established: - API - Authentication - Memory - AI -
+Tasks - Integrations
+
+## Phase 4 --- PostgreSQL / Prisma / Local Infrastructure
+
+Local PostgreSQL, Docker-era infrastructure, Prisma, connectivity, and
+monorepo foundation established.
 
 Historical runtime details must be verified before reuse.
 
-## Phase 8 — Clerk Authentication
-ClerkProvider, authentication routes, middleware, sign-in/sign-up, dashboard flow.
+## Phase 8 --- Clerk Authentication
 
-## Phase 9 — Clerk Webhooks & User Synchronization
-Completed architectural milestone:
-- Svix verification
-- ngrok development flow
-- User schema
-- Prisma migration
-- PostgreSQL synchronization
-- user-created flow
-- dispatcher
-- handlers
-- user service
-- thin controllers
-- real Clerk → PostgreSQL verification
+ClerkProvider, authentication routes, middleware, sign-in/sign-up,
+dashboard flow.
 
-## Phase 10 — Backend Core Infrastructure
-Completed:
-- environment configuration
-- Zod validation
-- centralized logger
-- AppError
-- global error middleware
-- 404 middleware
-- async error handling
+## Phase 9 --- Clerk Webhooks & User Synchronization
 
-## Phase 11 — AI Provider Layer
-Provider-boundary architecture established so BrainOS can use Ollama and future providers without rewriting higher layers.
+Completed architectural milestone: - Svix verification - ngrok
+development flow - User schema - Prisma migration - PostgreSQL
+synchronization - user-created flow - dispatcher - handlers - user
+service - thin controllers - real Clerk → PostgreSQL verification
 
-## Phase 12 — Memory Foundation
-Memory domain, Memory Service, Embeddings Service, provider boundary, and repository separation established.
+## Phase 10 --- Backend Core Infrastructure
 
-## Phase 13 — Semantic Memory Foundation
-PostgreSQL + pgvector semantic retrieval foundation established with limits, thresholds, user ownership, and soft-delete filtering.
+Completed: - environment configuration - Zod validation - centralized
+logger - AppError - global error middleware - 404 middleware - async
+error handling
 
-## Phase 14 — Authenticated Semantic Memory
-COMPLETE. End-to-end authenticated memory creation, embedding persistence, semantic retrieval, ownership isolation, and soft-delete behavior were verified.
+## Phase 11 --- AI Provider Layer
 
----
+Provider-boundary architecture established so BrainOS can use Ollama and
+future providers without rewriting higher layers.
+
+## Phase 12 --- Memory Foundation
+
+Memory domain, Memory Service, Embeddings Service, provider boundary,
+and repository separation established.
+
+## Phase 13 --- Semantic Memory Foundation
+
+PostgreSQL + pgvector semantic retrieval foundation established with
+limits, thresholds, user ownership, and soft-delete filtering.
+
+## Phase 14 --- Authenticated Semantic Memory
+
+COMPLETE. End-to-end authenticated memory creation, embedding
+persistence, semantic retrieval, ownership isolation, and soft-delete
+behavior were verified.
+
+------------------------------------------------------------------------
 
 # 14. PHASE 14 VERIFIED RESULTS
 
 Frontend obtains Clerk token:
 
-```typescript
+``` typescript
 const { getToken } = await auth();
 const token = await getToken();
 ```
 
 Sends:
 
-```text
+``` text
 Authorization: Bearer <token>
 ```
 
-Backend authentication verification showed:
-- Authorization header present
-- Bearer scheme
-- Clerk user ID
-- Clerk session ID
-- database user found
+Backend authentication verification showed: - Authorization header
+present - Bearer scheme - Clerk user ID - Clerk session ID - database
+user found
 
 Memory creation:
 
@@ -514,7 +887,7 @@ Memory creation:
 
 Persistence sequence:
 
-```text
+``` text
 INSERT Memory
  ↓
 UPDATE Memory embedding = vector
@@ -528,16 +901,12 @@ Semantic search:
 
 Similarity:
 
-```sql
+``` sql
 1 - ("embedding" <=> $1::vector)
 ```
 
-Search filters:
-- authenticated userId
-- deletedAt IS NULL
-- embedding IS NOT NULL
-- similarity threshold
-- limit
+Search filters: - authenticated userId - deletedAt IS NULL - embedding
+IS NOT NULL - similarity threshold - limit
 
 Verified test query:
 
@@ -549,13 +918,13 @@ Verified similarity:
 
 42 duplicate Phase 14 test memories were soft-deleted.
 
----
+------------------------------------------------------------------------
 
 # 15. MEMORY ARCHITECTURE
 
 Current creation flow:
 
-```text
+``` text
 Authenticated Request
  ↓
 requireAuth
@@ -581,7 +950,7 @@ PostgreSQL + pgvector
 
 Search:
 
-```text
+``` text
 Authenticated Request
  ↓
 requireAuth
@@ -613,13 +982,13 @@ Current Ollama host:
 
 Actual configuration is authoritative.
 
----
+------------------------------------------------------------------------
 
 # 16. MEMORY DATA MODEL
 
 Conceptually:
 
-```prisma
+``` prisma
 model Memory {
   id             String   @id @default(cuid())
   userId         String
@@ -641,23 +1010,26 @@ model Memory {
 
 Actual schema is authoritative.
 
-Use relational columns for structured facts and vectors for semantic retrieval. Do not vectorize everything.
+Use relational columns for structured facts and vectors for semantic
+retrieval. Do not vectorize everything.
 
----
+------------------------------------------------------------------------
 
-# 17. PHASE 15 — MEMORY PRODUCTION HARDENING & CLEANUP
+# 17. PHASE 15 --- MEMORY PRODUCTION HARDENING & CLEANUP
 
 **CURRENT PHASE: IN PROGRESS**
 
 Goal:
 
-> Turn the proven Phase 14 memory pipeline into a clean, secure, maintainable foundation for future BrainOS capabilities.
+> Turn the proven Phase 14 memory pipeline into a clean, secure,
+> maintainable foundation for future BrainOS capabilities.
 
 Do not immediately add a giant new feature.
 
-Phase 15 is about security, ownership, boundaries, testing, cleanup, and production readiness.
+Phase 15 is about security, ownership, boundaries, testing, cleanup, and
+production readiness.
 
----
+------------------------------------------------------------------------
 
 # 18. PHASE 15 CHECKPOINT ALREADY COMPLETED
 
@@ -667,7 +1039,7 @@ Git commit:
 
 Five files changed:
 
-```text
+``` text
 apps/backend/src/app.ts
 apps/backend/src/middleware/auth.middleware.ts
 apps/backend/src/services/auth/auth.service.ts
@@ -679,23 +1051,23 @@ Diff summary:
 
 **5 files changed, 14 insertions(+), 33 deletions(-)**
 
-## Change A — Clerk debug logging disabled
+## Change A --- Clerk debug logging disabled
 
 Removed intentional:
 
-```typescript
+``` typescript
 debug: true
 ```
 
 from Clerk middleware configuration.
 
-## Change B — Auth middleware error handling fixed
+## Change B --- Auth middleware error handling fixed
 
 The old flow could call `next(error)` and then also send a 401 response.
 
 Current architectural direction:
 
-```typescript
+``` typescript
 try {
   req.user = await getAuthenticatedUser(req);
   next();
@@ -706,31 +1078,29 @@ try {
 
 The centralized error middleware owns the final response.
 
-## Change C — Authentication errors use AppError
+## Change C --- Authentication errors use AppError
 
 `getAuthenticatedUser()` now throws:
 
-```typescript
+``` typescript
 new UnauthorizedError()
 ```
 
-instead of generic `Error` instances for missing/unknown authenticated users.
+instead of generic `Error` instances for missing/unknown authenticated
+users.
 
-## Change D — Sensitive auth debug logs removed
+## Change D --- Sensitive auth debug logs removed
 
-Removed temporary logs exposing:
-- authorization details
-- Clerk user ID
-- Clerk session ID
-- database lookup debug information
+Removed temporary logs exposing: - authorization details - Clerk user
+ID - Clerk session ID - database lookup debug information
 
 These should not be present in production logs.
 
-## Change E — Embedding ownership is explicit
+## Change E --- Embedding ownership is explicit
 
 Memory Service now calls:
 
-```typescript
+``` typescript
 await memoryRepository.updateEmbedding(
   data.userId,
   memory.id,
@@ -738,11 +1108,11 @@ await memoryRepository.updateEmbedding(
 );
 ```
 
-## Change F — Repository embedding update is user-scoped
+## Change F --- Repository embedding update is user-scoped
 
 `updateEmbedding()` now accepts:
 
-```typescript
+``` typescript
 memoryId: string
 userId: string
 embedding: number[]
@@ -750,7 +1120,7 @@ embedding: number[]
 
 and updates only when:
 
-```sql
+``` sql
 WHERE "id" = $memoryId
   AND "userId" = $userId
   AND "deletedAt" IS NULL
@@ -758,21 +1128,22 @@ WHERE "id" = $memoryId
 
 Security rule established:
 
-> Every memory mutation must be scoped to the authenticated owner, not merely the memory ID.
+> Every memory mutation must be scoped to the authenticated owner, not
+> merely the memory ID.
 
----
+------------------------------------------------------------------------
 
 # 19. PHASE 15 VALIDATION ALREADY PASSED
 
 Command:
 
-```powershell
+``` powershell
 npm --prefix apps/backend run typecheck
 ```
 
 Result:
 
-```text
+``` text
 > backend@1.0.0 typecheck
 > tsc --noEmit
 ```
@@ -783,13 +1154,13 @@ Completed successfully with no TypeScript errors.
 
 This is not sufficient to declare Phase 15 complete.
 
----
+------------------------------------------------------------------------
 
 # 20. CURRENT GIT STATE
 
 Last verified state:
 
-```text
+``` text
 On branch main
 Your branch is ahead of 'origin/main' by 1 commit.
 nothing to commit, working tree clean
@@ -797,64 +1168,60 @@ nothing to commit, working tree clean
 
 Latest local checkpoint:
 
-```text
+``` text
 6ab95e4 feat(memory): harden authenticated memory ownership
 ```
 
 Previous relevant commits include:
 
-```text
+``` text
 b1074ec context for each phase
 63e0492 feat(memory): complete authenticated semantic memory pipeline
 ```
 
 Important:
 
-**The Phase 15 checkpoint is committed locally but has NOT yet been claimed as pushed.**
+**The Phase 15 checkpoint is committed locally but has NOT yet been
+claimed as pushed.**
 
 Immediate Git action when appropriate:
 
-```powershell
+``` powershell
 git push origin main
 ```
 
 Then verify:
 
-```powershell
+``` powershell
 git status
 git log --oneline -5
 ```
 
----
+------------------------------------------------------------------------
 
 # 21. PHASE 15 REMAINING WORK
 
 ## A. Push current checkpoint
-- verify status
-- push
-- verify remote state
+
+-   verify status
+-   push
+-   verify remote state
 
 ## B. Memory API contract review
 
 Review:
 
-```text
+``` text
 POST /api/v1/memories
 POST /api/v1/memories/search
 ```
 
-Check:
-- validation
-- authentication
-- ownership
-- consistent response shape
-- centralized errors
-- service boundaries
-- repository boundaries
+Check: - validation - authentication - ownership - consistent response
+shape - centralized errors - service boundaries - repository boundaries
 
 Potential future API:
 
-```text
+``` text
 GET    /memories
 GET    /memories/:id
 PATCH  /memories/:id
@@ -867,22 +1234,22 @@ Do not implement them unless the phase requires them.
 
 Test:
 
-1. no Authorization header
-2. invalid token
-3. valid authenticated user
-4. authenticated Clerk user missing from DB
-5. user A creates memory
-6. user A searches own memory
-7. user A cannot retrieve user B memory
-8. user B cannot retrieve user A memory
-9. deleted memory is not searchable
+1.  no Authorization header
+2.  invalid token
+3.  valid authenticated user
+4.  authenticated Clerk user missing from DB
+5.  user A creates memory
+6.  user A searches own memory
+7.  user A cannot retrieve user B memory
+8.  user B cannot retrieve user A memory
+9.  deleted memory is not searchable
 10. embedding update cannot target another user's memory
 
 ## D. Soft-delete verification
 
 Verify:
 
-```text
+``` text
 Create → visible
 Soft delete → invisible
 Database row → remains
@@ -892,7 +1259,7 @@ Database row → remains
 
 Ensure:
 
-```text
+``` text
 Memory Service
  ↓
 Embeddings Service
@@ -906,26 +1273,15 @@ No Ollama-specific dependency in Memory Service.
 
 ## F. Database/pgvector review
 
-Review:
-- schema
-- vector dimension
-- similarity operator
-- indexes
-- ownership filtering
-- soft-delete filtering
+Review: - schema - vector dimension - similarity operator - indexes -
+ownership filtering - soft-delete filtering
 
 Do not optimize prematurely.
 
 ## G. Automated tests
 
-Add repeatable tests for:
-- authentication
-- create
-- embedding persistence
-- search
-- isolation
-- soft delete
-- error behavior
+Add repeatable tests for: - authentication - create - embedding
+persistence - search - isolation - soft delete - error behavior
 
 ## H. Frontend cleanup
 
@@ -941,120 +1297,100 @@ Investigate the deprecation warning.
 
 Do not blindly migrate.
 
-First inspect current Clerk middleware behavior and official requirements, then make the smallest safe change if migration is actually needed.
+First inspect current Clerk middleware behavior and official
+requirements, then make the smallest safe change if migration is
+actually needed.
 
----
+------------------------------------------------------------------------
 
 # 22. PHASE 15 ACCEPTANCE CRITERIA
 
-Architecture:
-- repository/context reviewed
-- memory boundary reviewed
-- auth boundary reviewed
-- embedding boundary reviewed
-- ownership enforced in memory mutations
+Architecture: - repository/context reviewed - memory boundary reviewed -
+auth boundary reviewed - embedding boundary reviewed - ownership
+enforced in memory mutations
 
-Security:
-- unauthenticated requests rejected
-- invalid authentication rejected
-- unknown DB user rejected
-- cross-user memory isolation verified
-- sensitive auth logs removed
-- embedding updates are user-scoped
-- no secrets/tokens/session IDs logged
+Security: - unauthenticated requests rejected - invalid authentication
+rejected - unknown DB user rejected - cross-user memory isolation
+verified - sensitive auth logs removed - embedding updates are
+user-scoped - no secrets/tokens/session IDs logged
 
-Memory:
-- create works
-- embedding persists
-- search works
-- similarity works
-- ownership is enforced
-- soft delete works
-- deleted memory excluded
+Memory: - create works - embedding persists - search works - similarity
+works - ownership is enforced - soft delete works - deleted memory
+excluded
 
-Frontend:
-- Clerk works
-- memory test page works
-- middleware/proxy issue investigated
-- no new runtime/hydration errors
+Frontend: - Clerk works - memory test page works - middleware/proxy
+issue investigated - no new runtime/hydration errors
 
-Quality:
-- backend typecheck passes
-- frontend build passes
-- automated tests pass where implemented
-- Git diff reviewed
-- no unnecessary abstraction
+Quality: - backend typecheck passes - frontend build passes - automated
+tests pass where implemented - Git diff reviewed - no unnecessary
+abstraction
 
-Documentation:
-- Phase 15 handoff updated
-- decisions recorded
-- commands recorded
-- tests recorded
-- technical debt recorded
-- next phase recorded
+Documentation: - Phase 15 handoff updated - decisions recorded -
+commands recorded - tests recorded - technical debt recorded - next
+phase recorded
 
-Git:
-- clean working tree
-- checkpoint committed
-- checkpoint pushed
-- final log verified
+Git: - clean working tree - checkpoint committed - checkpoint pushed -
+final log verified
 
----
+------------------------------------------------------------------------
 
 # 23. MEMORY SECURITY RULES
 
 Non-negotiable:
 
 ### Authentication
+
 Never trust:
-```text
+
+``` text
 req.body.userId
 req.query.userId
 client-provided ownership
 ```
 
 ### Memory ownership
+
 Every mutation must verify authenticated ownership.
 
 ### Search
+
 Every search must be scoped to authenticated user.
 
 ### Deletion
+
 Deleted memories must not appear in normal search.
 
 ### Logging
-Never log:
-- access tokens
-- secrets
-- full Authorization headers
-- unnecessary session IDs
-- private memory content
+
+Never log: - access tokens - secrets - full Authorization headers -
+unnecessary session IDs - private memory content
 
 ### Errors
+
 Do not leak internal provider/database details.
 
----
+------------------------------------------------------------------------
 
 # 24. FUTURE MEMORY ROLE
 
 Memory will eventually include:
 
-- user preferences
-- personal facts
-- projects
-- goals
-- tasks
-- experiences
-- decisions
-- relationships
-- documents
-- knowledge
-- conversation summaries
-- temporary context
+-   user preferences
+-   personal facts
+-   projects
+-   goals
+-   tasks
+-   experiences
+-   decisions
+-   relationships
+-   documents
+-   knowledge
+-   conversation summaries
+-   temporary context
 
 Long-term pipeline:
 
-```text
+``` text
 User interaction
  ↓
 Context analyzer
@@ -1074,23 +1410,23 @@ Retrieve using semantic + structured filters
 
 Memory decisions should consider:
 
-- usefulness
-- permanence
-- confidence
-- sensitivity
-- duplication
-- expiration
-- user control
+-   usefulness
+-   permanence
+-   confidence
+-   sensitivity
+-   duplication
+-   expiration
+-   user control
 
 BrainOS should not blindly remember everything.
 
----
+------------------------------------------------------------------------
 
 # 25. FUTURE AI ORCHESTRATION
 
 Long-term:
 
-```text
+``` text
 BrainOS Assistant
  ↓
 AI Orchestrator
@@ -1108,11 +1444,11 @@ Response / Action
 
 AI providers remain behind interfaces.
 
----
+------------------------------------------------------------------------
 
 # 26. NORTH-STAR ARCHITECTURE
 
-```text
+``` text
                          USER
                            │
                            ▼
@@ -1145,17 +1481,18 @@ AI providers remain behind interfaces.
 
 BrainOS should ultimately combine:
 
-**Identity + Memory + Knowledge + AI + Tools + Tasks + Automation + Decision Support**
+**Identity + Memory + Knowledge + AI + Tools + Tasks + Automation +
+Decision Support**
 
 into one coherent personal system.
 
----
+------------------------------------------------------------------------
 
 # 27. CURRENT IMPORTANT FILES
 
 Backend:
 
-```text
+``` text
 apps/backend/src/app.ts
 apps/backend/src/config/env.ts
 apps/backend/src/middleware/auth.middleware.ts
@@ -1175,7 +1512,7 @@ apps/backend/src/lib/prisma.ts
 
 Frontend:
 
-```text
+``` text
 apps/web/.env.local
 apps/web/lib/brainos-api.ts
 apps/web/app/dashboard/memory-test/page.tsx
@@ -1184,91 +1521,99 @@ apps/web/app/layout.tsx
 
 Always inspect actual source before editing.
 
----
+------------------------------------------------------------------------
 
 # 28. KNOWN TECHNICAL DEBT
 
 ## Next.js middleware/proxy warning
+
 Investigate in Phase 15. Do not blindly migrate.
 
 ## Temporary memory test page
+
 Diagnostic only; not final UI.
 
 ## Automated tests
-Phase 14 was primarily manually verified. Phase 15 should make important behavior repeatable.
+
+Phase 14 was primarily manually verified. Phase 15 should make important
+behavior repeatable.
 
 ## Historical handler notes
-Older context may describe user.updated/user.deleted as skeletons. Verify actual repository state before assuming anything is incomplete.
 
----
+Older context may describe user.updated/user.deleted as skeletons.
+Verify actual repository state before assuming anything is incomplete.
+
+------------------------------------------------------------------------
 
 # 29. VERIFIED VS PLANNED
 
 ## Verified
-- Clerk authentication reaches backend
-- Bearer token flow works
-- Clerk user maps to PostgreSQL User
-- memory creation works
-- embedding generation works
-- pgvector persistence works
-- semantic search works
-- similarity works
-- user-scoped search works
-- soft delete filtering works
-- 42 duplicate Phase 14 test records were soft-deleted
-- centralized error architecture exists
-- Phase 15 ownership hardening checkpoint exists
-- backend TypeScript typecheck passes
-- local working tree was clean after the checkpoint
-- local `main` is one commit ahead of `origin/main`
+
+-   Clerk authentication reaches backend
+-   Bearer token flow works
+-   Clerk user maps to PostgreSQL User
+-   memory creation works
+-   embedding generation works
+-   pgvector persistence works
+-   semantic search works
+-   similarity works
+-   user-scoped search works
+-   soft delete filtering works
+-   42 duplicate Phase 14 test records were soft-deleted
+-   centralized error architecture exists
+-   Phase 15 ownership hardening checkpoint exists
+-   backend TypeScript typecheck passes
+-   local working tree was clean after the checkpoint
+-   local `main` is one commit ahead of `origin/main`
 
 ## Not yet fully verified for Phase 15
-- full unauthenticated/invalid-token matrix
-- cross-user isolation regression tests
-- embedding ownership mutation regression test
-- automated memory regression suite
-- frontend production build after hardening
-- middleware/proxy decision
-- final Phase 15 documentation
-- push of `6ab95e4`
-- final Phase 15 Git verification
+
+-   full unauthenticated/invalid-token matrix
+-   cross-user isolation regression tests
+-   embedding ownership mutation regression test
+-   automated memory regression suite
+-   frontend production build after hardening
+-   middleware/proxy decision
+-   final Phase 15 documentation
+-   push of `6ab95e4`
+-   final Phase 15 Git verification
 
 Do not mark planned work as complete without evidence.
 
----
+------------------------------------------------------------------------
 
 # 30. DEVELOPMENT COMMANDS
 
 Backend:
 
-```powershell
+``` powershell
 cd D:\Project\BrainOSppsackend
 npm run dev
 ```
 
 Frontend:
 
-```powershell
+``` powershell
 cd D:\Project\BrainOSpps\web
 npm run dev
 ```
 
 Backend typecheck:
 
-```powershell
+``` powershell
 npm --prefix apps/backend run typecheck
 ```
 
 Frontend build:
 
-```powershell
+``` powershell
 cd D:\Project\BrainOSpps\web
 npm run build
 ```
 
 Prisma:
 
-```powershell
+``` powershell
 cd D:\Project\BrainOSppsackend
 npx prisma validate
 npx prisma studio
@@ -1277,7 +1622,7 @@ npx prisma migrate dev --name <migration_name>
 
 Git:
 
-```powershell
+``` powershell
 cd D:\Project\BrainOS
 git status
 git branch --show-current
@@ -1287,17 +1632,17 @@ git diff
 
 Push:
 
-```powershell
+``` powershell
 git push origin main
 ```
 
 ngrok:
 
-```powershell
+``` powershell
 ngrok http 3001
 ```
 
----
+------------------------------------------------------------------------
 
 # 31. TESTING PHILOSOPHY
 
@@ -1305,7 +1650,7 @@ A feature is not complete because code exists or TypeScript compiles.
 
 Definition of Done:
 
-```text
+``` text
 Requirements
  ↓
 Architecture
@@ -1327,13 +1672,13 @@ Review
 
 Actual behavior must be verified.
 
----
+------------------------------------------------------------------------
 
 # 32. SENIOR DEVELOPER WORKING STYLE
 
 For every task:
 
-```text
+``` text
 Understand
  ↓
 Inspect repository
@@ -1359,20 +1704,20 @@ Push
 
 When the user shows an error:
 
-1. Read the actual error.
-2. Identify the likely root cause.
-3. Inspect relevant files.
-4. Make the smallest correct fix.
-5. Retest.
-6. Verify.
+1.  Read the actual error.
+2.  Identify the likely root cause.
+3.  Inspect relevant files.
+4.  Make the smallest correct fix.
+5.  Retest.
+6.  Verify.
 
 Do not provide random destructive fix lists.
 
----
+------------------------------------------------------------------------
 
 # 33. EXPECTED ROADMAP
 
-```text
+``` text
 Phase 14
 Authenticated Semantic Memory — COMPLETE
         ↓
@@ -1397,55 +1742,67 @@ Documents / Knowledge / Agents / Integrations / Voice / Proactive Assistant
 
 Re-evaluate after every phase.
 
----
+------------------------------------------------------------------------
 
 # 34. SUCCESS CRITERIA
 
 Eventually BrainOS should be able to:
 
 ### Remember
-“Remember my project architecture.”
+
+"Remember my project architecture."
 
 ### Retrieve
-“What did I decide about the database?”
+
+"What did I decide about the database?"
 
 ### Understand
-“Read this document and tell me what matters.”
+
+"Read this document and tell me what matters."
 
 ### Plan
-“Plan my week around my classes and projects.”
+
+"Plan my week around my classes and projects."
 
 ### Decide
-“Compare these options based on my priorities.”
+
+"Compare these options based on my priorities."
 
 ### Act
 
-“Create the task and remind me tomorrow.”
+"Create the task and remind me tomorrow."
 
 ### Integrate
-“Check my calendar and tell me if I have time.”
+
+"Check my calendar and tell me if I have time."
 
 ### Proactively assist
-“You have a deadline tomorrow and this related document has not been reviewed.”
+
+"You have a deadline tomorrow and this related document has not been
+reviewed."
 
 ### Learn responsibly
-“That preference is likely important for future recommendations.”
+
+"That preference is likely important for future recommendations."
 
 User control and privacy remain central.
 
----
+------------------------------------------------------------------------
 
 # 35. CURRENT AUTHORITATIVE STATE
 
-This section supersedes older current-phase, planned-work, and stale Git-state statements above. Historical sections are retained intentionally.
+This section supersedes older current-phase, planned-work, and stale
+Git-state statements above. Historical sections are retained
+intentionally.
 
 ## Current phase
 
-**Phase 19 — Tasks / Reminders / Automation**
+**Phase 19 --- Tasks / Reminders / Automation**
 
 Phase 19 is actively being implemented.
 
-The first Phase 19 milestone is the **Task foundation and assistant tool integration**. The verified foundation is complete.
+The first Phase 19 milestone is the **Task foundation and assistant tool
+integration**. The verified foundation is complete.
 
 ## Verified Phase 19 implementation
 
@@ -1453,7 +1810,7 @@ The first Phase 19 milestone is the **Task foundation and assistant tool integra
 
 Prisma schema now contains:
 
-```text
+``` text
 TaskStatus
   TODO
   COMPLETED
@@ -1466,7 +1823,7 @@ TaskPriority
 
 `Task` model fields:
 
-```text
+``` text
 id
 userId
 title
@@ -1482,7 +1839,7 @@ deletedAt
 
 Indexes:
 
-```text
+``` text
 (userId)
 (userId, status)
 (userId, dueAt)
@@ -1490,28 +1847,29 @@ Indexes:
 
 Ownership:
 
-```text
+``` text
 Task.userId → User.id
 ON DELETE CASCADE
 ```
 
 Migration:
 
-```text
+``` text
 apps/backend/prisma/migrations/20260822143000_add_task_foundation/migration.sql
 ```
 
-The migration was applied successfully to the dedicated test database `brainos_test`.
+The migration was applied successfully to the dedicated test database
+`brainos_test`.
 
 Verified:
 
-```powershell
+``` powershell
 npx prisma migrate status
 ```
 
 Result:
 
-```text
+``` text
 Database schema is up to date!
 ```
 
@@ -1519,7 +1877,7 @@ Database schema is up to date!
 
 Implemented:
 
-```text
+``` text
 apps/backend/src/services/tasks/task.service.ts
 apps/backend/src/services/tasks/task.types.ts
 apps/backend/src/services/tasks/repositories/task.repository.ts
@@ -1527,7 +1885,7 @@ apps/backend/src/services/tasks/repositories/task.repository.ts
 
 Task service operations include:
 
-```text
+``` text
 createTask
 listTasks
 getTask
@@ -1536,12 +1894,8 @@ completeTask
 deleteTask
 ```
 
-The service validates:
-- authenticated user ID
-- task ID
-- task title
-- list limits
-- task input normalization
+The service validates: - authenticated user ID - task ID - task title -
+list limits - task input normalization
 
 The repository owns Prisma access.
 
@@ -1553,7 +1907,7 @@ Active reads/lists exclude soft-deleted tasks.
 
 Task list limit is capped at:
 
-```text
+``` text
 50
 ```
 
@@ -1561,39 +1915,40 @@ Task list limit is capped at:
 
 Implemented:
 
-```text
+``` text
 apps/backend/test/services/tasks/task.service.test.ts
 apps/backend/test/tasks/task.integration.test.ts
 ```
 
 The PostgreSQL integration suite verifies:
 
-- task persistence
-- owner-scoped listing
-- owned task retrieval
-- cross-owner read denial
-- owned update
-- cross-owner update denial
-- completion
-- cross-owner completion denial
-- soft deletion
-- hidden soft-deleted tasks
-- repeated/cross-owner deletion denial
-- status/priority filtering
+-   task persistence
+-   owner-scoped listing
+-   owned task retrieval
+-   cross-owner read denial
+-   owned update
+-   cross-owner update denial
+-   completion
+-   cross-owner completion denial
+-   soft deletion
+-   hidden soft-deleted tasks
+-   repeated/cross-owner deletion denial
+-   status/priority filtering
 
-The integration suite uses the dedicated test database and was verified after applying the task migration.
+The integration suite uses the dedicated test database and was verified
+after applying the task migration.
 
 ### Assistant task tools
 
 Implemented:
 
-```text
+``` text
 apps/backend/src/services/tools/task.tools.ts
 ```
 
 Registered tools:
 
-```text
+``` text
 create_task
 list_tasks
 complete_task
@@ -1602,7 +1957,7 @@ delete_task
 
 Tool behavior:
 
-```text
+``` text
 ToolContext
     ↓
 authenticated userId
@@ -1620,27 +1975,22 @@ The tools do not allow the model/client to choose the task owner.
 
 Ownership always comes from:
 
-```typescript
+``` typescript
 context.userId
 ```
 
-Tool input validation covers:
-- object shape
-- required strings
-- enum values
-- ISO date values
-- positive integer limits
-- task IDs
+Tool input validation covers: - object shape - required strings - enum
+values - ISO date values - positive integer limits - task IDs
 
 Task tools are registered in:
 
-```text
+``` text
 apps/backend/src/services/tools/tool.container.ts
 ```
 
 Existing development tool remains registered:
 
-```text
+``` text
 test_tool
 ```
 
@@ -1648,33 +1998,28 @@ test_tool
 
 Implemented:
 
-```text
+``` text
 apps/backend/test/services/tools/task.tools.test.ts
 ```
 
 Verified coverage includes:
 
-```text
+``` text
 create_task
 list_tasks
 complete_task
 delete_task
 ```
 
-including:
-- authenticated ownership
-- required-field validation
-- invalid enum validation
-- invalid input validation
-- invalid limit validation
-- task ID validation
-- service delegation behavior
+including: - authenticated ownership - required-field validation -
+invalid enum validation - invalid input validation - invalid limit
+validation - task ID validation - service delegation behavior
 
 ## Verified validation
 
 Latest verified backend validation:
 
-```powershell
+``` powershell
 npx prisma generate
 npx prisma validate
 npx tsc --noEmit
@@ -1683,7 +2028,7 @@ npm run test:run
 
 Results:
 
-```text
+``` text
 Prisma Client generated successfully
 Prisma schema valid
 TypeScript compilation passes
@@ -1694,14 +2039,14 @@ TypeScript compilation passes
 
 The full backend test run was verified with:
 
-```text
+``` text
 Test Files  14 passed (14)
 Tests       166 passed (166)
 ```
 
 Task-specific verification:
 
-```text
+``` text
 Task tool tests: 12 passed
 Task PostgreSQL integration tests: 11 passed
 ```
@@ -1710,19 +2055,20 @@ Task PostgreSQL integration tests: 11 passed
 
 Prisma commands must be executed from:
 
-```text
+``` text
 D:\Project\BrainOS\apps\backend
 ```
 
 because the active Prisma configuration resolves:
 
-```text
+``` text
 apps/backend/prisma/schema.prisma
 ```
 
-Running `npx prisma generate` from the repository root can cause Prisma to look for:
+Running `npx prisma generate` from the repository root can cause Prisma
+to look for:
 
-```text
+``` text
 D:\Project\BrainOS\prisma\schema.prisma
 ```
 
@@ -1730,16 +2076,17 @@ and fail.
 
 Correct:
 
-```powershell
+``` powershell
 cd D:\Project\BrainOS\apps\backend
 npx prisma generate
 ```
 
 ## Test database incident and resolution
 
-During Phase 19 setup, the task integration suite initially connected to:
+During Phase 19 setup, the task integration suite initially connected
+to:
 
-```text
+``` text
 brainos_test
 ```
 
@@ -1747,20 +2094,20 @@ but the new `Task` table had not yet been migrated.
 
 The integration suite correctly failed because:
 
-```text
+``` text
 public.Task does not exist
 ```
 
 The correct resolution was:
 
-```powershell
+``` powershell
 cd D:\Project\BrainOS\apps\backend
 npx prisma migrate deploy
 ```
 
 The task migration:
 
-```text
+``` text
 20260822143000_add_task_foundation
 ```
 
@@ -1768,7 +2115,7 @@ was then applied successfully.
 
 After migration:
 
-```text
+``` text
 Database schema is up to date!
 ```
 
@@ -1778,28 +2125,33 @@ No production/development database should be modified casually.
 
 ## TypeScript issue resolved
 
-The task integration test initially showed implicit-`any` errors for callback parameters.
+The task integration test initially showed implicit-`any` errors for
+callback parameters.
 
-A temporary attempt added explicit Prisma `Task` annotations, but the resulting diff was unnecessary formatting/type noise.
+A temporary attempt added explicit Prisma `Task` annotations, but the
+resulting diff was unnecessary formatting/type noise.
 
-The integration test was restored to the clean original style after the underlying generated Prisma Client issue was resolved.
+The integration test was restored to the clean original style after the
+underlying generated Prisma Client issue was resolved.
 
 Then:
 
-```powershell
+``` powershell
 npx prisma generate
 npx tsc --noEmit
 ```
 
 passed successfully.
 
-The final committed test file is therefore the clean version, not the temporary noisy version.
+The final committed test file is therefore the clean version, not the
+temporary noisy version.
 
 ## Tool test issue resolved
 
-The task tool tests initially failed before executing any tests because Vitest mock initialization hit:
+The task tool tests initially failed before executing any tests because
+Vitest mock initialization hit:
 
-```text
+``` text
 Cannot access 'mockCreateTask' before initialization
 ```
 
@@ -1807,7 +2159,7 @@ The test setup was corrected.
 
 The next failure was only an error-message mismatch:
 
-```text
+``` text
 Expected: "title is required."
 Received: "title must be a string."
 ```
@@ -1818,7 +2170,7 @@ The validation behavior/tests were aligned.
 
 Final result:
 
-```text
+``` text
 12/12 task tool tests passing
 ```
 
@@ -1826,7 +2178,7 @@ Final result:
 
 Phase 19 task work was split into three commits:
 
-```text
+``` text
 8378a1e feat(tasks): add task foundation and persistence
 c37a159 feat(tasks): register task assistant tools
 6149b4e test(tasks): add task tool tests
@@ -1834,7 +2186,7 @@ c37a159 feat(tasks): register task assistant tools
 
 Verified contents of `8378a1e`:
 
-```text
+``` text
 apps/backend/prisma/migrations/20260822143000_add_task_foundation/migration.sql
 apps/backend/prisma/schema.prisma
 apps/backend/src/services/tasks/repositories/task.repository.ts
@@ -1846,32 +2198,33 @@ apps/backend/test/tasks/task.integration.test.ts
 
 Verified contents of `c37a159`:
 
-```text
+``` text
 apps/backend/src/services/tools/task.tools.ts
 apps/backend/src/services/tools/tool.container.ts
 ```
 
 Verified contents of `6149b4e`:
 
-```text
+``` text
 apps/backend/test/services/tools/task.tools.test.ts
 ```
 
 Latest verified Git state:
 
-```text
+``` text
 On branch main
 Your branch is ahead of 'origin/main' by 3 commits.
 nothing to commit, working tree clean
 ```
 
-Do not claim these commits are pushed unless a later command verifies the remote state.
+Do not claim these commits are pushed unless a later command verifies
+the remote state.
 
 ## Current architecture
 
 Task domain:
 
-```text
+``` text
 Assistant
    ↓
 ToolExecutor
@@ -1891,7 +2244,7 @@ PostgreSQL
 
 Authentication ownership:
 
-```text
+``` text
 Clerk
    ↓
 Authenticated request
@@ -1909,33 +2262,36 @@ The task owner is never taken from tool input.
 
 `task.tools.ts` currently creates a service instance internally:
 
-```typescript
+``` typescript
 const taskService = new TaskService(
   new TaskRepository(),
 );
 ```
 
-This is acceptable for the current foundation but is a known future dependency-injection improvement.
+This is acceptable for the current foundation but is a known future
+dependency-injection improvement.
 
-Do not refactor this merely for style. Only change it when the architecture or testing requirements justify the change.
+Do not refactor this merely for style. Only change it when the
+architecture or testing requirements justify the change.
 
 ## Current known warnings
 
 Vitest/Vite may emit a non-failing warning concerning:
 
-```text
+``` text
 configLoader: 'native'
 ```
 
 and ESM syntax in:
 
-```text
+``` text
 vitest.config.ts
 ```
 
 This warning does not currently fail the tests.
 
-Do not change the configuration merely to suppress the warning without a separately scoped compatibility decision.
+Do not change the configuration merely to suppress the warning without a
+separately scoped compatibility decision.
 
 # 36. PHASE 19 CURRENT CHECKPOINT
 
@@ -1943,7 +2299,7 @@ Do not change the configuration merely to suppress the warning without a separat
 
 Completed:
 
-```text
+``` text
 ✓ Task Prisma model
 ✓ Task enums
 ✓ Task migration
@@ -1969,7 +2325,7 @@ Completed:
 
 Verified:
 
-```text
+``` text
 14 test files passed
 166 tests passed
 0 failed
@@ -1985,7 +2341,7 @@ Potential next milestone:
 
 Verify the real path:
 
-```text
+``` text
 User request
  ↓
 Assistant controller
@@ -2011,19 +2367,21 @@ tool result
 assistant response
 ```
 
-The task tools are registered, but do not claim full natural-language assistant task execution is verified until an end-to-end assistant test or manual verification proves it.
+The task tools are registered, but do not claim full natural-language
+assistant task execution is verified until an end-to-end assistant test
+or manual verification proves it.
 
 Then consider, in separate milestones:
 
-- `update_task` tool
-- `get_task` tool
-- richer due-date handling
-- reminder scheduling
-- recurring tasks
-- automation infrastructure
-- task completion/update response handling
-- task-related conversation context
-- user-facing task API/UI if required
+-   `update_task` tool
+-   `get_task` tool
+-   richer due-date handling
+-   reminder scheduling
+-   recurring tasks
+-   automation infrastructure
+-   task completion/update response handling
+-   task-related conversation context
+-   user-facing task API/UI if required
 
 Do not implement all of these at once.
 
@@ -2031,7 +2389,7 @@ Do not implement all of these at once.
 
 Current task-foundation milestone:
 
-```text
+``` text
 ✓ Task persistence works
 ✓ Task ownership is enforced
 ✓ Task soft deletion works
@@ -2050,7 +2408,7 @@ Current task-foundation milestone:
 
 Broader Phase 19 completion:
 
-```text
+``` text
 [ ] Real assistant → task tool execution verified
 [ ] Task tool result handling verified
 [ ] Task lifecycle complete
@@ -2066,7 +2424,7 @@ Broader Phase 19 completion:
 
 Task implementation:
 
-```text
+``` text
 apps/backend/src/services/tasks/task.service.ts
 apps/backend/src/services/tasks/task.types.ts
 apps/backend/src/services/tasks/repositories/task.repository.ts
@@ -2074,7 +2432,7 @@ apps/backend/src/services/tasks/repositories/task.repository.ts
 
 Task tools:
 
-```text
+``` text
 apps/backend/src/services/tools/task.tools.ts
 apps/backend/src/services/tools/tool.container.ts
 apps/backend/src/services/tools/tool.registry.ts
@@ -2084,7 +2442,7 @@ apps/backend/src/services/tools/tool.types.ts
 
 Task tests:
 
-```text
+``` text
 apps/backend/test/services/tasks/task.service.test.ts
 apps/backend/test/tasks/task.integration.test.ts
 apps/backend/test/services/tools/task.tools.test.ts
@@ -2092,19 +2450,19 @@ apps/backend/test/services/tools/task.tools.test.ts
 
 Task migration:
 
-```text
+``` text
 apps/backend/prisma/migrations/20260822143000_add_task_foundation/migration.sql
 ```
 
 Schema:
 
-```text
+``` text
 apps/backend/prisma/schema.prisma
 ```
 
 Assistant/tool integration:
 
-```text
+``` text
 apps/backend/src/controllers/assistant/assistant.controller.ts
 apps/backend/src/services/assistant/assistant.service.ts
 apps/backend/src/services/tools/tool.container.ts
@@ -2116,36 +2474,28 @@ Always inspect actual source before modifying these files.
 
 # 38. PHASE 17 AND PHASE 18 HISTORICAL CHECKPOINTS
 
-## Phase 17 — AI Assistant Integration / Orchestration
+## Phase 17 --- AI Assistant Integration / Orchestration
 
-Phase 17 established:
-- assistant service
-- AI provider integration
-- tool registry
-- tool executor
-- authenticated assistant route
-- Ollama integration
-- assistant/tool boundary
+Phase 17 established: - assistant service - AI provider integration -
+tool registry - tool executor - authenticated assistant route - Ollama
+integration - assistant/tool boundary
 
 Relevant commit:
 
-```text
+``` text
 afc51f4 feat: add assistant tool calling with Ollama
 ```
 
 Actual repository state is authoritative for exact implementation.
 
-## Phase 18 — Conversation + Persistent Context
+## Phase 18 --- Conversation + Persistent Context
 
-Phase 18 established:
-- conversation persistence
-- message persistence
-- assistant conversation integration
-- conversation activity updates
+Phase 18 established: - conversation persistence - message persistence -
+assistant conversation integration - conversation activity updates
 
 Relevant commits:
 
-```text
+``` text
 7d4c465 docs: prepare Phase 18 conversation context
 5f7ed01 docs: update phase 18 context
 c7780e0 feat: add conversation persistence
@@ -2158,49 +2508,49 @@ Phase 18 is now treated as complete for roadmap purposes.
 
 Do not restart Phase 18 unless a verified regression requires it.
 
-# 39. VERIFIED VS PLANNED — UPDATED
+# 39. VERIFIED VS PLANNED --- UPDATED
 
 ## Verified
 
-- Clerk authentication reaches backend
-- Bearer token flow works
-- Clerk user maps to PostgreSQL User
-- centralized error architecture exists
-- centralized logging abstraction exists
-- memory creation works
-- memory embeddings work
-- pgvector persistence works
-- semantic memory search works
-- authenticated memory ownership isolation works
-- soft-delete memory filtering works
-- automated memory regression suite exists
-- dedicated `brainos_test` database safety exists
-- task schema exists
-- task migration exists
-- task repository exists
-- task service exists
-- task PostgreSQL integration exists
-- task assistant tools exist
-- task tools are registered
-- task tool tests exist
-- task ownership comes from authenticated tool context
-- task soft deletion works
-- task filtering works
-- Prisma generation passes
-- Prisma validation passes
-- TypeScript compilation passes
-- full backend suite passes with 166 tests
+-   Clerk authentication reaches backend
+-   Bearer token flow works
+-   Clerk user maps to PostgreSQL User
+-   centralized error architecture exists
+-   centralized logging abstraction exists
+-   memory creation works
+-   memory embeddings work
+-   pgvector persistence works
+-   semantic memory search works
+-   authenticated memory ownership isolation works
+-   soft-delete memory filtering works
+-   automated memory regression suite exists
+-   dedicated `brainos_test` database safety exists
+-   task schema exists
+-   task migration exists
+-   task repository exists
+-   task service exists
+-   task PostgreSQL integration exists
+-   task assistant tools exist
+-   task tools are registered
+-   task tool tests exist
+-   task ownership comes from authenticated tool context
+-   task soft deletion works
+-   task filtering works
+-   Prisma generation passes
+-   Prisma validation passes
+-   TypeScript compilation passes
+-   full backend suite passes with 166 tests
 
 ## Not yet fully verified
 
-- natural-language assistant → task tool execution end-to-end
-- reminder scheduler
-- reminder delivery
-- recurring automation
-- full task API/UI
-- production deployment of task functionality
-- Phase 19 final documentation
-- Phase 19 final push verification
+-   natural-language assistant → task tool execution end-to-end
+-   reminder scheduler
+-   reminder delivery
+-   recurring automation
+-   full task API/UI
+-   production deployment of task functionality
+-   Phase 19 final documentation
+-   Phase 19 final push verification
 
 Never mark these as complete without evidence.
 
@@ -2208,49 +2558,49 @@ Never mark these as complete without evidence.
 
 Backend:
 
-```powershell
+``` powershell
 cd D:\Project\BrainOS\apps\backend
 npm run dev
 ```
 
 Frontend:
 
-```powershell
+``` powershell
 cd D:\Project\BrainOS\apps\web
 npm run dev
 ```
 
 Backend typecheck:
 
-```powershell
+``` powershell
 cd D:\Project\BrainOS\apps\backend
 npx tsc --noEmit
 ```
 
 Full backend tests:
 
-```powershell
+``` powershell
 cd D:\Project\BrainOS\apps\backend
 npm run test:run
 ```
 
 Task tool tests:
 
-```powershell
+``` powershell
 cd D:\Project\BrainOS\apps\backend
 npx vitest run test/services/tools/task.tools.test.ts
 ```
 
 Task PostgreSQL integration:
 
-```powershell
+``` powershell
 cd D:\Project\BrainOS\apps\backend
 npx vitest run test/tasks/task.integration.test.ts
 ```
 
 Prisma:
 
-```powershell
+``` powershell
 cd D:\Project\BrainOS\apps\backend
 npx prisma generate
 npx prisma validate
@@ -2259,14 +2609,14 @@ npx prisma migrate status
 
 Apply pending migrations when intentionally required:
 
-```powershell
+``` powershell
 cd D:\Project\BrainOS\apps\backend
 npx prisma migrate deploy
 ```
 
 Git:
 
-```powershell
+``` powershell
 cd D:\Project\BrainOS
 git status
 git branch --show-current
@@ -2276,7 +2626,7 @@ git diff
 
 Push:
 
-```powershell
+``` powershell
 git push origin main
 ```
 
@@ -2286,7 +2636,7 @@ A feature is not complete because code exists or TypeScript compiles.
 
 Definition of Done:
 
-```text
+``` text
 Requirements
  ↓
 Architecture
@@ -2308,7 +2658,7 @@ Review
 
 For task features specifically:
 
-```text
+``` text
 Tool input
  ↓
 Validation
@@ -2332,7 +2682,7 @@ Each boundary should be tested at the appropriate level.
 
 For every task:
 
-```text
+``` text
 Understand
  ↓
 Inspect repository
@@ -2358,18 +2708,18 @@ Push
 
 When the user shows an error:
 
-1. Read the actual error.
-2. Identify the likely root cause.
-3. Inspect relevant files.
-4. Make the smallest correct fix.
-5. Retest.
-6. Verify.
+1.  Read the actual error.
+2.  Identify the likely root cause.
+3.  Inspect relevant files.
+4.  Make the smallest correct fix.
+5.  Retest.
+6.  Verify.
 
 Do not provide random destructive fix lists.
 
 # 43. UPDATED ROADMAP
 
-```text
+``` text
 Phase 14
 Authenticated Semantic Memory — COMPLETE
         ↓
@@ -2400,58 +2750,61 @@ Eventually BrainOS should be able to:
 
 ### Remember
 
-“Remember my project architecture.”
+"Remember my project architecture."
 
 ### Retrieve
 
-“What did I decide about the database?”
+"What did I decide about the database?"
 
 ### Understand
 
-“Read this document and tell me what matters.”
+"Read this document and tell me what matters."
 
 ### Plan
 
-“Plan my week around my classes and projects.”
+"Plan my week around my classes and projects."
 
 ### Decide
 
-“Compare these options based on my priorities.”
+"Compare these options based on my priorities."
 
 ### Act
 
-“Create the task and remind me tomorrow.”
+"Create the task and remind me tomorrow."
 
 ### Integrate
 
-“Check my calendar and tell me if I have time.”
+"Check my calendar and tell me if I have time."
 
 ### Proactively assist
 
-“You have a deadline tomorrow and this related document has not been reviewed.”
+"You have a deadline tomorrow and this related document has not been
+reviewed."
 
 ### Learn responsibly
 
-“That preference is likely important for future recommendations.”
+"That preference is likely important for future recommendations."
 
 User control and privacy remain central.
 
 # 45. FINAL PROJECT STATEMENT
 
-BrainOS is being built to become a private personal AI operating system that:
+BrainOS is being built to become a private personal AI operating system
+that:
 
-- remembers
-- understands
-- retrieves
-- reasons
-- recommends
-- organizes
-- plans
-- integrates
-- automates
-- eventually acts appropriately with user control
+-   remembers
+-   understands
+-   retrieves
+-   reasons
+-   recommends
+-   organizes
+-   plans
+-   integrates
+-   automates
+-   eventually acts appropriately with user control
 
-The technical foundation is deliberately being built before the high-level assistant.
+The technical foundation is deliberately being built before the
+high-level assistant.
 
 Current verified stack:
 
@@ -2459,7 +2812,8 @@ Current verified stack:
 
 Current milestone:
 
-**Phase 19 — Task foundation and assistant task tools complete; reminder/automation work remains**
+**Phase 19 --- Task foundation and assistant task tools complete;
+reminder/automation work remains**
 
 Current verified test result:
 
@@ -2467,7 +2821,7 @@ Current verified test result:
 
 Current verified Git checkpoints:
 
-```text
+``` text
 8378a1e feat(tasks): add task foundation and persistence
 c37a159 feat(tasks): register task assistant tools
 6149b4e test(tasks): add task tool tests
@@ -2475,6 +2829,10 @@ c37a159 feat(tasks): register task assistant tools
 
 Ultimate mission:
 
-> Build a personal AI assistant that understands the user's context, stores and retrieves useful information, helps make better decisions, organizes life/work/study, and provides appropriate proactive assistance while remaining private, modular, affordable, maintainable, and under the user's control.
+> Build a personal AI assistant that understands the user's context,
+> stores and retrieves useful information, helps make better decisions,
+> organizes life/work/study, and provides appropriate proactive
+> assistance while remaining private, modular, affordable, maintainable,
+> and under the user's control.
 
 # END OF BRAINOS MASTER CONTEXT
