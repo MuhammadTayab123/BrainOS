@@ -14,6 +14,8 @@ import {
 const mocks = vi.hoisted(() => ({
   createTask: vi.fn(),
   listTasks: vi.fn(),
+  getTask: vi.fn(),
+  updateTask: vi.fn(),
   completeTask: vi.fn(),
   deleteTask: vi.fn(),
 }));
@@ -24,6 +26,8 @@ vi.mock(
     TaskService: class {
       createTask = mocks.createTask;
       listTasks = mocks.listTasks;
+      getTask = mocks.getTask;
+      updateTask = mocks.updateTask;
       completeTask = mocks.completeTask;
       deleteTask = mocks.deleteTask;
     },
@@ -40,6 +44,8 @@ vi.mock(
 import {
   createTaskTool,
   listTasksTool,
+  getTaskTool,
+  updateTaskTool,
   completeTaskTool,
   deleteTaskTool,
 } from "../../../src/services/tools/task.tools";
@@ -233,6 +239,149 @@ describe("Task tools", () => {
 
       expect(
         mocks.listTasks,
+      ).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("get_task", () => {
+    it("gets a task using the authenticated user", async () => {
+      const task = {
+        id: "task_1",
+        userId: "user_a",
+        title: "Finish BrainOS",
+        status: TaskStatus.TODO,
+        priority: TaskPriority.HIGH,
+      };
+
+      mocks.getTask.mockResolvedValue(task);
+
+      const result =
+        await getTaskTool.execute(
+          {
+            taskId: "task_1",
+          },
+          context,
+        );
+
+      expect(
+        mocks.getTask,
+      ).toHaveBeenCalledWith(
+        "task_1",
+        "user_a",
+      );
+
+      expect(result).toEqual(task);
+    });
+
+    it("rejects a missing task ID", async () => {
+      await expect(
+        getTaskTool.execute(
+          {},
+          context,
+        ),
+      ).rejects.toThrow(
+        "taskId is required.",
+      );
+
+      expect(
+        mocks.getTask,
+      ).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("update_task", () => {
+    it("updates supplied task fields for the authenticated user", async () => {
+      mocks.updateTask.mockResolvedValue(
+        undefined,
+      );
+
+      const result =
+        await updateTaskTool.execute(
+          {
+            taskId: "task_1",
+            title: "Finish Phase 19",
+            description:
+              "Complete task tool work",
+            priority: "HIGH",
+            dueAt:
+              "2026-08-30T12:00:00.000Z",
+          },
+          context,
+        );
+
+      expect(
+        mocks.updateTask,
+      ).toHaveBeenCalledWith(
+        "task_1",
+        "user_a",
+        {
+          title: "Finish Phase 19",
+          description:
+            "Complete task tool work",
+          priority:
+            TaskPriority.HIGH,
+          dueAt: new Date(
+            "2026-08-30T12:00:00.000Z",
+          ),
+        },
+      );
+
+      expect(result).toEqual({
+        success: true,
+        taskId: "task_1",
+        updated: true,
+      });
+    });
+
+    it("rejects a missing task ID", async () => {
+      await expect(
+        updateTaskTool.execute(
+          {
+            title: "New title",
+          },
+          context,
+        ),
+      ).rejects.toThrow(
+        "taskId is required.",
+      );
+
+      expect(
+        mocks.updateTask,
+      ).not.toHaveBeenCalled();
+    });
+
+    it("rejects an update with no fields", async () => {
+      await expect(
+        updateTaskTool.execute(
+          {
+            taskId: "task_1",
+          },
+          context,
+        ),
+      ).rejects.toThrow(
+        "At least one task field must be provided for update.",
+      );
+
+      expect(
+        mocks.updateTask,
+      ).not.toHaveBeenCalled();
+    });
+
+    it("rejects an invalid priority", async () => {
+      await expect(
+        updateTaskTool.execute(
+          {
+            taskId: "task_1",
+            priority: "URGENT",
+          },
+          context,
+        ),
+      ).rejects.toThrow(
+        "priority must be one of",
+      );
+
+      expect(
+        mocks.updateTask,
       ).not.toHaveBeenCalled();
     });
   });

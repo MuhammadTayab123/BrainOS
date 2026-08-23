@@ -3,6 +3,8 @@ import { testTool } from "./test.tool";
 import {
   createTaskTool,
   listTasksTool,
+  getTaskTool,
+  updateTaskTool,
   completeTaskTool,
   deleteTaskTool,
 } from "./task.tools";
@@ -14,6 +16,8 @@ export function createToolRegistry(): ToolRegistry {
 
   registry.register(createTaskTool);
   registry.register(listTasksTool);
+  registry.register(getTaskTool);
+registry.register(updateTaskTool);
   registry.register(completeTaskTool);
   registry.register(deleteTaskTool);
 

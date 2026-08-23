@@ -340,6 +340,156 @@ export const listTasksTool: ToolDefinition = {
   },
 };
 
+
+export const getTaskTool: ToolDefinition = {
+  name: "get_task",
+
+  description:
+    "Get one active task belonging to the authenticated BrainOS user by task ID.",
+
+  parameters: {
+    type: "object",
+
+    properties: {
+      taskId: {
+        type: "string",
+        description:
+          "The exact ID of the task to retrieve.",
+      },
+    },
+
+    required: ["taskId"],
+  },
+
+  async execute(
+    input: unknown,
+    context: ToolContext,
+  ) {
+    const taskId = requireTaskId(input);
+
+    return taskService.getTask(
+      taskId,
+      context.userId,
+    );
+  },
+};
+
+export const updateTaskTool: ToolDefinition = {
+  name: "update_task",
+
+  description:
+    "Update an owned BrainOS task. Only supplied fields are changed.",
+
+  parameters: {
+    type: "object",
+
+    properties: {
+      taskId: {
+        type: "string",
+        description:
+          "The exact ID of the task to update.",
+      },
+
+      title: {
+        type: "string",
+        description:
+          "Optional new task title.",
+      },
+
+      description: {
+        type: "string",
+        description:
+          "Optional new task description.",
+      },
+
+      priority: {
+        type: "string",
+        enum: [
+          TaskPriority.LOW,
+          TaskPriority.MEDIUM,
+          TaskPriority.HIGH,
+        ],
+        description:
+          "Optional new task priority.",
+      },
+
+      dueAt: {
+        type: "string",
+        description:
+          "Optional new due date/time as an ISO 8601 string.",
+      },
+    },
+
+    required: ["taskId"],
+  },
+
+  async execute(
+    input: unknown,
+    context: ToolContext,
+  ) {
+    const object = requireObject(input);
+
+    const taskId = requireString(
+      object,
+      "taskId",
+    );
+
+    const data = {
+      title:
+        object.title !== undefined
+          ? requireString(object, "title")
+          : undefined,
+
+      description:
+        object.description !== undefined
+          ? optionalString(
+              object,
+              "description",
+            )
+          : undefined,
+
+      priority: optionalEnum(
+        object,
+        "priority",
+        [
+          TaskPriority.LOW,
+          TaskPriority.MEDIUM,
+          TaskPriority.HIGH,
+        ],
+      ),
+
+      dueAt:
+        object.dueAt !== undefined
+          ? optionalDate(object, "dueAt")
+          : undefined,
+    };
+
+    const hasUpdate =
+      data.title !== undefined ||
+      data.description !== undefined ||
+      data.priority !== undefined ||
+      data.dueAt !== undefined;
+
+    if (!hasUpdate) {
+      throw new Error(
+        "At least one task field must be provided for update.",
+      );
+    }
+
+    await taskService.updateTask(
+      taskId,
+      context.userId,
+      data,
+    );
+
+    return {
+      success: true,
+      taskId,
+      updated: true,
+    };
+  },
+};
+
 export const completeTaskTool: ToolDefinition = {
   name: "complete_task",
 
