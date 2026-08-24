@@ -15,7 +15,7 @@ import userRoutes from "./routes/user.routes";
 import memoryRoutes from "./routes/memory.routes";
 import assistantRoutes from "./routes/assistant.routes";
 import conversationRoutes from "./routes/conversation.routes";
-
+import documentRoutes from "./routes/document.routes";
 
 
 // Clerk webhooks
@@ -62,6 +62,8 @@ app.use("/api/v1/users", userRoutes);
 
 app.use("/api/v1/memories", memoryRoutes);
 
+// Document routes
+app.use("/api/v1/documents", documentRoutes);
 // Assistant routes
 app.use("/api/v1/assistant", assistantRoutes);
 

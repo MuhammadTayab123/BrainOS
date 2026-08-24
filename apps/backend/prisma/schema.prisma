@@ -32,6 +32,19 @@ enum ReminderStatus {
   CANCELLED
 }
 
+enum DocumentStatus {
+  PENDING
+  READY
+  FAILED
+  DELETED
+}
+
+enum DocumentSourceType {
+  UPLOAD
+  TEXT
+  URL
+}
+
 model User {
   id        String  @id @default(cuid())
   clerkId   String  @unique
@@ -45,6 +58,7 @@ model User {
   memories      Memory[]
   tasks         Task[]
   reminders     Reminder[]
+  documents     Document[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -62,7 +76,8 @@ model Conversation {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
-  Message   Message[]
+
+  Message Message[]
 
   @@index([userId])
 }
@@ -72,8 +87,9 @@ model Message {
 
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role           MessageRole
-  content        String
+
+  role    MessageRole
+  content String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -153,4 +169,27 @@ model Reminder {
   @@index([userId, status])
   @@index([scheduledFor, status])
   @@index([taskId])
+}
+
+model Document {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title String
+
+  sourceType DocumentSourceType
+  source     String?
+
+  mimeType String?
+
+  status DocumentStatus @default(PENDING)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId])
+  @@index([userId, status])
 }

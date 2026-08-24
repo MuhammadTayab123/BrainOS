@@ -503,6 +503,32 @@ The database now reports:
 ```text
 Database schema is up to date!
 ```
+## Prisma Migration Safety Rules
+
+These rules are mandatory for all future BrainOS development.
+
+### Applied migrations are immutable
+
+Once a Prisma migration has been applied to a database:
+
+- never rename its migration directory
+- never edit its `migration.sql`
+- never delete the migration directory
+- never recreate it under a different timestamp/name
+
+Future schema changes must always use a new migration.
+
+### Required migration workflow
+
+Before creating a migration:
+
+```powershell
+cd D:\Project\BrainOS\apps\backend
+
+npx prisma migrate status
+npx prisma validate
+npx prisma generate
+npx tsc --noEmit
 
 **Do not reset the database or delete migration history casually.**
 
