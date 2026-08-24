@@ -10,6 +10,7 @@ describe("DocumentChunkRepository", () => {
         createMany: vi.fn(),
         findMany: vi.fn(),
       },
+      $executeRaw: vi.fn(),
     };
   }
 
@@ -152,5 +153,74 @@ describe("DocumentChunkRepository", () => {
     });
 
     expect(result).toEqual(chunks);
+  });
+
+  it("updates a chunk embedding with a valid 768-dimension vector", async () => {
+    const db = createDbMock();
+
+    db.$executeRaw.mockResolvedValue(1);
+
+    const repository = new DocumentChunkRepository(
+      db as any,
+    );
+
+    const embedding = Array.from(
+      { length: 768 },
+      (_, index) =>
+        index === 0 ? 1 : 0,
+    );
+
+    await repository.updateEmbedding(
+      "document-1",
+      0,
+      embedding,
+    );
+
+    expect(
+      db.$executeRaw,
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects invalid embedding dimensions", async () => {
+    const db = createDbMock();
+
+    const repository = new DocumentChunkRepository(
+      db as any,
+    );
+
+    await expect(
+      repository.updateEmbedding(
+        "document-1",
+        0,
+        [1, 0, 0],
+      ),
+    ).rejects.toThrow(
+      "Invalid embedding dimensions. Expected 768, received 3.",
+    );
+  });
+
+  it("rejects invalid embedding values", async () => {
+    const db = createDbMock();
+
+    const repository = new DocumentChunkRepository(
+      db as any,
+    );
+
+    const embedding = Array.from(
+      { length: 768 },
+      () => 0,
+    );
+
+    embedding[10] = Number.NaN;
+
+    await expect(
+      repository.updateEmbedding(
+        "document-1",
+        0,
+        embedding,
+      ),
+    ).rejects.toThrow(
+      "Embedding contains invalid numeric values.",
+    );
   });
 });

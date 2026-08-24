@@ -196,7 +196,6 @@ model Document {
   @@index([userId])
   @@index([userId, status])
 }
-
 model DocumentChunk {
   id String @id @default(cuid())
 
@@ -205,6 +204,8 @@ model DocumentChunk {
 
   chunkIndex Int
   content   String
+
+  embedding Unsupported("vector")?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
