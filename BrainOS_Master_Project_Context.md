@@ -4,14 +4,475 @@
 
 **Project:** BrainOS
 **Purpose:** Personal AI Operating System / Second Brain / Personal Assistant
-**Current phase:** Phase 19 — Tasks / Reminders / Automation
+**Current phase:** Phase 20 — Documents / Knowledge Foundation
 **Phase 17 status:** COMPLETE
 **Phase 18 status:** COMPLETE — Conversation persistence foundation verified
 **Repository:** `D:\Project\BrainOS`
 **Branch:** `main`
 **OS:** Windows
 **Editor:** VS Code
-**Last verified local commit:** `1ece2ed docs(context): update phase 19 task tools checkpoint`
+**Last verified local commit:** `d83946c feat(documents): add document content support`
+
+---
+
+# CURRENT AUTHORITATIVE STATE — 2026-08-24
+
+This section is the newest source of truth. Older sections below are historical and are retained for continuity. If an older section conflicts with this section or with the actual repository, inspect the repository and use the newer verified state.
+
+## Current phase
+
+**Phase 20 — Documents / Knowledge Foundation**
+
+Phase 20 has started after the Phase 19 task/reminder work.
+
+### Current verified milestone
+
+**Document foundation + authenticated Document API + document content support + first document ingestion layer COMPLETE.**
+
+Completed document work:
+
+```text
+✓ Document Prisma foundation
+✓ Document migration
+✓ Document repository
+✓ Document service
+✓ Authenticated Document API
+✓ Document API tests
+✓ Document content persistence
+✓ Content migration
+✓ Document ingestion service foundation
+✓ TEXT ingestion/normalization
+✓ Ingestion unit tests
+✓ DocumentService ingestion integration
+✓ DocumentService ingestion error propagation
+✓ Full backend regression
+✓ TypeScript compilation
+```
+
+The current ingestion layer intentionally does **not** claim URL or file extraction support.
+
+Current ingestion behavior:
+
+```text
+TEXT
+  ↓
+DocumentIngestionService
+  ↓
+validate / normalize content
+  ↓
+DocumentService
+  ↓
+DocumentRepository
+  ↓
+PostgreSQL
+```
+
+Deferred ingestion sources:
+
+```text
+URL
+  → reject until URL extraction is implemented
+
+UPLOAD
+  → reject until file extraction is implemented
+```
+
+### Current Git state
+
+Latest verified commit:
+
+```text
+d83946c feat(documents): add document content support
+```
+
+Previous document checkpoint:
+
+```text
+81a6ac8 feat(documents): add document foundation and API
+```
+
+Earlier Phase 19 checkpoints:
+
+```text
+cf20183 feat(reminders): add reminder worker and scheduler
+c4f42ba feat(reminders): add reminder foundation
+```
+
+Latest verified state before continuing document work:
+
+```text
+Branch: main
+origin/main: d83946c
+Working tree: clean
+```
+
+Do not claim a commit is pushed unless `git status` / `git log` or an equivalent remote verification confirms it.
+
+## Document architecture
+
+Current document request flow:
+
+```text
+Authenticated Request
+ ↓
+requireAuth
+ ↓
+Document Controller
+ ↓
+Document Service
+ ↓
+Document Repository
+ ↓
+Prisma
+ ↓
+PostgreSQL
+```
+
+Ingestion-aware creation flow:
+
+```text
+Authenticated Request
+ ↓
+Document Controller
+ ↓
+Document Service
+ ↓
+DocumentIngestionService
+ ↓
+normalized content
+ ↓
+Document Repository
+ ↓
+Prisma
+ ↓
+PostgreSQL
+```
+
+Ownership is always derived from the authenticated user context.
+
+Controllers must remain thin.
+
+Prisma/database access remains in repositories.
+
+Business rules remain in services.
+
+## Document API
+
+Current routes:
+
+```text
+POST   /api/v1/documents
+GET    /api/v1/documents
+GET    /api/v1/documents/:id
+PATCH  /api/v1/documents/:id/status
+DELETE /api/v1/documents/:id
+```
+
+Authentication is required.
+
+Document ownership is enforced through the authenticated user.
+
+Soft-deleted documents are excluded from normal reads/lists.
+
+Current document status foundation includes:
+
+```text
+PENDING
+READY
+PROCESSING
+FAILED
+DELETED
+```
+
+Use the actual Prisma enum/schema as authoritative if this changes.
+
+## Document files
+
+Current implementation files:
+
+```text
+apps/backend/src/controllers/document/document.controller.ts
+apps/backend/src/routes/document.routes.ts
+
+apps/backend/src/services/documents/document.service.ts
+apps/backend/src/services/documents/document.types.ts
+apps/backend/src/services/documents/repositories/document.repository.ts
+
+apps/backend/src/services/documents/ingestion/document.ingestion.service.ts
+apps/backend/src/services/documents/ingestion/document.ingestion.types.ts
+
+apps/backend/test/documents/document.api.test.ts
+apps/backend/test/documents/document.service.test.ts
+apps/backend/test/documents/document.ingestion.test.ts
+```
+
+Current migrations:
+
+```text
+apps/backend/prisma/migrations/20260824003625_add_document_foundation/migration.sql
+apps/backend/prisma/migrations/20260824053010_add_document_content/migration.sql
+```
+
+## Document validation
+
+Latest verified document-focused validation:
+
+```text
+Document test files: 3 passed
+Document tests: 32 passed
+Full backend test files: 21 passed
+Full backend tests: 249 passed
+TypeScript: passed
+```
+
+The document-specific suites include:
+
+```text
+document.api.test.ts
+document.service.test.ts
+document.ingestion.test.ts
+```
+
+The ingestion suite verifies the current intentional boundaries:
+
+```text
+✓ accepts supported TEXT ingestion
+✓ normalizes/validates TEXT content
+✓ rejects unsupported URL ingestion until extraction exists
+✓ rejects unsupported UPLOAD ingestion until extraction exists
+```
+
+The service suite verifies:
+
+```text
+✓ normalized document creation
+✓ ingestion integration
+✓ missing title rejection
+✓ missing source type rejection
+✓ ingestion error propagation
+✓ list validation
+✓ owner-scoped retrieval
+✓ not-found behavior
+✓ status updates
+✓ DELETED status protection
+✓ soft deletion
+```
+
+## Document next milestone
+
+Do not implement all extraction features at once.
+
+Next recommended milestone:
+
+**URL ingestion/extraction foundation**
+
+Expected boundary:
+
+```text
+DocumentService
+ ↓
+DocumentIngestionService
+ ↓
+URL extractor
+ ↓
+normalized document content
+ ↓
+DocumentRepository
+```
+
+After URL extraction is verified, implement file/upload extraction separately.
+
+Potential future document pipeline:
+
+```text
+Document
+ ↓
+Source detection
+ ↓
+Extraction
+ ↓
+Normalization
+ ↓
+Chunking
+ ↓
+Embedding
+ ↓
+pgvector
+ ↓
+Semantic retrieval
+ ↓
+Assistant / RAG
+```
+
+Do not add chunking, embeddings, or RAG until the extraction boundary is stable and tested.
+
+## Phase 19 status when moving into Phase 20
+
+Phase 19 task/reminder foundation work has been completed sufficiently to begin the document milestone, but broader automation behavior should not be called complete without evidence.
+
+Verified Phase 19 work includes:
+
+```text
+✓ Task persistence
+✓ Task ownership
+✓ Task soft deletion
+✓ Task service/repository
+✓ Task assistant tools
+✓ Reminder persistence
+✓ Reminder ownership
+✓ Reminder lifecycle foundation
+✓ Reminder service/repository
+✓ Reminder scheduler/worker foundation
+✓ Related regression tests
+```
+
+Any remaining Phase 19 automation/delivery work must be checked against the actual repository before being declared complete.
+
+## Important recent Prisma migration incident
+
+A previous migration checksum mismatch was caused by the already-applied migration:
+
+```text
+20260810121955_add_memory_embedding
+```
+
+being different from the checksum recorded in the database.
+
+The local migration file was restored from the authoritative Git commit and the database checksum was repaired to match the tracked migration.
+
+After repair:
+
+```text
+npx prisma migrate dev --name add_document_foundation
+```
+
+successfully created and applied:
+
+```text
+20260824003625_add_document_foundation
+```
+
+This incident must not be repeated.
+
+### Mandatory Prisma migration rules
+
+Once a migration has been applied:
+
+```text
+DO NOT edit migration.sql
+DO NOT rename the migration directory
+DO NOT delete the migration
+DO NOT recreate an applied migration under another timestamp
+```
+
+For every future schema change:
+
+```text
+1. Check migration status.
+2. Inspect git status.
+3. Ensure existing applied migrations are untouched.
+4. Change schema.prisma.
+5. Create a NEW migration.
+6. Validate.
+7. Generate Prisma Client.
+8. Typecheck.
+9. Run tests.
+10. Commit schema + migration together.
+```
+
+Never use `prisma migrate reset` as the first response to a checksum/history problem.
+
+Investigate migration history first.
+
+### Migration preflight
+
+Run from:
+
+```text
+D:\Project\BrainOS\apps\backend
+```
+
+before creating a migration:
+
+```powershell
+npx prisma migrate status
+npx prisma validate
+npx prisma generate
+npx tsc --noEmit
+```
+
+Then inspect:
+
+```powershell
+git status --short
+git diff -- prisma/schema.prisma
+```
+
+Only create the migration after confirming no previously applied migration file was modified.
+
+## Phase 20 working rules
+
+For every document milestone:
+
+```text
+Read BrainOS_Master_Project_Context.md
+ ↓
+Check git status/log
+ ↓
+Inspect actual document files
+ ↓
+Define one small milestone
+ ↓
+Implement
+ ↓
+Run focused tests
+ ↓
+Run full regression
+ ↓
+Run TypeScript
+ ↓
+Update context
+ ↓
+Review diff
+ ↓
+Commit
+ ↓
+Push
+ ↓
+Verify final Git state
+```
+
+Do not skip the context checkpoint.
+
+Do not create a second overlapping document abstraction if the current service/repository/ingestion boundaries already support the requirement.
+
+Do not put extraction logic in controllers.
+
+Do not put Prisma queries in controllers or ingestion providers.
+
+Do not trust client-supplied `userId`.
+
+Do not expose document content or authentication secrets in logs.
+
+## Current known non-blocking warnings
+
+Git may report:
+
+```text
+LF will be replaced by CRLF
+```
+
+for tracked files on Windows.
+
+This is a line-ending warning, not a functional failure.
+
+Vitest/Vite may also emit the existing non-blocking configuration warning around:
+
+```text
+configLoader: 'native'
+```
+
+Do not change configuration merely to suppress warnings without a scoped reason.
 
 ---
 

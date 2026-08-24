@@ -1,6 +1,8 @@
 import { NotFoundError } from "../../errors";
 
 import { DocumentRepository } from "./repositories/document.repository";
+import { DocumentIngestionService } from "./ingestion/document.ingestion.service";
+
 import {
   CreateDocumentInput,
   DocumentListResult,
@@ -17,30 +19,45 @@ const MAX_DOCUMENT_LIST_LIMIT = 50;
 export class DocumentService {
   constructor(
     private readonly documentRepository: DocumentRepository,
+    private readonly documentIngestionService: DocumentIngestionService =
+      new DocumentIngestionService(),
   ) {}
 
-  async createDocument(
-    input: CreateDocumentInput,
-  ): Promise<DocumentListResult> {
-    this.validateUserId(input.userId);
-    this.validateTitle(input.title);
+ async createDocument(
+  input: CreateDocumentInput,
+): Promise<DocumentListResult> {
+  this.validateUserId(input.userId);
+  this.validateTitle(input.title);
 
-    if (!input.sourceType) {
-      throw new Error(
-        "Document source type is required.",
-      );
-    }
-
-    return this.documentRepository.create({
-      userId: input.userId,
-      title: input.title.trim(),
-      sourceType: input.sourceType,
-      source: input.source?.trim() || undefined,
-      content: input.content?.trim() || undefined,
-      mimeType: input.mimeType?.trim() || undefined,
-    });
+  if (!input.sourceType) {
+    throw new Error(
+      "Document source type is required.",
+    );
   }
 
+  let content = input.content;
+
+  if (content !== undefined) {
+    const ingestion =
+      await this.documentIngestionService.ingest({
+        sourceType: input.sourceType,
+        source: input.source,
+        content,
+        mimeType: input.mimeType,
+      });
+
+    content = ingestion.content;
+  }
+
+  return this.documentRepository.create({
+    userId: input.userId,
+    title: input.title.trim(),
+    sourceType: input.sourceType,
+    source: input.source?.trim() || undefined,
+    content,
+    mimeType: input.mimeType?.trim() || undefined,
+  });
+}
   async listDocuments(
     input: ListDocumentsInput,
   ): Promise<DocumentListResult[]> {
