@@ -11,6 +11,7 @@ describe("DocumentChunkRepository", () => {
         findMany: vi.fn(),
       },
       $executeRaw: vi.fn(),
+      $queryRaw: vi.fn(),
     };
   }
 
@@ -197,6 +198,10 @@ describe("DocumentChunkRepository", () => {
     ).rejects.toThrow(
       "Invalid embedding dimensions. Expected 768, received 3.",
     );
+
+    expect(
+      db.$executeRaw,
+    ).not.toHaveBeenCalled();
   });
 
   it("rejects invalid embedding values", async () => {
@@ -222,5 +227,103 @@ describe("DocumentChunkRepository", () => {
     ).rejects.toThrow(
       "Embedding contains invalid numeric values.",
     );
+
+    expect(
+      db.$executeRaw,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("searches similar document chunks for the authenticated user", async () => {
+    const db = createDbMock();
+
+    db.$queryRaw.mockResolvedValue([
+      {
+        id: "chunk-1",
+        documentId: "document-1",
+        chunkIndex: 0,
+        content: "First chunk",
+        similarity: 0.91,
+      },
+    ]);
+
+    const repository = new DocumentChunkRepository(
+      db as any,
+    );
+
+    const embedding = Array.from(
+      { length: 768 },
+      (_, index) =>
+        index === 0 ? 1 : 0,
+    );
+
+    const result =
+      await repository.searchSimilar(
+        "user-1",
+        embedding,
+        5,
+      );
+
+    expect(
+      db.$queryRaw,
+    ).toHaveBeenCalledTimes(1);
+
+    expect(result).toEqual([
+      {
+        id: "chunk-1",
+        documentId: "document-1",
+        chunkIndex: 0,
+        content: "First chunk",
+        similarity: 0.91,
+      },
+    ]);
+  });
+
+  it("rejects invalid search embedding dimensions", async () => {
+    const db = createDbMock();
+
+    const repository = new DocumentChunkRepository(
+      db as any,
+    );
+
+    await expect(
+      repository.searchSimilar(
+        "user-1",
+        [1, 0, 0],
+        5,
+      ),
+    ).rejects.toThrow(
+      "Invalid embedding dimensions. Expected 768, received 3.",
+    );
+
+    expect(
+      db.$queryRaw,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid search limit", async () => {
+    const db = createDbMock();
+
+    const repository = new DocumentChunkRepository(
+      db as any,
+    );
+
+    const embedding = Array.from(
+      { length: 768 },
+      () => 0,
+    );
+
+    await expect(
+      repository.searchSimilar(
+        "user-1",
+        embedding,
+        21,
+      ),
+    ).rejects.toThrow(
+      "Search limit must be an integer between 1 and 20.",
+    );
+
+    expect(
+      db.$queryRaw,
+    ).not.toHaveBeenCalled();
   });
 });
