@@ -135,7 +135,24 @@ describe("DocumentIngestionService", () => {
   });
 
   describe("UPLOAD", () => {
-    it("rejects upload ingestion until file extraction is implemented", async () => {
+    it("accepts plain-text upload content", async () => {
+      const service = new DocumentIngestionService(
+        createUrlExtractorMock() as any,
+      );
+
+      const result = await service.ingest({
+        sourceType: DocumentSourceType.UPLOAD,
+        source: "notes.txt",
+        content: "  Hello from upload  ",
+        mimeType: "text/plain",
+      });
+
+      expect(result).toEqual({
+        content: "Hello from upload",
+      });
+    });
+
+    it("rejects unsupported upload MIME types", async () => {
       const service = new DocumentIngestionService(
         createUrlExtractorMock() as any,
       );
@@ -144,9 +161,11 @@ describe("DocumentIngestionService", () => {
         service.ingest({
           sourceType: DocumentSourceType.UPLOAD,
           source: "example.pdf",
+          content: "binary-content",
+          mimeType: "application/pdf",
         }),
       ).rejects.toThrow(
-        "Uploaded file ingestion is not implemented yet.",
+        "Only plain-text uploads are supported.",
       );
     });
   });

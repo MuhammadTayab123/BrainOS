@@ -21,9 +21,7 @@ export class DocumentIngestionService {
         return this.ingestUrl(input);
 
       case DocumentSourceType.UPLOAD:
-        throw new Error(
-          "Uploaded file ingestion is not implemented yet.",
-        );
+        return this.ingestUpload(input);
 
       default:
         throw new Error(
@@ -58,6 +56,31 @@ export class DocumentIngestionService {
 
     return {
       content,
+    };
+  }
+
+  private ingestUpload(
+    input: IngestDocumentInput,
+  ): IngestDocumentResult {
+    if (
+      input.mimeType !== "text/plain"
+    ) {
+      throw new Error(
+        "Only plain-text uploads are supported.",
+      );
+    }
+
+    if (
+      typeof input.content !== "string" ||
+      input.content.trim().length === 0
+    ) {
+      throw new Error(
+        "Uploaded text files require non-empty content.",
+      );
+    }
+
+    return {
+      content: input.content.trim(),
     };
   }
 }

@@ -360,6 +360,43 @@ describe("authenticated document API", () => {
       });
     });
 
+    it("accepts a plain-text file upload", async () => {
+      const response = await request(app)
+        .post("/api/v1/documents")
+        .field("title", "Uploaded Notes")
+        .field("sourceType", "UPLOAD")
+        .attach(
+          "file",
+          Buffer.from(
+            "Hello from an uploaded text file",
+          ),
+          "notes.txt",
+        );
+
+      expect(response.status).toBe(201);
+      expect(response.body.success).toBe(true);
+
+      expect(response.body.data).toMatchObject({
+        id: "document-new",
+        title: "Uploaded Notes",
+        sourceType: "UPLOAD",
+        content:
+          "Hello from an uploaded text file",
+        mimeType: "text/plain",
+        status: "PENDING",
+      });
+
+      expect(fakes.create).toHaveBeenCalledWith({
+        userId: "user-a",
+        title: "Uploaded Notes",
+        sourceType: "UPLOAD",
+        source: "notes.txt",
+        content:
+          "Hello from an uploaded text file",
+        mimeType: "text/plain",
+      });
+    });
+
     it("accepts a document without content", async () => {
       const response = await request(app)
         .post("/api/v1/documents")

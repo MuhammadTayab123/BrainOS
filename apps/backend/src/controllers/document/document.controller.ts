@@ -1,5 +1,8 @@
 import { Request, Response } from "express";
-import { DocumentSourceType, DocumentStatus } from "@prisma/client";
+import {
+  DocumentSourceType,
+  DocumentStatus,
+} from "@prisma/client";
 
 import { DocumentService } from "../../services/documents/document.service";
 import { DocumentRepository } from "../../services/documents/repositories/document.repository";
@@ -39,12 +42,14 @@ export async function createDocument(
   }
 
   const {
-  title,
-  sourceType,
-  source,
-  content,
-  mimeType,
-} = req.body;
+    title,
+    sourceType,
+    source,
+    content,
+    mimeType,
+  } = req.body;
+
+  const uploadedFile = req.file;
 
   if (
     typeof title !== "string" ||
@@ -75,17 +80,18 @@ export async function createDocument(
   }
 
   if (
-  content !== undefined &&
-  typeof content !== "string"
-) {
-  return res.status(400).json({
-    success: false,
-    error: {
-      code: "INVALID_CONTENT",
-      message: "Document content must be a string.",
-    },
-  });
-}
+    content !== undefined &&
+    typeof content !== "string"
+  ) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: "INVALID_CONTENT",
+        message:
+          "Document content must be a string.",
+      },
+    });
+  }
 
   if (
     mimeType !== undefined &&
@@ -95,9 +101,45 @@ export async function createDocument(
       success: false,
       error: {
         code: "INVALID_MIME_TYPE",
-        message: "MIME type must be a string.",
+        message:
+          "MIME type must be a string.",
       },
     });
+  }
+
+  if (
+    uploadedFile &&
+    sourceType !== DocumentSourceType.UPLOAD
+  ) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: "INVALID_SOURCE_TYPE",
+        message:
+          "Uploaded files require sourceType UPLOAD.",
+      },
+    });
+  }
+
+  if (
+    sourceType === DocumentSourceType.UPLOAD &&
+    !uploadedFile
+  ) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: "FILE_REQUIRED",
+        message:
+          "An uploaded file is required for UPLOAD documents.",
+      },
+    });
+  }
+
+  let uploadedContent: string | undefined;
+
+  if (uploadedFile) {
+    uploadedContent =
+      uploadedFile.buffer.toString("utf8");
   }
 
   const document =
@@ -108,15 +150,16 @@ export async function createDocument(
       source:
         typeof source === "string"
           ? source.trim()
-          : undefined,
-          content:
-        typeof content === "string"
+          : uploadedFile?.originalname,
+      content:
+        uploadedContent ??
+        (typeof content === "string"
           ? content.trim()
-          : undefined,
-        mimeType:
+          : undefined),
+      mimeType:
         typeof mimeType === "string"
           ? mimeType.trim()
-          : undefined,
+          : uploadedFile?.mimetype,
     });
 
   return res.status(201).json({
@@ -263,7 +306,8 @@ export async function updateDocumentStatus(
       success: false,
       error: {
         code: "INVALID_STATUS",
-        message: "Valid document status is required.",
+        message:
+          "Valid document status is required.",
       },
     });
   }
