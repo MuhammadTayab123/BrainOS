@@ -1,6 +1,9 @@
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DocumentSourceType, DocumentStatus } from "@prisma/client";
+import {
+  DocumentSourceType,
+  DocumentStatus,
+} from "@prisma/client";
 
 const fakes = vi.hoisted(() => ({
   authenticatedUser: vi.fn(),
@@ -41,7 +44,11 @@ vi.mock(
         status?: DocumentStatus,
         limit?: number,
       ) {
-        return fakes.listByUser(userId, status, limit);
+        return fakes.listByUser(
+          userId,
+          status,
+          limit,
+        );
       }
 
       findByIdForUser(
@@ -102,6 +109,7 @@ function publicDocument(
     title,
     sourceType,
     source,
+    content,
     mimeType,
     status,
     createdAt,
@@ -113,6 +121,7 @@ function publicDocument(
     title,
     sourceType,
     source,
+    content,
     mimeType,
     status,
     createdAt,
@@ -129,6 +138,7 @@ function addDocument(
     title: "Project Notes",
     sourceType: DocumentSourceType.TEXT,
     source: "BrainOS notes",
+    content: "Document content",
     mimeType: "text/plain",
     status: DocumentStatus.PENDING,
     createdAt: new Date(
@@ -176,6 +186,7 @@ describe("authenticated document API", () => {
           title: data.title,
           sourceType: data.sourceType,
           source: data.source ?? null,
+          content: data.content ?? null,
           mimeType: data.mimeType ?? null,
         });
 
@@ -260,7 +271,9 @@ describe("authenticated document API", () => {
         record.deletedAt = new Date(
           "2026-01-02T00:00:00.000Z",
         );
-        record.status = DocumentStatus.DELETED;
+
+        record.status =
+          DocumentStatus.DELETED;
       },
     );
   });
@@ -270,7 +283,10 @@ describe("authenticated document API", () => {
       ["GET", "/api/v1/documents"],
       ["GET", "/api/v1/documents/document-a"],
       ["POST", "/api/v1/documents"],
-      ["PATCH", "/api/v1/documents/document-a/status"],
+      [
+        "PATCH",
+        "/api/v1/documents/document-a/status",
+      ],
       ["DELETE", "/api/v1/documents/document-a"],
     ])(
       "returns 401 for unauthenticated %s %s",
@@ -293,11 +309,13 @@ describe("authenticated document API", () => {
                 : await request(app).delete(path);
 
         expect(response.status).toBe(401);
+
         expect(response.body).toEqual({
           success: false,
           error: {
             code: "UNAUTHORIZED",
-            message: "Authentication required.",
+            message:
+              "Authentication required.",
           },
         });
       },
@@ -312,16 +330,21 @@ describe("authenticated document API", () => {
           title: "  My Notes  ",
           sourceType: "TEXT",
           source: "  hello world  ",
+          content:
+            "  This is my document content.  ",
           mimeType: "text/plain",
         });
 
       expect(response.status).toBe(201);
       expect(response.body.success).toBe(true);
+
       expect(response.body.data).toMatchObject({
         id: "document-new",
         title: "My Notes",
         sourceType: "TEXT",
         source: "hello world",
+        content:
+          "This is my document content.",
         mimeType: "text/plain",
         status: "PENDING",
       });
@@ -331,8 +354,51 @@ describe("authenticated document API", () => {
         title: "My Notes",
         sourceType: "TEXT",
         source: "hello world",
+        content:
+          "This is my document content.",
         mimeType: "text/plain",
       });
+    });
+
+    it("accepts a document without content", async () => {
+      const response = await request(app)
+        .post("/api/v1/documents")
+        .send({
+          title: "Metadata Only",
+          sourceType: "URL",
+          source: "https://example.com",
+        });
+
+      expect(response.status).toBe(201);
+
+      expect(fakes.create).toHaveBeenCalledWith({
+        userId: "user-a",
+        title: "Metadata Only",
+        sourceType: "URL",
+        source: "https://example.com",
+        content: undefined,
+        mimeType: undefined,
+      });
+    });
+
+    it("rejects non-string content", async () => {
+      const response = await request(app)
+        .post("/api/v1/documents")
+        .send({
+          title: "Notes",
+          sourceType: "TEXT",
+          content: 123,
+        });
+
+      expect(response.status).toBe(400);
+
+      expect(response.body.error.code).toBe(
+        "INVALID_CONTENT",
+      );
+
+      expect(
+        fakes.create,
+      ).not.toHaveBeenCalled();
     });
 
     it("rejects an empty title", async () => {
@@ -344,10 +410,14 @@ describe("authenticated document API", () => {
         });
 
       expect(response.status).toBe(400);
+
       expect(response.body.error.code).toBe(
         "INVALID_TITLE",
       );
-      expect(fakes.create).not.toHaveBeenCalled();
+
+      expect(
+        fakes.create,
+      ).not.toHaveBeenCalled();
     });
 
     it("rejects an invalid source type", async () => {
@@ -359,6 +429,7 @@ describe("authenticated document API", () => {
         });
 
       expect(response.status).toBe(400);
+
       expect(response.body.error.code).toBe(
         "INVALID_SOURCE_TYPE",
       );
@@ -386,9 +457,11 @@ describe("authenticated document API", () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.data).toHaveLength(1);
+
       expect(response.body.data[0]).toMatchObject({
         id: "document-a",
         title: "Project Notes",
+        content: "Document content",
       });
 
       expect(
@@ -424,6 +497,7 @@ describe("authenticated document API", () => {
       );
 
       expect(response.status).toBe(400);
+
       expect(response.body.error.code).toBe(
         "INVALID_STATUS",
       );
@@ -440,9 +514,11 @@ describe("authenticated document API", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
+
       expect(response.body.data).toMatchObject({
         id: "document-a",
         title: "Project Notes",
+        content: "Document content",
       });
 
       expect(
@@ -467,6 +543,7 @@ describe("authenticated document API", () => {
         });
 
       expect(response.status).toBe(200);
+
       expect(response.body).toEqual({
         success: true,
         data: {
@@ -494,6 +571,7 @@ describe("authenticated document API", () => {
       );
 
       expect(response.status).toBe(200);
+
       expect(response.body).toEqual({
         success: true,
         data: {

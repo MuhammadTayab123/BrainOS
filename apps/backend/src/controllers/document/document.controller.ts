@@ -39,11 +39,12 @@ export async function createDocument(
   }
 
   const {
-    title,
-    sourceType,
-    source,
-    mimeType,
-  } = req.body;
+  title,
+  sourceType,
+  source,
+  content,
+  mimeType,
+} = req.body;
 
   if (
     typeof title !== "string" ||
@@ -74,17 +75,17 @@ export async function createDocument(
   }
 
   if (
-    source !== undefined &&
-    typeof source !== "string"
-  ) {
-    return res.status(400).json({
-      success: false,
-      error: {
-        code: "INVALID_SOURCE",
-        message: "Document source must be a string.",
-      },
-    });
-  }
+  content !== undefined &&
+  typeof content !== "string"
+) {
+  return res.status(400).json({
+    success: false,
+    error: {
+      code: "INVALID_CONTENT",
+      message: "Document content must be a string.",
+    },
+  });
+}
 
   if (
     mimeType !== undefined &&
@@ -108,7 +109,11 @@ export async function createDocument(
         typeof source === "string"
           ? source.trim()
           : undefined,
-      mimeType:
+          content:
+        typeof content === "string"
+          ? content.trim()
+          : undefined,
+        mimeType:
         typeof mimeType === "string"
           ? mimeType.trim()
           : undefined,

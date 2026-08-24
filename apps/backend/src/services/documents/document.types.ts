@@ -10,6 +10,7 @@ export interface CreateDocumentInput {
   title: string;
   sourceType: DocumentSourceType;
   source?: string;
+  content?: string;
   mimeType?: string;
 }
 
@@ -40,6 +41,7 @@ export interface DocumentListResult {
   title: string;
   sourceType: DocumentSourceType;
   source: string | null;
+  content: string | null;
   mimeType: string | null;
   status: DocumentStatus;
   createdAt: Date;

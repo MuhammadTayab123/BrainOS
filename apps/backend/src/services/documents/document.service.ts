@@ -36,6 +36,7 @@ export class DocumentService {
       title: input.title.trim(),
       sourceType: input.sourceType,
       source: input.source?.trim() || undefined,
+      content: input.content?.trim() || undefined,
       mimeType: input.mimeType?.trim() || undefined,
     });
   }
@@ -69,6 +70,7 @@ export class DocumentService {
     input: GetDocumentInput,
   ): Promise<DocumentListResult> {
     this.validateUserId(input.userId);
+
     this.validateId(
       input.documentId,
       "Document ID",
@@ -93,6 +95,7 @@ export class DocumentService {
     input: UpdateDocumentStatusInput,
   ): Promise<void> {
     this.validateUserId(input.userId);
+
     this.validateId(
       input.documentId,
       "Document ID",
@@ -121,6 +124,7 @@ export class DocumentService {
     input: DeleteDocumentInput,
   ): Promise<void> {
     this.validateUserId(input.userId);
+
     this.validateId(
       input.documentId,
       "Document ID",

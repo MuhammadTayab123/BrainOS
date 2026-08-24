@@ -181,6 +181,7 @@ model Document {
 
   sourceType DocumentSourceType
   source     String?
+  content    String?
 
   mimeType String?
 
