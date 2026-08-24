@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import {
   createDocument,
+  searchDocumentChunks,
   listDocuments,
   getDocumentById,
   updateDocumentStatus,
@@ -20,13 +21,30 @@ router.post(
   createDocument,
 );
 
-router.get("/", requireAuth, listDocuments);
-router.get("/:id", requireAuth, getDocumentById);
+router.post(
+  "/search",
+  requireAuth,
+  searchDocumentChunks,
+);
+
+router.get(
+  "/",
+  requireAuth,
+  listDocuments,
+);
+
+router.get(
+  "/:id",
+  requireAuth,
+  getDocumentById,
+);
+
 router.patch(
   "/:id/status",
   requireAuth,
   updateDocumentStatus,
 );
+
 router.delete(
   "/:id",
   requireAuth,

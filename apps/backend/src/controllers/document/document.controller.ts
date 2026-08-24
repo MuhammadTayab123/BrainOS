@@ -7,9 +7,22 @@ import {
 import { DocumentService } from "../../services/documents/document.service";
 import { DocumentRepository } from "../../services/documents/repositories/document.repository";
 
+import { DocumentRetrievalService } from "../../services/documents/retrieval/document-retrieval.service";
+import { EmbeddingsService } from "../../services/memory/embeddings.service";
+import { OllamaProvider } from "../../services/memory/providers";
+import { DocumentChunkRepository } from "../../services/documents/repositories/chunks/document-chunk.repository";
+
 const documentService = new DocumentService(
   new DocumentRepository(),
 );
+
+const documentRetrievalService =
+  new DocumentRetrievalService(
+    new EmbeddingsService(
+      new OllamaProvider(),
+    ),
+    new DocumentChunkRepository(),
+  );
 
 function unauthorized(res: Response) {
   return res.status(401).json({
@@ -176,6 +189,61 @@ export async function createDocument(
   });
 }
 
+export async function searchDocumentChunks(
+  req: Request,
+  res: Response,
+) {
+  if (!req.user) {
+    return unauthorized(res);
+  }
+
+  const { query, limit } = req.body;
+
+  if (
+    typeof query !== "string" ||
+    query.trim().length === 0
+  ) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: "INVALID_QUERY",
+        message: "Search query is required.",
+      },
+    });
+  }
+
+  if (
+    limit !== undefined &&
+    (
+      typeof limit !== "number" ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 20
+    )
+  ) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: "INVALID_LIMIT",
+        message:
+          "Limit must be an integer between 1 and 20.",
+      },
+    });
+  }
+
+  const results =
+    await documentRetrievalService.search({
+      userId: req.user.id,
+      query: query.trim(),
+      limit,
+    });
+
+  return res.status(200).json({
+    success: true,
+    data: results,
+  });
+}
+
 export async function listDocuments(
   req: Request,
   res: Response,
@@ -237,7 +305,8 @@ export async function listDocuments(
       });
     }
 
-    status = rawStatus as DocumentStatus;
+    status =
+      rawStatus as DocumentStatus;
   }
 
   const documents =

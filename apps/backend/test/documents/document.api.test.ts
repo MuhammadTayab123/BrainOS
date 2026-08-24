@@ -13,6 +13,7 @@ const fakes = vi.hoisted(() => ({
   findByIdForUser: vi.fn(),
   updateStatus: vi.fn(),
   softDeleteByIdForUser: vi.fn(),
+  searchDocumentChunks: vi.fn(),
 }));
 
 vi.mock("@clerk/express", () => ({
@@ -86,7 +87,23 @@ vi.mock(
   }),
 );
 
+vi.mock(
+  "../../src/services/documents/retrieval/document-retrieval.service",
+  () => ({
+    DocumentRetrievalService: class {
+      search(input: {
+        userId: string;
+        query: string;
+        limit?: number;
+      }) {
+        return fakes.searchDocumentChunks(input);
+      }
+    },
+  }),
+);
+
 import app from "../../src/app";
+
 import {
   NotFoundError,
   UnauthorizedError,
@@ -276,6 +293,18 @@ describe("authenticated document API", () => {
           DocumentStatus.DELETED;
       },
     );
+
+    fakes.searchDocumentChunks.mockResolvedValue(
+      [
+        {
+          id: "chunk-1",
+          documentId: "document-a",
+          chunkIndex: 0,
+          content: "BrainOS document content",
+          similarity: 0.91,
+        },
+      ],
+    );
   });
 
   describe("authentication", () => {
@@ -283,6 +312,7 @@ describe("authenticated document API", () => {
       ["GET", "/api/v1/documents"],
       ["GET", "/api/v1/documents/document-a"],
       ["POST", "/api/v1/documents"],
+      ["POST", "/api/v1/documents/search"],
       [
         "PATCH",
         "/api/v1/documents/document-a/status",
@@ -471,50 +501,179 @@ describe("authenticated document API", () => {
         "INVALID_SOURCE_TYPE",
       );
     });
+
     it("accepts a PDF file upload", async () => {
-  const fs = await import("node:fs/promises");
-  const path = await import("node:path");
+      const fs = await import(
+        "node:fs/promises"
+      );
+      const path = await import(
+        "node:path"
+      );
 
-  const pdfPath = path.join(
-    process.cwd(),
-    "test",
-    "fixtures",
-    "document-sample.pdf",
-  );
+      const pdfPath = path.join(
+        process.cwd(),
+        "test",
+        "fixtures",
+        "document-sample.pdf",
+      );
 
-  const pdfBuffer = await fs.readFile(pdfPath);
+      const pdfBuffer =
+        await fs.readFile(pdfPath);
 
-  const response = await request(app)
-    .post("/api/v1/documents")
-    .field("title", "Uploaded PDF")
-    .field("sourceType", "UPLOAD")
-    .attach("file", pdfBuffer, {
-      filename: "document-sample.pdf",
-      contentType: "application/pdf",
+      const response = await request(app)
+        .post("/api/v1/documents")
+        .field("title", "Uploaded PDF")
+        .field("sourceType", "UPLOAD")
+        .attach("file", pdfBuffer, {
+          filename:
+            "document-sample.pdf",
+          contentType:
+            "application/pdf",
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.success).toBe(true);
+
+      expect(
+        response.body.data,
+      ).toMatchObject({
+        id: "document-new",
+        title: "Uploaded PDF",
+        sourceType: "UPLOAD",
+        content:
+          expect.stringContaining("BrainOS"),
+        mimeType: "application/pdf",
+        status: "PENDING",
+      });
+
+      expect(
+        fakes.create,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: "user-a",
+          title: "Uploaded PDF",
+          sourceType: "UPLOAD",
+          source:
+            "document-sample.pdf",
+          mimeType: "application/pdf",
+        }),
+      );
     });
-
-  expect(response.status).toBe(201);
-  expect(response.body.success).toBe(true);
-
-  expect(response.body.data).toMatchObject({
-    id: "document-new",
-    title: "Uploaded PDF",
-    sourceType: "UPLOAD",
-    content: expect.stringContaining("BrainOS"),
-    mimeType: "application/pdf",
-    status: "PENDING",
   });
 
-  expect(fakes.create).toHaveBeenCalledWith(
-    expect.objectContaining({
-      userId: "user-a",
-      title: "Uploaded PDF",
-      sourceType: "UPLOAD",
-      source: "document-sample.pdf",
-      mimeType: "application/pdf",
-    }),
-  );
-});
+  describe("search", () => {
+    it("returns semantic document chunk matches", async () => {
+      const response = await request(app)
+        .post("/api/v1/documents/search")
+        .send({
+          query: "  BrainOS  ",
+          limit: 5,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+
+      expect(response.body.data).toEqual([
+        {
+          id: "chunk-1",
+          documentId: "document-a",
+          chunkIndex: 0,
+          content: "BrainOS document content",
+          similarity: 0.91,
+        },
+      ]);
+
+      expect(
+        fakes.searchDocumentChunks,
+      ).toHaveBeenCalledWith({
+        userId: "user-a",
+        query: "BrainOS",
+        limit: 5,
+      });
+    });
+
+    it("uses the default search limit", async () => {
+      const response = await request(app)
+        .post("/api/v1/documents/search")
+        .send({
+          query: "BrainOS",
+        });
+
+      expect(response.status).toBe(200);
+
+      expect(
+        fakes.searchDocumentChunks,
+      ).toHaveBeenCalledWith({
+        userId: "user-a",
+        query: "BrainOS",
+        limit: undefined,
+      });
+    });
+
+    it("rejects an empty search query", async () => {
+      const response = await request(app)
+        .post("/api/v1/documents/search")
+        .send({
+          query: "   ",
+        });
+
+      expect(response.status).toBe(400);
+
+      expect(response.body).toEqual({
+        success: false,
+        error: {
+          code: "INVALID_QUERY",
+          message:
+            "Search query is required.",
+        },
+      });
+
+      expect(
+        fakes.searchDocumentChunks,
+      ).not.toHaveBeenCalled();
+    });
+
+    it("rejects a non-string search query", async () => {
+      const response = await request(app)
+        .post("/api/v1/documents/search")
+        .send({
+          query: 123,
+        });
+
+      expect(response.status).toBe(400);
+
+      expect(response.body.error.code).toBe(
+        "INVALID_QUERY",
+      );
+
+      expect(
+        fakes.searchDocumentChunks,
+      ).not.toHaveBeenCalled();
+    });
+
+    it("rejects an invalid search limit", async () => {
+      const response = await request(app)
+        .post("/api/v1/documents/search")
+        .send({
+          query: "BrainOS",
+          limit: 21,
+        });
+
+      expect(response.status).toBe(400);
+
+      expect(response.body).toEqual({
+        success: false,
+        error: {
+          code: "INVALID_LIMIT",
+          message:
+            "Limit must be an integer between 1 and 20.",
+        },
+      });
+
+      expect(
+        fakes.searchDocumentChunks,
+      ).not.toHaveBeenCalled();
+    });
   });
 
   describe("list", () => {
@@ -539,7 +698,9 @@ describe("authenticated document API", () => {
       expect(response.body.success).toBe(true);
       expect(response.body.data).toHaveLength(1);
 
-      expect(response.body.data[0]).toMatchObject({
+      expect(
+        response.body.data[0],
+      ).toMatchObject({
         id: "document-a",
         title: "Project Notes",
         content: "Document content",
@@ -579,9 +740,9 @@ describe("authenticated document API", () => {
 
       expect(response.status).toBe(400);
 
-      expect(response.body.error.code).toBe(
-        "INVALID_STATUS",
-      );
+      expect(
+        response.body.error.code,
+      ).toBe("INVALID_STATUS");
     });
   });
 
@@ -596,7 +757,9 @@ describe("authenticated document API", () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
 
-      expect(response.body.data).toMatchObject({
+      expect(
+        response.body.data,
+      ).toMatchObject({
         id: "document-a",
         title: "Project Notes",
         content: "Document content",
