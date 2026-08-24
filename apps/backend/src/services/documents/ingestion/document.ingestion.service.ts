@@ -3,8 +3,13 @@ import {
   IngestDocumentInput,
   IngestDocumentResult,
 } from "./document.ingestion.types";
+import { DefaultUrlDocumentExtractor } from "./extractors/default-url.document.extractor";
 
 export class DocumentIngestionService {
+  constructor(
+    private readonly urlExtractor = new DefaultUrlDocumentExtractor(),
+  ) {}
+
   async ingest(
     input: IngestDocumentInput,
   ): Promise<IngestDocumentResult> {
@@ -13,9 +18,7 @@ export class DocumentIngestionService {
         return this.ingestText(input);
 
       case DocumentSourceType.URL:
-        throw new Error(
-          "URL document ingestion is not implemented yet.",
-        );
+        return this.ingestUrl(input);
 
       case DocumentSourceType.UPLOAD:
         throw new Error(
@@ -43,6 +46,18 @@ export class DocumentIngestionService {
 
     return {
       content: input.content.trim(),
+    };
+  }
+
+  private async ingestUrl(
+    input: IngestDocumentInput,
+  ): Promise<IngestDocumentResult> {
+    const content = await this.urlExtractor.extract(
+      input.source ?? "",
+    );
+
+    return {
+      content,
     };
   }
 }
