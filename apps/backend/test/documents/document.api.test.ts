@@ -471,6 +471,50 @@ describe("authenticated document API", () => {
         "INVALID_SOURCE_TYPE",
       );
     });
+    it("accepts a PDF file upload", async () => {
+  const fs = await import("node:fs/promises");
+  const path = await import("node:path");
+
+  const pdfPath = path.join(
+    process.cwd(),
+    "test",
+    "fixtures",
+    "document-sample.pdf",
+  );
+
+  const pdfBuffer = await fs.readFile(pdfPath);
+
+  const response = await request(app)
+    .post("/api/v1/documents")
+    .field("title", "Uploaded PDF")
+    .field("sourceType", "UPLOAD")
+    .attach("file", pdfBuffer, {
+      filename: "document-sample.pdf",
+      contentType: "application/pdf",
+    });
+
+  expect(response.status).toBe(201);
+  expect(response.body.success).toBe(true);
+
+  expect(response.body.data).toMatchObject({
+    id: "document-new",
+    title: "Uploaded PDF",
+    sourceType: "UPLOAD",
+    content: expect.stringContaining("BrainOS"),
+    mimeType: "application/pdf",
+    status: "PENDING",
+  });
+
+  expect(fakes.create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      userId: "user-a",
+      title: "Uploaded PDF",
+      sourceType: "UPLOAD",
+      source: "document-sample.pdf",
+      mimeType: "application/pdf",
+    }),
+  );
+});
   });
 
   describe("list", () => {

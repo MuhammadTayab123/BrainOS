@@ -1,4 +1,7 @@
-import { DocumentSourceType, DocumentStatus } from "@prisma/client";
+import {
+  DocumentSourceType,
+  DocumentStatus,
+} from "@prisma/client";
 
 export {
   DocumentSourceType,
@@ -12,6 +15,7 @@ export interface CreateDocumentInput {
   source?: string;
   content?: string;
   mimeType?: string;
+  fileBuffer?: Buffer;
 }
 
 export interface ListDocumentsInput {

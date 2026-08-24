@@ -102,7 +102,7 @@ export async function createDocument(
       error: {
         code: "INVALID_MIME_TYPE",
         message:
-          "MIME type must be a string.",
+          "Document MIME type must be a string.",
       },
     });
   }
@@ -136,10 +136,17 @@ export async function createDocument(
   }
 
   let uploadedContent: string | undefined;
+  let uploadedFileBuffer: Buffer | undefined;
 
   if (uploadedFile) {
-    uploadedContent =
-      uploadedFile.buffer.toString("utf8");
+    if (
+      uploadedFile.mimetype === "text/plain"
+    ) {
+      uploadedContent =
+        uploadedFile.buffer.toString("utf8");
+    } else {
+      uploadedFileBuffer = uploadedFile.buffer;
+    }
   }
 
   const document =
@@ -160,6 +167,7 @@ export async function createDocument(
         typeof mimeType === "string"
           ? mimeType.trim()
           : uploadedFile?.mimetype,
+      fileBuffer: uploadedFileBuffer,
     });
 
   return res.status(201).json({
@@ -224,7 +232,7 @@ export async function listDocuments(
         error: {
           code: "INVALID_STATUS",
           message:
-            "Status must be PENDING, READY, FAILED, DELETED, or CANCELLED.",
+            "Invalid document status.",
         },
       });
     }
@@ -300,7 +308,9 @@ export async function updateDocumentStatus(
   const { status } = req.body;
 
   if (
-    !Object.values(DocumentStatus).includes(status)
+    !Object.values(DocumentStatus).includes(
+      status,
+    )
   ) {
     return res.status(400).json({
       success: false,

@@ -3,11 +3,16 @@ import {
   IngestDocumentInput,
   IngestDocumentResult,
 } from "./document.ingestion.types";
+
 import { DefaultUrlDocumentExtractor } from "./extractors/default-url.document.extractor";
+import { DefaultPdfDocumentExtractor } from "./extractors/default-pdf.document.extractor";
 
 export class DocumentIngestionService {
   constructor(
-    private readonly urlExtractor = new DefaultUrlDocumentExtractor(),
+    private readonly urlExtractor =
+      new DefaultUrlDocumentExtractor(),
+    private readonly pdfExtractor =
+      new DefaultPdfDocumentExtractor(),
   ) {}
 
   async ingest(
@@ -50,37 +55,56 @@ export class DocumentIngestionService {
   private async ingestUrl(
     input: IngestDocumentInput,
   ): Promise<IngestDocumentResult> {
-    const content = await this.urlExtractor.extract(
-      input.source ?? "",
-    );
+    const content =
+      await this.urlExtractor.extract(
+        input.source ?? "",
+      );
 
     return {
       content,
     };
   }
 
-  private ingestUpload(
+  private async ingestUpload(
     input: IngestDocumentInput,
-  ): IngestDocumentResult {
-    if (
-      input.mimeType !== "text/plain"
-    ) {
-      throw new Error(
-        "Only plain-text uploads are supported.",
-      );
+  ): Promise<IngestDocumentResult> {
+    if (input.mimeType === "text/plain") {
+      if (
+        typeof input.content !== "string" ||
+        input.content.trim().length === 0
+      ) {
+        throw new Error(
+          "Uploaded text files require non-empty content.",
+        );
+      }
+
+      return {
+        content: input.content.trim(),
+      };
     }
 
-    if (
-      typeof input.content !== "string" ||
-      input.content.trim().length === 0
-    ) {
-      throw new Error(
-        "Uploaded text files require non-empty content.",
-      );
+    if (input.mimeType === "application/pdf") {
+      if (
+        !Buffer.isBuffer(input.fileBuffer) ||
+        input.fileBuffer.length === 0
+      ) {
+        throw new Error(
+          "Uploaded PDF files require file data.",
+        );
+      }
+
+      const content =
+        await this.pdfExtractor.extract(
+          input.fileBuffer,
+        );
+
+      return {
+        content,
+      };
     }
 
-    return {
-      content: input.content.trim(),
-    };
+    throw new Error(
+      "Unsupported upload MIME type.",
+    );
   }
 }

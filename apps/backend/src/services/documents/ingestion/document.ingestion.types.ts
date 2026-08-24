@@ -5,6 +5,7 @@ export interface IngestDocumentInput {
   source?: string;
   content?: string;
   mimeType?: string;
+  fileBuffer?: Buffer;
 }
 
 export interface IngestDocumentResult {

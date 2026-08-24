@@ -152,21 +152,20 @@ describe("DocumentIngestionService", () => {
       });
     });
 
-    it("rejects unsupported upload MIME types", async () => {
-      const service = new DocumentIngestionService(
-        createUrlExtractorMock() as any,
-      );
+    it("rejects PDF uploads without file data", async () => {
+  const service = new DocumentIngestionService(
+    createUrlExtractorMock() as any,
+  );
 
-      await expect(
-        service.ingest({
-          sourceType: DocumentSourceType.UPLOAD,
-          source: "example.pdf",
-          content: "binary-content",
-          mimeType: "application/pdf",
-        }),
-      ).rejects.toThrow(
-        "Only plain-text uploads are supported.",
-      );
-    });
+  await expect(
+    service.ingest({
+      sourceType: DocumentSourceType.UPLOAD,
+      source: "example.pdf",
+      mimeType: "application/pdf",
+    }),
+  ).rejects.toThrow(
+    "Uploaded PDF files require file data.",
+  );
+});
   });
 });
