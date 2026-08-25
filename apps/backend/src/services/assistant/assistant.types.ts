@@ -1,15 +1,6 @@
 import { LLMMessage } from "../ai";
 import { MemorySearchResult } from "../memory/memory.types";
-
-/**
- * ============================================================================
- * BrainOS Assistant / Orchestrator Types
- * ============================================================================
- *
- * Domain contracts for AI Assistant orchestration.
- * Framework-independent: do NOT import Express or Prisma here.
- * ============================================================================
- */
+import { SearchDocumentChunkResult } from "../documents/retrieval/document-retrieval.service";
 
 export interface AssistantMessageInput {
   userId: string;
@@ -17,8 +8,13 @@ export interface AssistantMessageInput {
   conversationId?: string;
   systemPrompt?: string;
   conversationHistory?: LLMMessage[];
+
   enableMemoryRetrieval?: boolean;
   memorySearchLimit?: number;
+
+  enableDocumentRetrieval?: boolean;
+  documentSearchLimit?: number;
+
   model?: string;
 }
 
@@ -27,6 +23,7 @@ export interface AssistantResponse {
   model: string;
   provider: string;
   retrievedMemories: MemorySearchResult[];
+  retrievedDocuments: SearchDocumentChunkResult[];
 }
 
 export interface AssembledContext {
@@ -34,4 +31,5 @@ export interface AssembledContext {
   messages: LLMMessage[];
   prompt: string;
   retrievedMemories: MemorySearchResult[];
+  retrievedDocuments: SearchDocumentChunkResult[];
 }

@@ -1,13 +1,19 @@
 import { LLMMessage, LLMService } from "../ai";
 import { LLMToolCall } from "../ai/providers/llm.provider";
+
 import { MemoryService } from "../memory/memory.service";
 import { MemorySearchResult } from "../memory/memory.types";
+
 import { ToolExecutor } from "../tools/tool.executor";
+
+import { DocumentRetrievalService } from "../documents/retrieval/document-retrieval.service";
+import { SearchDocumentChunkResult } from "../documents/retrieval/document-retrieval.service";
 
 import {
   AssistantMessageInput,
   AssistantResponse,
 } from "./assistant.types";
+
 import { assembleAssistantContext } from "./context.builder";
 
 import { ConversationRepository } from "../conversation/repositories/conversation.repository";
@@ -22,25 +28,39 @@ export class AssistantService {
     private readonly toolExecutor: ToolExecutor,
     private readonly conversationRepository?: ConversationRepository,
     private readonly messageRepository?: MessageRepository,
+    private readonly documentRetrievalService?: DocumentRetrievalService,
   ) {}
 
   async ask(
     input: AssistantMessageInput,
   ): Promise<AssistantResponse> {
-    if (!input.userId || input.userId.trim().length === 0) {
+    if (
+      !input.userId ||
+      input.userId.trim().length === 0
+    ) {
       throw new Error(
         "User ID is required for assistant orchestration.",
       );
     }
 
-    if (!input.message || input.message.trim().length === 0) {
-      throw new Error("Message cannot be empty.");
+    if (
+      !input.message ||
+      input.message.trim().length === 0
+    ) {
+      throw new Error(
+        "Message cannot be empty.",
+      );
     }
 
     const userId = input.userId.trim();
-    const trimmedMessage = input.message.trim();
+    const trimmedMessage =
+      input.message.trim();
 
-    const retrievedMemories: MemorySearchResult[] = [];
+    const retrievedMemories: MemorySearchResult[] =
+      [];
+
+    const retrievedDocuments: SearchDocumentChunkResult[] =
+      [];
 
     const shouldRetrieveMemories =
       input.enableMemoryRetrieval ?? true;
@@ -54,6 +74,23 @@ export class AssistantService {
         });
 
       retrievedMemories.push(...memories);
+    }
+
+    const shouldRetrieveDocuments =
+      input.enableDocumentRetrieval ?? false;
+
+    if (
+      shouldRetrieveDocuments &&
+      this.documentRetrievalService
+    ) {
+      const documents =
+        await this.documentRetrievalService.search({
+          userId,
+          query: trimmedMessage,
+          limit: input.documentSearchLimit,
+        });
+
+      retrievedDocuments.push(...documents);
     }
 
     let conversationHistory: LLMMessage[] =
@@ -73,7 +110,9 @@ export class AssistantService {
         input.conversationId.trim();
 
       if (!conversationId) {
-        throw new Error("Conversation ID is required.");
+        throw new Error(
+          "Conversation ID is required.",
+        );
       }
 
       const conversation =
@@ -115,22 +154,18 @@ export class AssistantService {
         systemPrompt: input.systemPrompt,
         conversationHistory,
         retrievedMemories,
+        retrievedDocuments,
       });
 
     let messages: LLMMessage[] = [
       ...assembledContext.messages,
     ];
 
-    let prompt: string | undefined =
+    let prompt:
+      | string
+      | undefined =
       assembledContext.prompt;
 
-    /*
-     * Registered BrainOS tools are exposed to the LLM.
-     *
-     * The same tool definitions must be supplied on every
-     * generation round so the model can continue making tool
-     * calls after receiving tool results.
-     */
     const tools =
       this.toolExecutor.getToolDefinitions();
 
@@ -156,11 +191,6 @@ export class AssistantService {
         break;
       }
 
-      /*
-       * Once a tool round begins, the current user message
-       * becomes part of the message history because subsequent
-       * LLM calls no longer receive the standalone prompt.
-       */
       if (prompt !== undefined) {
         messages.push({
           role: "user",
@@ -170,7 +200,8 @@ export class AssistantService {
 
       messages.push({
         role: "assistant",
-        content: llmResponse.text ?? "",
+        content:
+          llmResponse.text ?? "",
         toolCalls,
       });
 
@@ -186,7 +217,8 @@ export class AssistantService {
 
         messages.push({
           role: "tool",
-          content: JSON.stringify(toolResult),
+          content:
+            JSON.stringify(toolResult),
           toolCallId: toolCall.id,
           toolName: toolCall.name,
         });
@@ -221,6 +253,7 @@ export class AssistantService {
       model: llmResponse.model,
       provider: llmResponse.provider,
       retrievedMemories,
+      retrievedDocuments,
     };
   }
 }

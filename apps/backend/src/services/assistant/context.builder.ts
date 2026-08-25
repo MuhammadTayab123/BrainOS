@@ -1,5 +1,6 @@
 import { LLMMessage } from "../ai";
 import { MemorySearchResult } from "../memory/memory.types";
+import { SearchDocumentChunkResult } from "../documents/retrieval/document-retrieval.service";
 import { AssembledContext } from "./assistant.types";
 
 export const DEFAULT_SYSTEM_PROMPT =
@@ -13,33 +14,71 @@ export function formatMemoriesForContext(
   }
 
   const formatted = memories
-    .map((memory, index) => `${index + 1}. ${memory.content}`)
+    .map(
+      (memory, index) =>
+        `${index + 1}. ${memory.content}`,
+    )
     .join("\n");
 
   return `\n\n[Relevant Context from Memory]\n${formatted}`;
 }
 
-export function assembleAssistantContext(params: {
-  message: string;
-  systemPrompt?: string;
-  conversationHistory?: LLMMessage[];
-  retrievedMemories: MemorySearchResult[];
-}): AssembledContext {
+export function formatDocumentsForContext(
+  documents: SearchDocumentChunkResult[],
+): string {
+  if (
+    !documents ||
+    documents.length === 0
+  ) {
+    return "";
+  }
+
+  const formatted = documents
+    .map(
+      (document, index) =>
+        `${index + 1}. ${document.content}`,
+    )
+    .join("\n");
+
+  return `\n\n[Relevant Context from Documents]\n${formatted}`;
+}
+
+export function assembleAssistantContext(
+  params: {
+    message: string;
+    systemPrompt?: string;
+    conversationHistory?: LLMMessage[];
+    retrievedMemories: MemorySearchResult[];
+    retrievedDocuments: SearchDocumentChunkResult[];
+  },
+): AssembledContext {
   const basePrompt =
-    params.systemPrompt && params.systemPrompt.trim().length > 0
+    params.systemPrompt &&
+    params.systemPrompt.trim().length > 0
       ? params.systemPrompt.trim()
       : DEFAULT_SYSTEM_PROMPT;
 
-  const memoryContext = formatMemoriesForContext(
-    params.retrievedMemories,
-  );
+  const memoryContext =
+    formatMemoriesForContext(
+      params.retrievedMemories,
+    );
 
-  const finalSystemPrompt = `${basePrompt}${memoryContext}`;
+  const documentContext =
+    formatDocumentsForContext(
+      params.retrievedDocuments,
+    );
+
+  const finalSystemPrompt =
+    `${basePrompt}${memoryContext}${documentContext}`;
 
   return {
     systemPrompt: finalSystemPrompt,
-    messages: params.conversationHistory ?? [],
+    messages:
+      params.conversationHistory ?? [],
     prompt: params.message,
-    retrievedMemories: params.retrievedMemories,
+    retrievedMemories:
+      params.retrievedMemories,
+    retrievedDocuments:
+      params.retrievedDocuments,
   };
 }
