@@ -14,6 +14,7 @@ const fakes = vi.hoisted(() => ({
   updateStatus: vi.fn(),
   softDeleteByIdForUser: vi.fn(),
   searchDocumentChunks: vi.fn(),
+  documentProcessingPipeline: vi.fn(),
 }));
 
 vi.mock("@clerk/express", () => ({
@@ -97,6 +98,23 @@ vi.mock(
         limit?: number;
       }) {
         return fakes.searchDocumentChunks(input);
+      }
+    },
+  }),
+);
+
+vi.mock(
+  "../../src/services/documents/pipeline/document.processing.pipeline.service",
+  () => ({
+    DocumentProcessingPipelineService: class {
+      process(input: {
+        documentId: string;
+        userId: string;
+        content: string;
+      }) {
+        return fakes.documentProcessingPipeline(
+          input,
+        );
       }
     },
   }),
@@ -193,6 +211,10 @@ describe("authenticated document API", () => {
 
     fakes.authenticatedUser.mockResolvedValue(
       userA,
+    );
+
+    fakes.documentProcessingPipeline.mockResolvedValue(
+      undefined,
     );
 
     fakes.create.mockImplementation(
@@ -376,7 +398,7 @@ describe("authenticated document API", () => {
         content:
           "This is my document content.",
         mimeType: "text/plain",
-        status: "PENDING",
+        status: "READY",
       });
 
       expect(fakes.create).toHaveBeenCalledWith({
@@ -387,6 +409,15 @@ describe("authenticated document API", () => {
         content:
           "This is my document content.",
         mimeType: "text/plain",
+      });
+
+      expect(
+        fakes.documentProcessingPipeline,
+      ).toHaveBeenCalledWith({
+        documentId: "document-new",
+        userId: "user-a",
+        content:
+          "This is my document content.",
       });
     });
 
@@ -413,7 +444,7 @@ describe("authenticated document API", () => {
         content:
           "Hello from an uploaded text file",
         mimeType: "text/plain",
-        status: "PENDING",
+        status: "READY",
       });
 
       expect(fakes.create).toHaveBeenCalledWith({
@@ -424,6 +455,15 @@ describe("authenticated document API", () => {
         content:
           "Hello from an uploaded text file",
         mimeType: "text/plain",
+      });
+
+      expect(
+        fakes.documentProcessingPipeline,
+      ).toHaveBeenCalledWith({
+        documentId: "document-new",
+        userId: "user-a",
+        content:
+          "Hello from an uploaded text file",
       });
     });
 
@@ -446,6 +486,10 @@ describe("authenticated document API", () => {
         content: undefined,
         mimeType: undefined,
       });
+
+      expect(
+        fakes.documentProcessingPipeline,
+      ).not.toHaveBeenCalled();
     });
 
     it("rejects non-string content", async () => {
@@ -465,6 +509,10 @@ describe("authenticated document API", () => {
 
       expect(
         fakes.create,
+      ).not.toHaveBeenCalled();
+
+      expect(
+        fakes.documentProcessingPipeline,
       ).not.toHaveBeenCalled();
     });
 
@@ -543,7 +591,7 @@ describe("authenticated document API", () => {
         content:
           expect.stringContaining("BrainOS"),
         mimeType: "application/pdf",
-        status: "PENDING",
+        status: "READY",
       });
 
       expect(
@@ -556,6 +604,19 @@ describe("authenticated document API", () => {
           source:
             "document-sample.pdf",
           mimeType: "application/pdf",
+        }),
+      );
+
+      expect(
+        fakes.documentProcessingPipeline,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "document-new",
+          userId: "user-a",
+          content:
+            expect.stringContaining(
+              "BrainOS",
+            ),
         }),
       );
     });

@@ -8,9 +8,15 @@ import { DocumentService } from "../../services/documents/document.service";
 import { DocumentRepository } from "../../services/documents/repositories/document.repository";
 
 import { DocumentRetrievalService } from "../../services/documents/retrieval/document-retrieval.service";
+import { DocumentChunkRepository } from "../../services/documents/repositories/chunks/document-chunk.repository";
+
+import { DocumentProcessingPipelineService } from "../../services/documents/pipeline/document.processing.pipeline.service";
+import { DocumentProcessingService } from "../../services/documents/processing/document.processing.service";
+import { DocumentChunkEmbeddingService } from "../../services/documents/embeddings/document-chunk-embedding.service";
+import { DocumentChunkEmbeddingPersistenceService } from "../../services/documents/embeddings/document-chunk-embedding-persistence.service";
+
 import { EmbeddingsService } from "../../services/memory/embeddings.service";
 import { OllamaProvider } from "../../services/memory/providers";
-import { DocumentChunkRepository } from "../../services/documents/repositories/chunks/document-chunk.repository";
 
 const documentService = new DocumentService(
   new DocumentRepository(),
@@ -22,6 +28,21 @@ const documentRetrievalService =
       new OllamaProvider(),
     ),
     new DocumentChunkRepository(),
+  );
+
+const documentProcessingPipeline =
+  new DocumentProcessingPipelineService(
+    new DocumentRepository(),
+    new DocumentChunkRepository(),
+    new DocumentProcessingService(),
+    new DocumentChunkEmbeddingService(
+      new EmbeddingsService(
+        new OllamaProvider(),
+      ),
+    ),
+    new DocumentChunkEmbeddingPersistenceService(
+      new DocumentChunkRepository(),
+    ),
   );
 
 function unauthorized(res: Response) {
@@ -183,6 +204,25 @@ export async function createDocument(
       fileBuffer: uploadedFileBuffer,
     });
 
+  if (
+    document.content &&
+    document.content.trim().length > 0
+  ) {
+    await documentProcessingPipeline.process({
+      documentId: document.id,
+      userId: req.user.id,
+      content: document.content,
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        ...document,
+        status: DocumentStatus.READY,
+      },
+    });
+  }
+
   return res.status(201).json({
     success: true,
     data: document,
@@ -299,8 +339,7 @@ export async function listDocuments(
         success: false,
         error: {
           code: "INVALID_STATUS",
-          message:
-            "Invalid document status.",
+          message: "Invalid document status.",
         },
       });
     }
