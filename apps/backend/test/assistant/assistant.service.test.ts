@@ -482,4 +482,121 @@ describe("AssistantService", () => {
       "Conversation not found for the authenticated user.",
     );
   });
+    it("executes a registered task tool through the assistant loop", async () => {
+    const llmService = createLlmServiceMock();
+    const memoryService = createMemoryServiceMock();
+
+    memoryService.searchMemories.mockResolvedValue(
+      [],
+    );
+
+    const toolExecutor = new ToolExecutor({
+      get: vi.fn((name: string) => {
+        if (name !== "create_task") {
+          return undefined;
+        }
+
+        return {
+          name: "create_task",
+          description:
+            "Create a task for the authenticated BrainOS user.",
+          parameters: {
+            type: "object",
+            properties: {
+              title: {
+                type: "string",
+              },
+            },
+            required: ["title"],
+          },
+          execute: vi.fn().mockResolvedValue({
+            id: "task-1",
+            title: "Finish BrainOS RAG",
+            status: "TODO",
+          }),
+        };
+      }),
+      getAll: vi.fn().mockReturnValue([
+        {
+          name: "create_task",
+          description:
+            "Create a task for the authenticated BrainOS user.",
+          parameters: {
+            type: "object",
+            properties: {
+              title: {
+                type: "string",
+              },
+            },
+            required: ["title"],
+          },
+        },
+      ]),
+    } as any);
+
+    llmService.generate
+      .mockResolvedValueOnce({
+        text: "",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [
+          {
+            id: "call-create-task",
+            name: "create_task",
+            arguments: {
+              title: "Finish BrainOS RAG",
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        text: "I created the task for you.",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [],
+      });
+
+    const service = new AssistantService(
+      llmService as unknown as LLMService,
+      memoryService as unknown as MemoryService,
+      toolExecutor,
+    );
+
+    const result = await service.ask({
+      userId: "user-1",
+      message:
+        "Create a task called Finish BrainOS RAG.",
+    });
+
+    expect(
+      llmService.generate,
+    ).toHaveBeenCalledTimes(2);
+
+    const secondCall =
+      llmService.generate.mock.calls[1][0];
+
+    expect(secondCall.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "tool",
+          toolCallId:
+            "call-create-task",
+          toolName: "create_task",
+          content: JSON.stringify({
+            id: "task-1",
+            title: "Finish BrainOS RAG",
+            status: "TODO",
+          }),
+        }),
+      ]),
+    );
+
+    expect(result).toEqual({
+      text: "I created the task for you.",
+      model: "test-model",
+      provider: "test",
+      retrievedMemories: [],
+      retrievedDocuments: [],
+    });
+  });
 });

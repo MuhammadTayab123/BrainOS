@@ -4,426 +4,386 @@
 
 **Project:** BrainOS
 **Purpose:** Personal AI Operating System / Second Brain / Personal Assistant
-**Current phase:** Phase 20 — Documents / Knowledge Foundation
-**Phase 17 status:** COMPLETE
-**Phase 18 status:** COMPLETE — Conversation persistence foundation verified
-**Repository:** `D:\Project\BrainOS`
+**Repository:** `D:\\Project\\BrainOS`
 **Branch:** `main`
 **OS:** Windows
-**Editor:** VS Code
-**Last verified local commit:** `d83946c feat(documents): add document content support`
+**Current date checkpoint:** 2026-08-26
+**Current phase:** Phase 20 — Documents / Knowledge Foundation
+**Phase 19:** IN PROGRESS — task/reminder foundation verified; broader automation remains
+**Latest verified commit:** `f1ccda1 feat(documents): automate document processing pipeline`
+**Remote:** `origin/main` matches `f1ccda1`
+**Working tree:** clean
+**TypeScript:** PASS
+**Latest full backend regression:** 30 test files, 295 tests, 0 failures
 
 ---
 
-# CURRENT AUTHORITATIVE STATE — 2026-08-24
+# CURRENT AUTHORITATIVE STATE
 
-This section is the newest source of truth. Older sections below are historical and are retained for continuity. If an older section conflicts with this section or with the actual repository, inspect the repository and use the newer verified state.
+This section supersedes older current-state claims. If this section conflicts with the repository, inspect the repository and use the repository as the final authority.
 
-## Current phase
+## Mission
 
-**Phase 20 — Documents / Knowledge Foundation**
+BrainOS is not merely a chatbot. It is a private personal AI operating system / second brain that should: understand context, remember useful information, retrieve relevant knowledge, reason over context, help make decisions, organize work/study/life, manage tasks/reminders, understand documents, plan, use AI models/tools, automate repetitive work, communicate naturally, and eventually support voice/mobile/PWA and proactive assistance with user control and privacy.
 
-Phase 20 has started after the Phase 19 task/reminder work.
+North-star:
 
-### Current verified milestone
+> BrainOS should become a private second brain and personal operating system that reduces cognitive load.
 
-**Document foundation + authenticated Document API + document content support + first document ingestion layer COMPLETE.**
+The current document/RAG work directly supports that mission.
 
-Completed document work:
+---
+
+# PHASE 20 — DOCUMENTS / KNOWLEDGE FOUNDATION
+
+## Status
+
+**Foundation milestone COMPLETE.**
+
+Completed:
 
 ```text
 ✓ Document Prisma foundation
-✓ Document migration
-✓ Document repository
-✓ Document service
-✓ Authenticated Document API
-✓ Document API tests
+✓ Document CRUD repository/service/API
+✓ Authenticated and owner-scoped document API
 ✓ Document content persistence
-✓ Content migration
-✓ Document ingestion service foundation
-✓ TEXT ingestion/normalization
-✓ Ingestion unit tests
-✓ DocumentService ingestion integration
-✓ DocumentService ingestion error propagation
+✓ TEXT ingestion / normalization
+✓ URL extraction
+✓ Plain-text upload ingestion
+✓ PDF extraction
+✓ PDF extraction tests / fixture
+✓ Document chunking with paragraph/sentence-aware boundaries
+✓ DocumentChunk persistence
+✓ 768-dimensional pgvector embedding persistence
+✓ Document chunk semantic search
+✓ Document retrieval service
+✓ POST /api/v1/documents/search
+✓ Assistant document retrieval integration
+✓ Document context formatting for Assistant
+✓ Automated document processing pipeline
+✓ READY / FAILED processing lifecycle
+✓ Pipeline tests
 ✓ Full backend regression
 ✓ TypeScript compilation
+✓ Commit + push verification
 ```
 
-The current ingestion layer intentionally does **not** claim URL or file extraction support.
-
-Current ingestion behavior:
+## Current end-to-end document flow
 
 ```text
-TEXT
-  ↓
-DocumentIngestionService
-  ↓
-validate / normalize content
-  ↓
-DocumentService
-  ↓
-DocumentRepository
-  ↓
-PostgreSQL
-```
-
-Deferred ingestion sources:
-
-```text
-URL
-  → reject until URL extraction is implemented
-
-UPLOAD
-  → reject until file extraction is implemented
-```
-
-### Current Git state
-
-Latest verified commit:
-
-```text
-d83946c feat(documents): add document content support
-```
-
-Previous document checkpoint:
-
-```text
-81a6ac8 feat(documents): add document foundation and API
-```
-
-Earlier Phase 19 checkpoints:
-
-```text
-cf20183 feat(reminders): add reminder worker and scheduler
-c4f42ba feat(reminders): add reminder foundation
-```
-
-Latest verified state before continuing document work:
-
-```text
-Branch: main
-origin/main: d83946c
-Working tree: clean
-```
-
-Do not claim a commit is pushed unless `git status` / `git log` or an equivalent remote verification confirms it.
-
-## Document architecture
-
-Current document request flow:
-
-```text
-Authenticated Request
- ↓
-requireAuth
+Authenticated request
  ↓
 Document Controller
  ↓
 Document Service
  ↓
-Document Repository
+Ingestion / Extraction
  ↓
-Prisma
+Normalized content
  ↓
-PostgreSQL
+Document Processing Pipeline
+ ↓
+Chunking
+ ↓
+DocumentChunk persistence
+ ↓
+Ollama embedding generation
+ ↓
+pgvector embedding persistence
+ ↓
+READY
 ```
 
-Ingestion-aware creation flow:
+Failure path:
 
 ```text
-Authenticated Request
+processing failure
  ↓
-Document Controller
- ↓
-Document Service
- ↓
-DocumentIngestionService
- ↓
-normalized content
- ↓
-Document Repository
- ↓
-Prisma
- ↓
-PostgreSQL
+FAILED
 ```
 
-Ownership is always derived from the authenticated user context.
+Documents without content are created without running the processing pipeline.
 
-Controllers must remain thin.
+## Semantic retrieval flow
 
-Prisma/database access remains in repositories.
+```text
+User query
+ ↓
+EmbeddingsService
+ ↓
+query vector
+ ↓
+DocumentChunkRepository.searchSimilar()
+ ↓
+owner-scoped pgvector similarity search
+ ↓
+ranked document chunks
+```
 
-Business rules remain in services.
+## Assistant / RAG flow
 
-## Document API
+```text
+Assistant message
+ ↓
+memory retrieval
+ ↓
+optional document retrieval
+ ↓
+context builder
+ ↓
+[Relevant Context from Memory]
+[Relevant Context from Documents]
+ ↓
+LLM
+```
 
-Current routes:
+Document retrieval is currently **opt-in** through `enableDocumentRetrieval`. Do not make it always-on without an explicit product/performance decision.
+
+## Current document API
 
 ```text
 POST   /api/v1/documents
+POST   /api/v1/documents/search
 GET    /api/v1/documents
 GET    /api/v1/documents/:id
 PATCH  /api/v1/documents/:id/status
 DELETE /api/v1/documents/:id
 ```
 
-Authentication is required.
+Search contract:
 
-Document ownership is enforced through the authenticated user.
-
-Soft-deleted documents are excluded from normal reads/lists.
-
-Current document status foundation includes:
-
-```text
-PENDING
-READY
-PROCESSING
-FAILED
-DELETED
+```json
+{
+  "query": "example",
+  "limit": 5
+}
 ```
 
-Use the actual Prisma enum/schema as authoritative if this changes.
+Rules:
+- query must be a non-empty string
+- query is trimmed before retrieval
+- limit is optional
+- limit must be an integer from 1 to 20
+- ownership comes from authenticated context
 
-## Document files
-
-Current implementation files:
+## Current important document files
 
 ```text
 apps/backend/src/controllers/document/document.controller.ts
 apps/backend/src/routes/document.routes.ts
-
 apps/backend/src/services/documents/document.service.ts
 apps/backend/src/services/documents/document.types.ts
 apps/backend/src/services/documents/repositories/document.repository.ts
-
 apps/backend/src/services/documents/ingestion/document.ingestion.service.ts
 apps/backend/src/services/documents/ingestion/document.ingestion.types.ts
+apps/backend/src/services/documents/ingestion/extractors/
+apps/backend/src/services/documents/chunking/document.chunker.ts
+apps/backend/src/services/documents/chunking/document.chunker.types.ts
+apps/backend/src/services/documents/processing/document.processing.service.ts
+apps/backend/src/services/documents/pipeline/document.processing.pipeline.service.ts
+apps/backend/src/services/documents/embeddings/document-chunk-embedding.service.ts
+apps/backend/src/services/documents/embeddings/document-chunk-embedding-persistence.service.ts
+apps/backend/src/services/documents/repositories/chunks/document-chunk.repository.ts
+apps/backend/src/services/documents/retrieval/document-retrieval.service.ts
+```
 
+## Current important document tests
+
+```text
 apps/backend/test/documents/document.api.test.ts
 apps/backend/test/documents/document.service.test.ts
 apps/backend/test/documents/document.ingestion.test.ts
+apps/backend/test/documents/pdf.document.extractor.test.ts
+apps/backend/test/documents/document.chunker.test.ts
+apps/backend/test/documents/document-chunk.repository.test.ts
+apps/backend/test/documents/embeddings/document-chunk-embedding.service.test.ts
+apps/backend/test/documents/embeddings/document-chunk-embedding-persistence.service.test.ts
+apps/backend/test/documents/processing/document.processing.service.test.ts
+apps/backend/test/documents/retrieval/document-retrieval.service.test.ts
+apps/backend/test/documents/pipeline/document.processing.pipeline.test.ts
 ```
 
-Current migrations:
+## Current data model direction
+
+`Document` includes:
 
 ```text
-apps/backend/prisma/migrations/20260824003625_add_document_foundation/migration.sql
-apps/backend/prisma/migrations/20260824053010_add_document_content/migration.sql
+id
+userId
+title
+sourceType
+source
+content
+mimeType
+status
+createdAt
+updatedAt
+deletedAt
 ```
 
-## Document validation
-
-Latest verified document-focused validation:
+`DocumentChunk` includes:
 
 ```text
-Document test files: 3 passed
-Document tests: 32 passed
-Full backend test files: 21 passed
-Full backend tests: 249 passed
-TypeScript: passed
+id
+documentId
+chunkIndex
+content
+embedding vector(768)
+createdAt
+updatedAt
 ```
 
-The document-specific suites include:
+Document status currently used by the pipeline:
 
 ```text
-document.api.test.ts
-document.service.test.ts
-document.ingestion.test.ts
+PENDING
+READY
+FAILED
+DELETED
 ```
 
-The ingestion suite verifies the current intentional boundaries:
+Authoritative schema:
 
 ```text
-✓ accepts supported TEXT ingestion
-✓ normalizes/validates TEXT content
-✓ rejects unsupported URL ingestion until extraction exists
-✓ rejects unsupported UPLOAD ingestion until extraction exists
+apps/backend/prisma/schema.prisma
 ```
 
-The service suite verifies:
+## Migration safety
 
-```text
-✓ normalized document creation
-✓ ingestion integration
-✓ missing title rejection
-✓ missing source type rejection
-✓ ingestion error propagation
-✓ list validation
-✓ owner-scoped retrieval
-✓ not-found behavior
-✓ status updates
-✓ DELETED status protection
-✓ soft deletion
-```
+Applied Prisma migrations are immutable. Never edit, rename, delete, or recreate an applied migration. Always create a new migration for future schema changes.
 
-## Document next milestone
-
-Do not implement all extraction features at once.
-
-Next recommended milestone:
-
-**URL ingestion/extraction foundation**
-
-Expected boundary:
-
-```text
-DocumentService
- ↓
-DocumentIngestionService
- ↓
-URL extractor
- ↓
-normalized document content
- ↓
-DocumentRepository
-```
-
-After URL extraction is verified, implement file/upload extraction separately.
-
-Potential future document pipeline:
-
-```text
-Document
- ↓
-Source detection
- ↓
-Extraction
- ↓
-Normalization
- ↓
-Chunking
- ↓
-Embedding
- ↓
-pgvector
- ↓
-Semantic retrieval
- ↓
-Assistant / RAG
-```
-
-Do not add chunking, embeddings, or RAG until the extraction boundary is stable and tested.
-
-## Phase 19 status when moving into Phase 20
-
-Phase 19 task/reminder foundation work has been completed sufficiently to begin the document milestone, but broader automation behavior should not be called complete without evidence.
-
-Verified Phase 19 work includes:
-
-```text
-✓ Task persistence
-✓ Task ownership
-✓ Task soft deletion
-✓ Task service/repository
-✓ Task assistant tools
-✓ Reminder persistence
-✓ Reminder ownership
-✓ Reminder lifecycle foundation
-✓ Reminder service/repository
-✓ Reminder scheduler/worker foundation
-✓ Related regression tests
-```
-
-Any remaining Phase 19 automation/delivery work must be checked against the actual repository before being declared complete.
-
-## Important recent Prisma migration incident
-
-A previous migration checksum mismatch was caused by the already-applied migration:
-
-```text
-20260810121955_add_memory_embedding
-```
-
-being different from the checksum recorded in the database.
-
-The local migration file was restored from the authoritative Git commit and the database checksum was repaired to match the tracked migration.
-
-After repair:
-
-```text
-npx prisma migrate dev --name add_document_foundation
-```
-
-successfully created and applied:
-
-```text
-20260824003625_add_document_foundation
-```
-
-This incident must not be repeated.
-
-### Mandatory Prisma migration rules
-
-Once a migration has been applied:
-
-```text
-DO NOT edit migration.sql
-DO NOT rename the migration directory
-DO NOT delete the migration
-DO NOT recreate an applied migration under another timestamp
-```
-
-For every future schema change:
-
-```text
-1. Check migration status.
-2. Inspect git status.
-3. Ensure existing applied migrations are untouched.
-4. Change schema.prisma.
-5. Create a NEW migration.
-6. Validate.
-7. Generate Prisma Client.
-8. Typecheck.
-9. Run tests.
-10. Commit schema + migration together.
-```
-
-Never use `prisma migrate reset` as the first response to a checksum/history problem.
-
-Investigate migration history first.
-
-### Migration preflight
-
-Run from:
-
-```text
-D:\Project\BrainOS\apps\backend
-```
-
-before creating a migration:
+Preflight:
 
 ```powershell
+cd D:\Project\BrainOS\apps\backend
 npx prisma migrate status
 npx prisma validate
 npx prisma generate
 npx tsc --noEmit
-```
-
-Then inspect:
-
-```powershell
 git status --short
-git diff -- prisma/schema.prisma
 ```
 
-Only create the migration after confirming no previously applied migration file was modified.
+---
 
-## Phase 20 working rules
+# PHASE 19 — TASKS / REMINDERS / AUTOMATION
 
-For every document milestone:
+## Status
+
+**IN PROGRESS**
+
+Verified:
 
 ```text
-Read BrainOS_Master_Project_Context.md
+✓ Task persistence
+✓ Task ownership enforcement
+✓ Task soft deletion
+✓ Task filtering
+✓ Task service / repository
+✓ create_task
+✓ list_tasks
+✓ complete_task
+✓ delete_task
+✓ get_task
+✓ update_task
+✓ Task tool registration and validation tests
+✓ Reminder persistence foundation
+✓ Reminder ownership / soft deletion
+✓ Reminder status lifecycle foundation
+✓ Reminder service / repository
+✓ Reminder tests
+✓ Reminder migration
+✓ Prisma generation / validation
+✓ TypeScript compilation
+```
+
+Still remaining:
+
+```text
+[ ] Real assistant → task tool execution end-to-end verification
+[ ] Reminder scheduler
+[ ] Reminder execution worker
+[ ] Reminder delivery integration
+[ ] Retry/backoff policy
+[ ] Recurring tasks/reminders
+[ ] Automation engine
+[ ] Proactive reminder behavior
+[ ] Final Phase 19 acceptance verification
+[ ] Final Phase 19 context checkpoint
+```
+
+Do not declare Phase 19 complete until these are actually verified.
+
+---
+
+# CURRENT GIT CHECKPOINT
+
+```text
+f1ccda1 feat(documents): automate document processing pipeline
+f6c3b96 feat(assistant): integrate document retrieval context
+fdb8608 feat(documents): add semantic search API
+bf0429a feat(documents): add semantic retrieval
+616f8b7 feat(documents): add chunk embeddings
+3ce8f72 feat(documents): persist document chunks
+3df64b1 feat(documents): add document processing foundation
+386faaa feat(documents): add document chunking foundation
+8388bac feat(documents): add PDF ingestion
+31ffd1d feat(documents): add plain-text upload ingestion
+```
+
+Latest verified state:
+
+```text
+Branch: main
+HEAD: f1ccda1
+origin/main: f1ccda1
+Working tree: clean
+```
+
+## Latest validation
+
+```text
+30 test files passed
+295 tests passed
+0 failed
+npx tsc --noEmit: PASS
+```
+
+Recent focused checks:
+
+```text
+Document API: 24 passed
+Document processing pipeline: 2 passed
+Assistant service: 6 passed
+Assistant API: 4 passed
+Document suite: 75 passed
+```
+
+---
+
+# TESTING ARCHITECTURE
+
+API/controller tests mock expensive processing boundaries. The real document pipeline is covered by focused unit tests, and repository/integration tests use the database where appropriate.
+
+Do not make API suites depend on a live Ollama instance.
+
+---
+
+# DEVELOPMENT RULES
+
+Before every meaningful change:
+
+```text
+Read this context
  ↓
 Check git status/log
  ↓
-Inspect actual document files
+Inspect actual files
+ ↓
+Confirm mission / architectural fit
  ↓
 Define one small milestone
  ↓
-Implement
+Implement the smallest correct change
  ↓
 Run focused tests
  ↓
@@ -431,9 +391,9 @@ Run full regression
  ↓
 Run TypeScript
  ↓
-Update context
- ↓
 Review diff
+ ↓
+Update context
  ↓
 Commit
  ↓
@@ -442,726 +402,123 @@ Push
 Verify final Git state
 ```
 
-Do not skip the context checkpoint.
-
-Do not create a second overlapping document abstraction if the current service/repository/ingestion boundaries already support the requirement.
-
-Do not put extraction logic in controllers.
-
-Do not put Prisma queries in controllers or ingestion providers.
-
-Do not trust client-supplied `userId`.
-
-Do not expose document content or authentication secrets in logs.
-
-## Current known non-blocking warnings
-
-Git may report:
-
-```text
-LF will be replaced by CRLF
-```
-
-for tracked files on Windows.
-
-This is a line-ending warning, not a functional failure.
-
-Vitest/Vite may also emit the existing non-blocking configuration warning around:
-
-```text
-configLoader: 'native'
-```
-
-Do not change configuration merely to suppress warnings without a scoped reason.
+Controllers stay thin. Prisma/database access stays in repositories. Business rules stay in services. External providers stay behind interfaces. Never trust client-supplied ownership IDs. Never expose secrets, session IDs, Authorization headers, or private document content in logs.
 
 ---
 
-# CURRENT AUTHORITATIVE STATE — 2026-08-23
+# NON-BLOCKING WARNINGS
 
-This section is the present source of truth. Older sections below are historical and are retained for continuity. If an older section conflicts with this section or with the actual repository, inspect the repository and use the newer verified state.
+Vitest/Vite may emit the existing `configLoader: 'native'` warning. It is currently non-blocking.
 
-## Current phase
-
-**Phase 19 — Tasks / Reminders / Automation**
-
-### Current verified milestone
-
-**Task foundation + assistant task tools + Reminder persistence/service foundation COMPLETE.**
-
-The broader Phase 19 roadmap is **not** complete yet.
-
-Still future work:
-
-- real assistant → task-tool end-to-end verification
-- task result handling improvements
-- richer task lifecycle
-- reminder scheduler/worker
-- reminder delivery integration
-- recurring tasks/automations
-- automation engine
-- proactive reminder behavior
-- user-facing task/reminder API/UI where required
-- final Phase 19 completion and push verification
-
-## Current Git state
-
-Latest verified local and remote HEAD:
-
-```text
-1ece2ed docs(context): update phase 19 task tools checkpoint
-```
-
-Verified:
-
-```text
-Branch: main
-origin/main: 1ece2ed
-Working tree: clean BEFORE the current Reminder-foundation changes were started
-```
-
-Phase 19 task commits already pushed:
-
-```text
-8378a1e feat(tasks): add task foundation and persistence
-c37a159 feat(tasks): register task assistant tools
-6149b4e test(tasks): add task tool tests
-3d2452d feat(tasks): integrate task tools with assistant
-0945e5d docs(context): finalize phase 19 task checkpoint
-34ead43 feat(tasks): add get and update task tools
-1ece2ed docs(context): update phase 19 task tools checkpoint
-```
-
-**Important:** the Reminder foundation changes described below are currently implemented and locally verified, but the final Reminder checkpoint has **not yet been committed/pushed** at the time this context is being written.
-
-## Phase 19 verified implementation
-
-### Task foundation
-
-Prisma model:
-
-```text
-Task
-  id
-  userId
-  title
-  description
-  status
-  priority
-  dueAt
-  completedAt
-  createdAt
-  updatedAt
-  deletedAt
-```
-
-Enums:
-
-```text
-TaskStatus
-  TODO
-  COMPLETED
-
-TaskPriority
-  LOW
-  MEDIUM
-  HIGH
-```
-
-Migration:
-
-```text
-apps/backend/prisma/migrations/20260822143000_add_task_foundation/migration.sql
-```
-
-Indexes:
-
-```text
-(userId)
-(userId, status)
-(userId, dueAt)
-```
-
-Ownership:
-
-```text
-Task.userId → User.id
-ON DELETE CASCADE
-```
-
-Task operations:
-
-```text
-createTask
-listTasks
-getTask
-updateTask
-completeTask
-deleteTask
-```
-
-Ownership is enforced through authenticated `userId`.
-
-Soft deletion uses `deletedAt`.
-
-Active task reads/lists exclude soft-deleted rows.
-
-Task list limit is capped at:
-
-```text
-50
-```
-
-### Assistant task tools
-
-Implemented and registered:
-
-```text
-create_task
-list_tasks
-complete_task
-delete_task
-get_task
-update_task
-```
-
-Files:
-
-```text
-apps/backend/src/services/tools/task.tools.ts
-apps/backend/src/services/tools/tool.container.ts
-apps/backend/src/services/tools/tool.executor.ts
-apps/backend/src/services/tools/tool.registry.ts
-apps/backend/src/services/tools/tool.types.ts
-```
-
-Ownership always comes from:
-
-```typescript
-context.userId
-```
-
-The model/client cannot select the task owner.
-
-Execution boundary:
-
-```text
-Assistant
- ↓
-ToolExecutor
- ↓
-ToolRegistry
- ↓
-Task Tool
- ↓
-TaskService
- ↓
-TaskRepository
- ↓
-Prisma
- ↓
-PostgreSQL
-```
-
-### Reminder persistence/service foundation
-
-The Reminder foundation has now been implemented and locally verified.
-
-Prisma enum:
-
-```text
-ReminderStatus
-  PENDING
-  PROCESSING
-  DELIVERED
-  FAILED
-  CANCELLED
-```
-
-Reminder model:
-
-```text
-Reminder
-  id
-  userId
-  taskId
-  message
-  scheduledFor
-  status
-  attempts
-  deliveredAt
-  lastError
-  createdAt
-  updatedAt
-  deletedAt
-```
-
-Relationships:
-
-```text
-Reminder.userId → User.id
-ON DELETE CASCADE
-
-Reminder.taskId → Task.id
-ON DELETE CASCADE
-```
-
-Indexes:
-
-```text
-(userId, status)
-(scheduledFor, status)
-(taskId)
-```
-
-Migration:
-
-```text
-apps/backend/prisma/migrations/20260823150000_add_reminder_foundation/migration.sql
-```
-
-The migration was applied successfully.
-
-Verified:
-
-```powershell
-npx prisma migrate status
-```
-
-Result:
-
-```text
-6 migrations found in prisma/migrations
-Database schema is up to date!
-```
-
-Reminder implementation:
-
-```text
-apps/backend/src/services/reminders/reminder.service.ts
-apps/backend/src/services/reminders/reminder.types.ts
-apps/backend/src/services/reminders/repositories/reminder.repository.ts
-```
-
-Reminder service operations:
-
-```text
-createReminder
-listReminders
-getReminder
-markProcessing
-markDelivered
-markFailed
-cancelReminder
-deleteReminder
-```
-
-Reminder repository behavior includes:
-
-```text
-create
-listByUser
-findByIdForUser
-markProcessing
-markDelivered
-markFailed
-cancel
-softDeleteByIdForUser
-```
-
-Reminder lifecycle:
-
-```text
-PENDING
-   ↓
-PROCESSING
-   ↓
-DELIVERED
-
-PROCESSING
-   ↓
-FAILED
-
-PENDING / PROCESSING
-   ↓
-CANCELLED
-```
-
-Important semantics:
-
-- `markProcessing` only claims `PENDING` reminders and increments `attempts`.
-- `markDelivered` only succeeds for `PROCESSING` reminders and records `deliveredAt`.
-- `markFailed` only succeeds for `PROCESSING` reminders and records `lastError`.
-- cancellation is user-scoped and only applies to active `PENDING`/`PROCESSING` reminders.
-- normal reads exclude soft-deleted reminders.
-- reminder ownership is enforced through authenticated `userId`.
-
-### Reminder validation
-
-The ReminderService validates:
-
-```text
-userId
-reminderId
-optional taskId
-message
-scheduledFor
-list limit
-failure error message
-```
-
-Reminder list limit is capped at:
-
-```text
-50
-```
-
-### Reminder tests
-
-Implemented:
-
-```text
-apps/backend/test/services/reminders/reminder.service.test.ts
-apps/backend/test/services/reminders/repositories/reminder.repository.test.ts
-```
-
-Verified focused service suite:
-
-```text
-1 test file passed
-19 tests passed
-0 failed
-```
-
-Verified focused repository suite:
-
-```text
-1 test file passed
-14 tests passed
-0 failed
-```
-
-### Full backend regression
-
-Latest verified full regression:
-
-```text
-16 test files passed
-205 tests passed
-0 failed
-```
-
-Previous Phase 19 task-only checkpoint had 172 tests. The current 205-test result includes the new Reminder coverage.
-
-### Current validation
-
-Latest verified commands:
-
-```powershell
-cd D:\Project\BrainOS\apps\backend
-
-npx prisma generate
-npx prisma validate
-npx prisma migrate status
-npx tsc --noEmit
-npm run test:run
-```
-
-Results:
-
-```text
-Prisma Client generated successfully
-Prisma schema valid
-Database schema is up to date
-TypeScript compilation passes
-16 test files passed
-205 tests passed
-0 failed
-```
-
-### Reminder files currently present
-
-```text
-apps/backend/src/services/reminders/reminder.service.ts
-apps/backend/src/services/reminders/reminder.types.ts
-apps/backend/src/services/reminders/repositories/reminder.repository.ts
-
-apps/backend/test/services/reminders/reminder.service.test.ts
-apps/backend/test/services/reminders/repositories/reminder.repository.test.ts
-
-apps/backend/prisma/migrations/20260823150000_add_reminder_foundation/migration.sql
-```
-
-### Current Prisma schema addition
-
-The current uncommitted Reminder schema addition is:
-
-```text
-ReminderStatus enum
-User.reminders relation
-Task.reminders relation
-Reminder model
-Reminder indexes
-Reminder ownership relations
-```
-
-The generated SQL was verified with:
-
-```powershell
-npx prisma migrate diff `
-  --from-schema-datasource .\prisma\schema.prisma `
-  --to-schema-datamodel .\prisma\schema.prisma `
-  --script
-```
-
-and matched the intended Reminder foundation, including:
-
-```text
-ReminderStatus
-Reminder table
-deliveredAt
-attempts
-lastError
-indexes
-User foreign key
-Task foreign key
-```
-
-## Important migration incident and resolution
-
-Earlier in Phase 19, the database contained an extra historical migration record:
-
-```text
-20260810121526_add_memory_embedding
-```
-
-while the local migration directory contains:
-
-```text
-20260810121955_add_memory_embedding
-```
-
-Repository inspection established that the tracked migration file is the authoritative one created by:
-
-```text
-86c06df feat(memory): add embedding persistence and semantic search
-```
-
-The extra database migration record was investigated rather than blindly deleting/resetting the database.
-
-The current local migration history is:
-
-```text
-20260806204535_init
-20260807191756_add_clerk_user_fields
-20260809053527_add_memory_engine
-20260810121955_add_memory_embedding
-20260822143000_add_task_foundation
-20260823150000_add_reminder_foundation
-```
-
-The database now reports:
-
-```text
-Database schema is up to date!
-```
-## Prisma Migration Safety Rules
-
-These rules are mandatory for all future BrainOS development.
-
-### Applied migrations are immutable
-
-Once a Prisma migration has been applied to a database:
-
-- never rename its migration directory
-- never edit its `migration.sql`
-- never delete the migration directory
-- never recreate it under a different timestamp/name
-
-Future schema changes must always use a new migration.
-
-### Required migration workflow
-
-Before creating a migration:
-
-```powershell
-cd D:\Project\BrainOS\apps\backend
-
-npx prisma migrate status
-npx prisma validate
-npx prisma generate
-npx tsc --noEmit
-
-**Do not reset the database or delete migration history casually.**
-
-## Important development environment note
-
-`pg_dump` and `psql` are not currently available on PATH and the expected PostgreSQL 18 `bin` directory was not found under:
-
-```text
-C:\Program Files\PostgreSQL\18
-```
-
-The PostgreSQL data directory does exist locally.
-
-For database inspection, Prisma/database access through the configured application environment is currently the verified route.
-
-Do not invent a `pg_dump` path.
-
-## Current task-tool dependency injection note
-
-`task.tools.ts` currently creates its `TaskService` internally:
-
-```typescript
-const taskService = new TaskService(
-  new TaskRepository(),
-);
-```
-
-This is acceptable for the current foundation.
-
-Do not refactor merely for style. Improve dependency injection only when architecture or testing requirements justify it.
-
-## Current known non-blocking warning
-
-Vitest/Vite may warn about:
-
-```text
-configLoader: 'native'
-```
-
-and ESM syntax in `vitest.config.ts`.
-
-This warning does not currently fail tests.
-
-Do not modify configuration merely to suppress it without a separate compatibility decision.
-
-# Phase 19 remaining work
-
-The next work should be scoped carefully.
-
-### Next milestone
-
-Verify the real assistant path with task tools:
-
-```text
-User request
- ↓
-Assistant controller
- ↓
-Assistant service
- ↓
-LLM provider
- ↓
-tool selection
- ↓
-ToolExecutor
- ↓
-Task tool
- ↓
-TaskService
- ↓
-TaskRepository
- ↓
-PostgreSQL
- ↓
-tool result
- ↓
-assistant response
-```
-
-Do not claim this is verified until an end-to-end assistant test or manual verification proves it.
-
-### Reminder/automation work still remaining
-
-```text
-[ ] reminder scheduler
-[ ] reminder execution worker
-[ ] reminder delivery integration
-[ ] retry/backoff policy
-[ ] recurring reminders/tasks
-[ ] automation engine
-[ ] proactive reminder behavior
-[ ] user-facing task/reminder API/UI if required
-[ ] final Phase 19 acceptance verification
-[ ] final Phase 19 context checkpoint
-[ ] final Phase 19 commit
-[ ] final Phase 19 push verification
-```
-
-Do not implement all remaining items at once.
-
-# Phase 19 acceptance criteria
-
-### Completed
-
-```text
-✓ Task persistence
-✓ Task ownership enforcement
-✓ Task soft deletion
-✓ Task filtering
-✓ Task service
-✓ Task repository
-✓ Task service tests
-✓ Task PostgreSQL integration tests
-✓ create_task
-✓ list_tasks
-✓ complete_task
-✓ delete_task
-✓ get_task
-✓ update_task
-✓ Task tool registration
-✓ Task tool validation tests
-✓ Reminder persistence
-✓ Reminder ownership enforcement
-✓ Reminder soft deletion
-✓ Reminder status lifecycle foundation
-✓ Reminder service
-✓ Reminder repository
-✓ Reminder service tests
-✓ Reminder repository tests
-✓ Reminder migration
-✓ Prisma generation
-✓ Prisma validation
-✓ TypeScript compilation
-✓ Full backend regression
-```
-
-### Not yet complete
-
-```text
-[ ] Real assistant → task tool execution verified end-to-end
-[ ] Complete reminder scheduling/execution system
-[ ] Reminder delivery integration
-[ ] Recurring automation
-[ ] Proactive automation
-[ ] Final Phase 19 documentation checkpoint
-[ ] Final Phase 19 commit/push
-```
+Windows Git may emit `LF will be replaced by CRLF`. That is a line-ending warning, not a functional failure.
 
 ---
 
-# 0. CRITICAL RULE FOR EVERY FUTURE CHAT
+# NEXT PRIORITIES
 
-Before changing BrainOS:
+## 1. True end-to-end RAG proof
 
-1. Read this context.
-2. Inspect the actual repository.
-3. Check `git status` and recent commits.
-4. Inspect the relevant files.
-5. Explain the architectural reason for a significant change.
-6. Make the smallest correct change.
-7. Run validation/tests.
-8. Verify actual behavior.
-9. Update the handoff/context.
-10. Commit completed work.
-11. Push completed phases.
-12. Verify the final Git state.
+Demonstrate one real path:
 
-Never restart completed phases, blindly overwrite working code, bypass authentication, put business logic in controllers, put Prisma access in controllers, trust client-supplied ownership IDs, expose secrets/tokens/session IDs in logs, or claim planned work is verified.
+```text
+create document
+→ process
+→ chunk
+→ embed
+→ persist
+→ retrieve
+→ inject into Assistant context
+→ LLM uses document context
+```
 
-If context and repository disagree, inspect the repository and resolve the difference first.
+Do not claim this is verified until it is actually demonstrated.
+
+## 2. Finish Phase 19
+
+Complete the task/reminder/automation acceptance criteria before declaring Phase 19 complete.
+
+## 3. Improve RAG quality after proof
+
+Potential follow-ups:
+
+```text
+document title/source metadata
+citation/source references
+retrieval thresholds
+hybrid search
+context-size controls
+duplicate chunk handling
+```
+
+Do not optimize prematurely.
 
 ---
+
+# PRODUCT SUCCESS CRITERIA
+
+BrainOS should eventually support:
+
+### Remember
+"Remember my project architecture."
+
+### Retrieve
+"What did I decide about the database?"
+
+### Understand
+"Read this document and tell me what matters."
+
+### Plan
+"Plan my week around my classes and projects."
+
+### Decide
+"Compare these options based on my priorities."
+
+### Act
+"Create the task and remind me tomorrow."
+
+### Integrate
+"Check my calendar and tell me if I have time."
+
+### Proactively assist
+"You have a deadline tomorrow and this related document has not been reviewed."
+
+### Learn responsibly
+"That preference is likely important for future recommendations."
+
+User control and privacy remain central.
+
+---
+
+# FINAL PROJECT STATEMENT
+
+BrainOS is being built to become a private personal AI operating system that:
+
+- remembers
+- understands
+- retrieves
+- reasons
+- recommends
+- organizes
+- plans
+- integrates
+- automates
+- eventually acts appropriately with user control
+
+Current verified stack:
+
+**Clerk + Express + PostgreSQL + Prisma + Ollama + pgvector + Next.js**
+
+Current verified document foundation:
+
+**Ingestion → extraction → chunking → embeddings → pgvector → retrieval → Assistant context → READY/FAILED processing lifecycle**
+
+Ultimate mission:
+
+> Build a personal AI assistant that understands the user's context, stores and retrieves useful information, helps make better decisions, organizes life/work/study, and provides appropriate proactive assistance while remaining private, modular, affordable, maintainable, and under the user's control.
+
+---
+
+# END OF CURRENT AUTHORITATIVE CONTEXT
 
 # HISTORICAL PROJECT CONTEXT
 

@@ -1,13 +1,22 @@
 import { NotFoundError } from "../../errors";
 
-import { ReminderDeliveryProvider } from "./reminder.delivery";
 import { ReminderRepository } from "./repositories/reminder.repository";
+import {
+  ReminderDelivery,
+  ReminderDeliveryProvider,
+} from "./reminder-delivery.provider";
 
 const DEFAULT_BATCH_SIZE = 50;
+const MAX_BATCH_SIZE = 50;
 
-export interface ReminderWorkerResult {
-  scanned: number;
-  claimed: number;
+export interface ProcessDueRemindersOptions {
+  now?: Date;
+  limit?: number;
+}
+
+export interface ProcessDueRemindersResult {
+  found: number;
+  processed: number;
   delivered: number;
   failed: number;
   skipped: number;
@@ -20,9 +29,12 @@ export class ReminderWorker {
   ) {}
 
   async processDueReminders(
-    now: Date = new Date(),
-    limit: number = DEFAULT_BATCH_SIZE,
-  ): Promise<ReminderWorkerResult> {
+    options: ProcessDueRemindersOptions = {},
+  ): Promise<ProcessDueRemindersResult> {
+    const now = options.now ?? new Date();
+    const limit =
+      options.limit ?? DEFAULT_BATCH_SIZE;
+
     this.validateNow(now);
     this.validateLimit(limit);
 
@@ -32,31 +44,23 @@ export class ReminderWorker {
         limit,
       );
 
-    const result: ReminderWorkerResult = {
-      scanned: reminders.length,
-      claimed: 0,
+    const result: ProcessDueRemindersResult = {
+      found: reminders.length,
+      processed: 0,
       delivered: 0,
       failed: 0,
       skipped: 0,
     };
 
     for (const reminder of reminders) {
-      let claimed = false;
-
       try {
         await this.reminderRepository.markProcessing(
           reminder.id,
         );
-
-        claimed = true;
-        result.claimed += 1;
       } catch (error) {
         /*
-         * Another worker may have claimed the same
-         * reminder between findDuePending() and
-         * markProcessing().
-         *
-         * In that case we simply skip it.
+         * Another worker may have claimed the reminder
+         * between findDuePending() and markProcessing().
          */
         if (error instanceof NotFoundError) {
           result.skipped += 1;
@@ -66,14 +70,19 @@ export class ReminderWorker {
         throw error;
       }
 
-      if (!claimed) {
-        result.skipped += 1;
-        continue;
-      }
+      result.processed += 1;
+
+      const delivery: ReminderDelivery = {
+        id: reminder.id,
+        userId: reminder.userId,
+        taskId: reminder.taskId,
+        message: reminder.message,
+        scheduledFor: reminder.scheduledFor,
+      };
 
       try {
         await this.deliveryProvider.deliver(
-          reminder,
+          delivery,
         );
 
         await this.reminderRepository.markDelivered(
@@ -82,28 +91,23 @@ export class ReminderWorker {
 
         result.delivered += 1;
       } catch (error) {
+        result.failed += 1;
+
         const lastError =
-          this.getErrorMessage(error);
+          error instanceof Error
+            ? error.message
+            : "Reminder delivery failed.";
 
         try {
           await this.reminderRepository.markFailed(
             reminder.id,
             lastError,
           );
-        } catch (markFailedError) {
+        } catch {
           /*
-           * Preserve the original delivery failure.
-           * A secondary persistence failure should not
-           * hide the actual delivery problem.
+           * Preserve the original delivery error.
            */
-          if (
-            !(markFailedError instanceof NotFoundError)
-          ) {
-            throw markFailedError;
-          }
         }
-
-        result.failed += 1;
       }
     }
 
@@ -116,7 +120,7 @@ export class ReminderWorker {
       Number.isNaN(now.getTime())
     ) {
       throw new Error(
-        "Worker execution time is required.",
+        "Reminder worker time must be a valid date.",
       );
     }
   }
@@ -125,19 +129,11 @@ export class ReminderWorker {
     if (
       !Number.isInteger(limit) ||
       limit < 1 ||
-      limit > DEFAULT_BATCH_SIZE
+      limit > MAX_BATCH_SIZE
     ) {
       throw new Error(
-        `Reminder worker batch size must be an integer between 1 and ${DEFAULT_BATCH_SIZE}.`,
+        `Reminder worker limit must be an integer between 1 and ${MAX_BATCH_SIZE}.`,
       );
     }
-  }
-
-  private getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-      return error.message;
-    }
-
-    return String(error);
   }
 }
