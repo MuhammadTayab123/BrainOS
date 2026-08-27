@@ -4,7 +4,6 @@ import cors from "cors";
 import { clerkMiddleware } from "@clerk/express";
 import { env } from "./config/env";
 
-
 import healthRoutes from "./routes/health.routes";
 import webhookRoutes from "./routes/webhook.routes";
 
@@ -16,7 +15,7 @@ import memoryRoutes from "./routes/memory.routes";
 import assistantRoutes from "./routes/assistant.routes";
 import conversationRoutes from "./routes/conversation.routes";
 import documentRoutes from "./routes/document.routes";
-
+import automationRoutes from "./routes/automation.routes";
 
 // Clerk webhooks
 const app = express();
@@ -24,7 +23,7 @@ app.use(
   cors({
     origin: "http://localhost:3000",
     credentials: true,
-  })
+  }),
 );
 
 // Clerk Authentication
@@ -32,15 +31,11 @@ app.use(
   clerkMiddleware({
     publishableKey: env.CLERK_PUBLISHABLE_KEY,
     secretKey: env.CLERK_SECRET_KEY,
-  })
+  }),
 );
 
 // Clerk webhooks
-app.use(
-  "/webhooks",
-  express.raw({ type: "application/json" }),
-  webhookRoutes
-);
+app.use("/webhooks", express.raw({ type: "application/json" }), webhookRoutes);
 
 // JSON parser
 app.use(express.json());
@@ -68,10 +63,10 @@ app.use("/api/v1/documents", documentRoutes);
 app.use("/api/v1/assistant", assistantRoutes);
 
 // Conversation routes
-app.use(
-  "/api/v1/conversations",
-  conversationRoutes,
-); 
+app.use("/api/v1/conversations", conversationRoutes);
+
+// Automation routes
+app.use("/api/v1/automations", automationRoutes);
 
 // Development routes
 app.use("/api/v1/dev", devRoutes);

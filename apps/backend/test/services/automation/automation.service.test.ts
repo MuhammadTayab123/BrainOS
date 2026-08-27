@@ -222,4 +222,47 @@ describe("AutomationService", () => {
       "user-1",
     );
   });
+
+  it("rejects a TASK_DUE automation without a taskId", async () => {
+    const repository = createRepository();
+    const service = new AutomationService(repository as any);
+
+    await expect(
+      service.createAutomation({
+        userId: "user-1",
+        name: "Task due automation",
+        triggerType: AutomationTriggerType.TASK_DUE,
+        actionType: AutomationActionType.CREATE_TASK,
+        config: {},
+      }),
+    ).rejects.toThrow("Task due automation requires a valid taskId.");
+
+    expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it("trims the taskId for a TASK_DUE automation", async () => {
+    const repository = createRepository();
+    const service = new AutomationService(repository as any);
+
+    await service.createAutomation({
+      userId: "user-1",
+      name: "Task due automation",
+      triggerType: AutomationTriggerType.TASK_DUE,
+      actionType: AutomationActionType.CREATE_TASK,
+      config: {
+        taskId: "  task-1  ",
+      },
+    });
+
+    expect(repository.create).toHaveBeenCalledWith({
+      userId: "user-1",
+      name: "Task due automation",
+      triggerType: AutomationTriggerType.TASK_DUE,
+      actionType: AutomationActionType.CREATE_TASK,
+      config: {
+        taskId: "task-1",
+      },
+      nextRunAt: undefined,
+    });
+  });
 });

@@ -4,6 +4,7 @@ import { AutomationRepository } from "./repositories/automation.repository";
 
 import {
   AutomationActionType,
+  AutomationConfig,
   AutomationStatus,
   AutomationTriggerType,
   CreateAutomationInput,
@@ -24,6 +25,11 @@ export class AutomationService {
     this.validateActionType(input.actionType);
     this.validateConfig(input.config);
 
+    const config = this.applyTriggerSpecificConfig(
+      input.triggerType,
+      input.config,
+    );
+
     if (input.nextRunAt !== undefined) {
       this.validateDate(input.nextRunAt, "Automation next run time");
     }
@@ -33,7 +39,7 @@ export class AutomationService {
       name: input.name.trim(),
       triggerType: input.triggerType,
       actionType: input.actionType,
-      config: input.config,
+      config,
       nextRunAt: input.nextRunAt,
     });
   }
@@ -160,7 +166,7 @@ export class AutomationService {
     }
   }
 
-  private validateConfig(config: Record<string, unknown>): void {
+  private validateConfig(config: AutomationConfig): void {
     if (
       config === null ||
       typeof config !== "object" ||
@@ -168,6 +174,26 @@ export class AutomationService {
     ) {
       throw new Error("Automation config must be an object.");
     }
+  }
+
+  private applyTriggerSpecificConfig(
+    triggerType: AutomationTriggerType,
+    config: AutomationConfig,
+  ): AutomationConfig {
+    if (triggerType === AutomationTriggerType.TASK_DUE) {
+      const taskId = config.taskId;
+
+      if (typeof taskId !== "string" || taskId.trim().length === 0) {
+        throw new Error("Task due automation requires a valid taskId.");
+      }
+
+      return {
+        ...config,
+        taskId: taskId.trim(),
+      };
+    }
+
+    return config;
   }
 
   private validateDate(value: Date, fieldName: string): void {
