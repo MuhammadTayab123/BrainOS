@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   SignInButton,
   Show,
   UserButton,
   useAuth,
 } from "@clerk/nextjs";
+
 interface AssistantResponse {
   success: boolean;
   data?: {
@@ -39,16 +41,17 @@ export default function Home() {
     setError("");
 
     try {
-   const token = await getToken();
+      const token = await getToken();
 
-console.log("BRAINOS TOKEN CHECK:", {
-  available: !!token,
-  length: token?.length ?? 0,
-});
+      console.log("BRAINOS TOKEN CHECK:", {
+        available: Boolean(token),
+        length: token?.length ?? 0,
+      });
 
-if (!token) {
-  throw new Error("Authentication token unavailable.");
-}
+      if (!token) {
+        throw new Error("Authentication token unavailable.");
+      }
+
       const res = await fetch(
         "http://localhost:3001/api/v1/assistant/ask",
         {
@@ -69,7 +72,8 @@ if (!token) {
 
       if (!res.ok || !result.success) {
         throw new Error(
-          result.error?.message ?? "Assistant request failed.",
+          result.error?.message ??
+            "Assistant request failed.",
         );
       }
 
@@ -99,13 +103,21 @@ if (!token) {
             </p>
           </div>
 
-          <Show when="signed-in">
-  <UserButton />
-</Show>
+          <div className="flex items-center gap-3">
+            <Show when="signed-in">
+              <Link
+                href="/dashboard/automations"
+                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-900 hover:text-white"
+              >
+                Automations
+              </Link>
+
+              <UserButton />
+            </Show>
+          </div>
         </header>
 
         <Show when="signed-out">
-
           <div className="flex flex-1 flex-col items-center justify-center text-center">
             <h2 className="text-3xl font-semibold">
               Welcome to BrainOS
@@ -124,7 +136,6 @@ if (!token) {
         </Show>
 
         <Show when="signed-in">
-
           <section className="flex flex-1 flex-col justify-center">
             <div className="mb-8">
               <h2 className="text-3xl font-semibold">
