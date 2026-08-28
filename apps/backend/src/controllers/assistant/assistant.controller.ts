@@ -2,7 +2,8 @@
 import { ConversationRepository } from "../../services/conversation/repositories/conversation.repository";
 import { MessageRepository } from "../../services/conversation/repositories/message.repository";
 import { Request, Response } from "express";
-
+import { DocumentRetrievalService } from "../../services/documents/retrieval/document-retrieval.service";
+import { DocumentChunkRepository } from "../../services/documents/repositories/chunks/document-chunk.repository";
 import { LLMService } from "../../services/ai";
 import { OllamaLLMProvider } from "../../services/ai/providers/ollama.provider";
 import { EmbeddingsService } from "../../services/memory/embeddings.service";
@@ -34,13 +35,21 @@ const conversationRepository =
 
 const messageRepository =
   new MessageRepository();
+const documentChunkRepository =
+  new DocumentChunkRepository();
 
+const documentRetrievalService =
+  new DocumentRetrievalService(
+    embeddingsService,
+    documentChunkRepository,
+  );
 const assistantService = new AssistantService(
   llmService,
   memoryService,
   toolExecutor,
   conversationRepository,
   messageRepository,
+  documentRetrievalService,
 );
 
 export async function askAssistant(
@@ -58,14 +67,16 @@ export async function askAssistant(
   }
 
    const {
-    message,
-    conversationId,
-    systemPrompt,
-    conversationHistory,
-    enableMemoryRetrieval,
-    memorySearchLimit,
-    model,
-  } = req.body;
+  message,
+  conversationId,
+  systemPrompt,
+  conversationHistory,
+  enableMemoryRetrieval,
+  memorySearchLimit,
+  enableDocumentRetrieval,
+  documentSearchLimit,
+  model,
+} = req.body;
 
   if (
     typeof message !== "string" ||
@@ -148,7 +159,35 @@ export async function askAssistant(
       },
     });
   }
+if (
+  enableDocumentRetrieval !== undefined &&
+  typeof enableDocumentRetrieval !== "boolean"
+) {
+  return res.status(400).json({
+    success: false,
+    error: {
+      code: "INVALID_DOCUMENT_RETRIEVAL",
+      message:
+        "enableDocumentRetrieval must be a boolean.",
+    },
+  });
+}
 
+if (
+  documentSearchLimit !== undefined &&
+  (!Number.isInteger(documentSearchLimit) ||
+    documentSearchLimit < 1 ||
+    documentSearchLimit > 20)
+) {
+  return res.status(400).json({
+    success: false,
+    error: {
+      code: "INVALID_DOCUMENT_SEARCH_LIMIT",
+      message:
+        "documentSearchLimit must be an integer between 1 and 20.",
+    },
+  });
+}
   const result = await assistantService.ask({
     userId: req.user.id,
     message,
@@ -160,6 +199,8 @@ export async function askAssistant(
     conversationHistory,
     enableMemoryRetrieval,
     memorySearchLimit,
+    enableDocumentRetrieval,
+    documentSearchLimit,
     model,
   });
 
