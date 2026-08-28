@@ -46,15 +46,15 @@ Never:
 - edit an already-applied Prisma migration
 - use `prisma migrate reset` as the first response to migration problems
 
-If this context and the repository disagree, the repository must be inspected and the difference resolved before coding.
+If this context and the repository disagree, inspect the repository and resolve the difference before coding.
 
 ---
 
 # 1. BRAINOS MISSION
 
-BrainOS is being built as a **private personal AI operating system**, not merely a chatbot.
+BrainOS is a **private personal AI operating system**, not merely a chatbot.
 
-The long-term goal is an AI assistant that understands the user's personal context and can help manage information, work, study, communication, and computer-based activities while remaining private, secure, modular, affordable, maintainable, and under the user's control.
+The long-term goal is an AI assistant that understands the user's personal context and helps manage information, work, study, communication, and computer-based activities while remaining private, secure, modular, affordable, maintainable, and under the user's control.
 
 ## North-star idea
 
@@ -71,8 +71,6 @@ Not:
 ---
 
 # 2. LONG-TERM PRODUCT VISION
-
-The intended final BrainOS system is:
 
 ```text
                          USER
@@ -106,7 +104,7 @@ The intended final BrainOS system is:
           Apps/files   Windows      Browser
 ```
 
-The core loop is:
+Core loop:
 
 ```text
 User request
@@ -134,8 +132,6 @@ Optionally remember useful information
 
 # 3. FINAL CAPABILITY TARGET
 
-When the project is mature, BrainOS should be able to provide the following capabilities.
-
 ## 3.1 Personal memory
 
 - remember important user information
@@ -145,21 +141,7 @@ When the project is mature, BrainOS should be able to provide the following capa
 - use memory to personalize responses
 - allow the user to control what is remembered
 
-Examples:
-
-```text
-"Remember my project architecture."
-
-"What did I decide about the database?"
-
-"What do you know about this project?"
-```
-
----
-
 ## 3.2 Knowledge and documents
-
-BrainOS should understand the user's documents and knowledge base.
 
 Target flow:
 
@@ -183,41 +165,22 @@ Assistant context
 Answer / reasoning / action
 ```
 
-Examples:
-
-```text
-"Read this document and tell me what matters."
-
-"Find the section where I discussed the database."
-
-"Use my project documents when answering this."
-```
-
----
-
 ## 3.3 Tasks
 
-BrainOS should manage structured tasks.
-
-Examples:
+BrainOS should manage structured tasks:
 
 ```text
 "Create a task to finish the API."
-
 "Show my overdue tasks."
-
 "Complete the task."
-
 "Move this task to tomorrow."
 ```
 
-Task operations should remain authenticated and user-owned.
-
----
+Task operations remain authenticated and user-owned.
 
 ## 3.4 Reminders and alarms
 
-BrainOS should eventually support:
+Target capabilities:
 
 - one-time reminders
 - scheduled reminders
@@ -228,25 +191,7 @@ BrainOS should eventually support:
 - cancellation
 - proactive reminders
 
-Examples:
-
-```text
-"Remind me tomorrow at 9 AM."
-
-"Remind me every Monday."
-
-"Wake me at 7 AM."
-
-"Remind me if I haven't completed this task."
-```
-
-Reminder scheduling and delivery must remain behind service/provider boundaries.
-
----
-
 ## 3.5 Planning and scheduling
-
-BrainOS should help organize time.
 
 Target capabilities:
 
@@ -259,130 +204,50 @@ Target capabilities:
 - prioritization
 - time-aware recommendations
 
-Examples:
-
-```text
-"Plan my week around my classes and projects."
-
-"When can I finish this?"
-
-"Do I have time for this tomorrow?"
-
-"Move my tasks around my calendar."
-```
-
----
-
 ## 3.6 Calendar integration
 
-Eventually BrainOS should integrate with a calendar provider.
+Eventually integrate with a calendar provider for:
 
-Target capabilities:
-
-- read calendar events
-- create events
-- update events
-- cancel events
-- detect conflicts
-- use calendar availability during planning
-- combine tasks + reminders + calendar
-
-Example:
-
-```text
-"Check my calendar and tell me if I have time."
-
-"Schedule this for the first free hour tomorrow."
-```
+- reading events
+- creating/updating/canceling events
+- conflict detection
+- availability-aware planning
+- combining tasks, reminders, and calendar
 
 Calendar access must use authenticated provider integrations and explicit user authorization.
 
----
-
 ## 3.7 Email management
 
-Eventually BrainOS should manage email through an authenticated provider integration.
+Eventually support:
 
-Target capabilities:
-
-- summarize emails
-- search emails
-- identify important messages
+- email summaries/search
+- importance detection
 - draft replies
-- send replies when explicitly authorized
-- create follow-up tasks
-- create reminders from email
-- detect deadlines
-- connect emails with documents/tasks/calendar
+- authorized sending
+- follow-up tasks
+- reminders
+- deadline detection
+- connections to tasks/documents/calendar
 
-Examples:
-
-```text
-"Summarize my important emails."
-
-"Find the email about the project deadline."
-
-"Draft a reply."
-
-"Turn this email into a task."
-```
-
-Sending email is an external side effect and should have appropriate authorization/confirmation controls.
-
----
+External sending is a side effect and requires appropriate authorization/confirmation.
 
 ## 3.8 WhatsApp / messaging integration
 
-Eventually BrainOS should be able to assist with WhatsApp/messaging workflows through an appropriate supported integration.
-
-Target capabilities:
+Eventually support authorized messaging workflows:
 
 - read authorized incoming messages
 - summarize conversations
 - identify messages requiring attention
 - draft replies
 - send authorized replies
-- create tasks/reminders from messages
-- maintain conversation context where permitted
-- support away/offline response workflows
-
-Example:
-
-```text
-"Check my messages."
-
-"Who needs a reply?"
-
-"Draft a response to this."
-
-"Reply that I will get back to them tomorrow."
-```
-
-### Important design rule
+- create tasks/reminders
+- maintain context where permitted
 
 BrainOS must not silently impersonate the user.
 
-Messaging automation must respect:
-
-- platform rules
-- provider/API capabilities
-- authentication
-- user authorization
-- recipient expectations
-- configurable automation boundaries
-- explicit confirmation for sensitive/high-impact actions when appropriate
-
-Do not build an unofficial integration merely because it is technically possible if it creates unacceptable account or platform risk.
-
----
-
 ## 3.9 Local computer control
 
-A major long-term capability is a **local BrainOS computer agent** running on the user's Windows computer.
-
-The cloud/backend assistant cannot directly unlock or control the user's computer by itself. A local agent is required.
-
-Target architecture:
+A local BrainOS Windows agent is required for computer control.
 
 ```text
 BrainOS Backend
@@ -401,48 +266,13 @@ BrainOS Windows Agent
       └── Computer state
 ```
 
-Examples of intended capabilities:
-
-```text
-"Open VS Code."
-
-"Open my BrainOS project."
-
-"Open Spotify."
-
-"Find the PDF I downloaded."
-
-"Open my browser."
-
-"Prepare my study environment."
-```
-
-The local agent must enforce:
-
-- authenticated communication
-- explicit tool permissions
-- allowlists/denylists where appropriate
-- action logging without leaking secrets
-- confirmation for sensitive operations
-- least privilege
-- secure transport
-- local-user ownership
-
----
+The local agent must enforce authentication, permissions, least privilege, secure transport, action controls, and safe logging.
 
 ## 3.10 Computer unlock / lock
 
-Computer unlock is a **high-security capability** and must not be treated like a normal generic tool.
+Computer unlock is a **high-security capability**.
 
-Possible future capabilities:
-
-```text
-"Lock my computer."
-```
-
-Unlocking may require a dedicated secure mechanism and should never bypass Windows security controls improperly.
-
-Design requirements:
+Requirements:
 
 - strong local authentication
 - device binding
@@ -454,53 +284,37 @@ Design requirements:
 - auditability
 - fail-closed behavior
 
-Do not implement unsafe credential automation merely to satisfy a demo.
-
----
+Do not bypass Windows security controls.
 
 ## 3.11 Application and file management
 
-BrainOS should eventually understand the user's computer environment well enough to perform authorized operations such as:
+Future authorized operations include:
 
 - opening applications
-- opening files
-- locating files
+- opening/finding files
 - organizing files
 - launching workflows
 - reading authorized local content
 - creating files
 - moving/renaming files
-- starting browser workflows
 
-These operations belong in the **local agent/action layer**, not in the backend controller layer.
-
----
+These belong in the local agent/action layer.
 
 ## 3.12 Browser automation
 
-Eventually BrainOS may operate an authorized browser session.
-
-Target examples:
+Future authorized browser capabilities include:
 
 ```text
 "Open the website."
-
 "Search for this."
-
 "Fill this form."
-
 "Download the report."
-
 "Find the information I need."
 ```
 
-Browser automation must use scoped permissions and confirmation for consequential actions such as purchases, account changes, or submissions.
-
----
+Consequential actions such as purchases, account changes, and submissions require appropriate confirmation.
 
 ## 3.13 Voice
-
-Eventually BrainOS should support natural voice interaction.
 
 Target architecture:
 
@@ -520,47 +334,24 @@ Text response
 Text-to-speech
 ```
 
-Voice should be an interface over the same BrainOS orchestration layer rather than a separate brain.
-
----
+Voice should use the same orchestration, authorization, and tool system.
 
 ## 3.14 Proactive assistant
 
-The mature system should not only wait for commands.
-
-It should proactively surface useful information when appropriate.
-
-Examples:
+Eventually surface useful information such as:
 
 ```text
 "You have a deadline tomorrow."
-
 "You have three overdue tasks."
-
 "You have an email that needs a reply."
-
 "You have a meeting in 30 minutes."
-
-"This document is related to your current task."
-
-"You usually do this task on Friday."
 ```
 
-Proactive behavior must be:
-
-- configurable
-- explainable
-- privacy-preserving
-- rate-limited
-- non-annoying
-- user-controlled
-- based on reliable signals
-
----
+Proactive behavior must be configurable, explainable, privacy-preserving, rate-limited, non-annoying, user-controlled, and based on reliable signals.
 
 ## 3.15 Automation engine
 
-Eventually BrainOS should support rules/workflows such as:
+BrainOS should support:
 
 ```text
 WHEN condition
@@ -568,23 +359,9 @@ IF condition
 THEN action
 ```
 
-Examples:
-
-```text
-When an important email arrives → create a task.
-
-When a deadline is approaching → remind me.
-
-Every Monday → prepare my weekly plan.
-
-When I receive a message while offline → draft/handle it according to my rules.
-
-When a document is uploaded → process and index it.
-```
-
 Automation must have:
 
-- trigger definitions
+- triggers
 - conditions
 - actions
 - schedules
@@ -602,7 +379,7 @@ Automation must have:
 
 BrainOS is a one-user-first product.
 
-Prioritize usefulness for the primary user before:
+Prioritize usefulness before:
 
 - SaaS billing
 - public marketplace
@@ -626,10 +403,6 @@ The project should remain:
 
 # 5. SECURITY PRINCIPLES
 
-Security is especially important because BrainOS will eventually be able to act on the user's computer and external accounts.
-
-Rules:
-
 - Clerk owns authentication.
 - Never trust client-supplied ownership IDs.
 - Derive ownership from authenticated context.
@@ -643,7 +416,7 @@ Rules:
 - Fail closed when authorization is uncertain.
 - Maintain auditable action records without storing sensitive secrets.
 
-Sensitive actions include, but are not limited to:
+Sensitive actions include:
 
 - unlocking devices
 - sending messages automatically
@@ -750,10 +523,6 @@ Target development cost:
 
 **approximately $0–$5/month where practical.**
 
-Prefer existing/free/student resources when appropriate.
-
-Do not add paid AI APIs merely for testing unless explicitly requested.
-
 Development environment:
 
 ```text
@@ -768,11 +537,13 @@ Ollama
 No dedicated GPU
 ```
 
+Do not add paid AI APIs merely for testing unless explicitly requested.
+
 ---
 
 # 9. VERIFIED IMPLEMENTATION HISTORY
 
-The following foundations are already completed and must not be restarted:
+Already completed; do not restart:
 
 ```text
 Authenticated Semantic Memory — COMPLETE
@@ -801,15 +572,29 @@ Reminder repository/service — COMPLETE
 Reminder scheduler — COMPLETE
 Reminder worker — COMPLETE
 Reminder delivery-provider boundary — COMPLETE
+
+Automation API/backend engine — COMPLETE for implemented scope
+Automation dashboard UI — COMPLETE for implemented scope
+Automation create/pause/resume/delete flow — VERIFIED
+Scheduled CREATE_TASK automation execution — VERIFIED
+TASK_DUE → CREATE_TASK execution — VERIFIED
+Future due-date TASK_DUE behavior — VERIFIED
+TASK_DUE duplicate-execution protection — VERIFIED
+Real Task creation from automation — VERIFIED
+AutomationExecution success recording — VERIFIED
 ```
 
 ---
 
-# 10. CURRENT VERIFIED CHECKPOINT
+# 10. CURRENT VERIFIED GIT CHECKPOINT
 
-Latest verified Git state from the active development session:
+Previously committed checkpoint:
 
 ```text
+6a04c89 feat(web): add automation dashboard
+44fcdf4 feat: add automation API routes
+df407db feat: add automation engine
+db2ba9e docs(context): update BrainOS project roadmap
 af078eb test(assistant): verify task tool execution
 293ade9 feat(reminders): add reminder processing worker
 f1ccda1 feat(documents): automate document processing pipeline
@@ -817,64 +602,218 @@ f6c3b96 feat(assistant): integrate document retrieval context
 fdb8608 feat(documents): add semantic search API
 bf0429a feat(documents): add semantic retrieval
 616f8b7 feat(documents): add chunk embeddings
-3ce8f72 feat(documents): persist document chunks
-3df64b1 feat(documents): add document processing foundation
-386faaa feat(documents): add document chunking foundation
-8388bac feat(documents): add PDF ingestion
-31ffd1d feat(documents): add plain-text upload ingestion
 ```
 
-Verified Git state at the latest checkpoint:
+Current repository checkpoint before the final Phase 19 commit:
 
 ```text
-Branch: main
-origin/main: af078eb
-Working tree: clean
+Branch:
+main
+
+HEAD:
+6a04c89
+
+origin/main:
+6a04c89
+
+Working tree:
+modified, with intentional Phase 19 recurring-automation changes
 ```
 
-Do not claim any later state unless it is verified from the repository.
-
----
-
-# 11. CURRENT TEST VERIFICATION
-
-Latest broad regression verified during the active development session:
+Current intentional modified files:
 
 ```text
-32 test files passed
-296 tests passed
-0 failures
+BrainOS_Master_Project_Context.md
+apps/backend/src/services/automation/automation.service.ts
+apps/web/app/dashboard/automations/page.tsx
 ```
 
-Also verified:
+The recurring-automation implementation was added after the previously committed
+`6a04c89` checkpoint and has not yet been committed.
+
+Do not discard these changes.
+
+Before committing:
 
 ```text
-TypeScript: PASS
-Prettier: PASS
-git diff --check: PASS
+git status
+git diff --name-only
+git diff --stat
+git diff --check
 ```
 
-The existing Vite warning:
+After committing and pushing, verify:
 
 ```text
-configLoader: 'native'
+git status
+git branch --show-current
+git log --oneline -10
+git remote -v
 ```
 
-is non-blocking.
+The final Phase 19 checkpoint must have a clean working tree and local `main`
+synchronized with `origin/main`.
 
-Windows Git may report:
+# 11. CURRENT TEST / VALIDATION STATUS
+
+## Focused automation regression
+
+Verified on 2026-08-28:
 
 ```text
-LF will be replaced by CRLF
+Test Files: 4 passed (4)
+Tests:      32 passed (32)
+Failures:   0
 ```
 
-This is a line-ending warning, not a functional failure.
+Focused files:
 
----
+```text
+test/services/automation/automation.scheduler.test.ts
+test/services/automation/automation.recurrence.test.ts
+test/services/automation/execution/automation.worker.test.ts
+test/services/automation/repositories/automation.repository.test.ts
+```
 
-# 12. CURRENT ARCHITECTURAL MILESTONE
+Breakdown:
 
-The most important verified assistant tool path is:
+```text
+Automation scheduler tests:       6/6   PASS
+Automation recurrence tests:     6/6   PASS
+Automation worker tests:        12/12   PASS
+Automation repository tests:     8/8   PASS
+```
+
+Recurrence coverage includes:
+
+```text
+DAILY next-run calculation
+DAILY upcoming same-day calculation
+WEEKLY next-run calculation
+invalid hour rejection
+invalid weekday rejection
+invalid date rejection
+recurring worker rescheduling
+invalid recurrence failure handling
+```
+
+## Full backend regression
+
+Verified on 2026-08-28:
+
+```text
+Test Files: 37 passed (37)
+Tests:      343 passed (343)
+Failures:   0
+```
+
+This confirms the recurring automation changes did not introduce a backend
+regression.
+
+## Backend TypeScript
+
+Verified:
+
+```text
+npm --prefix .\apps\backend run typecheck
+PASS
+```
+
+## Web production build
+
+Verified:
+
+```text
+npm --prefix .\apps\web run build
+PASS
+```
+
+Routes included:
+
+```text
+○ /
+○ /_not-found
+○ /dashboard
+○ /dashboard/automations
+ƒ /dashboard/memory-test
+ƒ /sign-in/[[...sign-in]]
+ƒ /sign-up/[[...sign-in]]
+ƒ Proxy (Middleware)
+```
+
+Non-blocking warnings:
+
+```text
+Next.js ignored package-lock.json in D:\Project because it is outside
+the current Git repository (D:\Project\BrainOS).
+
+The "middleware" file convention is deprecated. Use "proxy" in a future
+Next.js migration.
+```
+
+## Git integrity
+
+Verified:
+
+```text
+git diff --check
+PASS
+```
+
+Windows LF/CRLF warnings are non-blocking.
+
+## Root npm test note
+
+Running:
+
+```text
+npm test -- ...
+```
+
+from the repository root does not execute BrainOS tests because the root
+package has no test implementation and returns:
+
+```text
+Error: no test specified
+```
+
+The correct backend test command is:
+
+```text
+npm --prefix .\apps\backend run test:run
+```
+
+## Backend lint
+
+The backend package currently has no `lint` script.
+
+Do not claim backend lint passed until a real lint script exists and succeeds.
+
+## Behavioral verification already completed before the current recurrence work
+
+Previously verified and should not be unnecessarily repeated:
+
+```text
+SCHEDULE → CREATE_TASK
+TASK_DUE → CREATE_TASK
+future TASK_DUE does not fire early
+TASK_DUE fires after due time
+successful execution is recorded
+one-time automation does not repeatedly execute
+real Task record is created
+TASK_DUE duplicate protection
+```
+
+The current recurrence work is covered by focused automated tests and the full
+backend regression above.
+
+A separate manual multi-run recurring automation against the live scheduler and
+database was not recorded in this checkpoint. Do not claim that manual E2E
+scenario as verified unless it is actually performed.
+
+# 12. CURRENT ASSISTANT TOOL ARCHITECTURE
+
+Verified path:
 
 ```text
 LLM
@@ -892,50 +831,812 @@ TaskService
 TaskRepository
 ```
 
-The authenticated user ID is propagated into the task operation.
+The authenticated user ID is propagated into task operations.
 
-The real task registry has been tested rather than relying only on a fake executor.
+The real task registry has been tested.
 
-This pattern should be reused for future tools.
-
----
-
-# 13. CURRENT PHASE
-
-**Phase 19 — Tasks / Reminders / Automation**
-
-Phase 19 is substantially implemented, but the broader automation acceptance criteria are not yet declared complete.
-
-Do not declare Phase 19 complete until the remaining acceptance criteria are explicitly implemented and verified.
+Reuse this pattern for future tools.
 
 ---
 
-# 14. PHASE 19 REMAINING WORK
+# 13. CURRENT AUTOMATION ARCHITECTURE
 
-Potential remaining Phase 19 work includes:
+Relevant backend files:
 
 ```text
-[ ] richer task lifecycle if required
-[ ] richer due-date / schedule handling
-[ ] recurring tasks/reminders
-[ ] automation rule engine
-[ ] automation execution history
-[ ] retry/idempotency behavior where required
-[ ] proactive reminder behavior
-[ ] user-facing task/reminder API/UI where required
-[ ] complete reminder delivery integration
-[ ] final Phase 19 acceptance verification
+apps/backend/src/services/automation/automation.recurrence.ts
+apps/backend/src/services/automation/automation.runtime.ts
+apps/backend/src/services/automation/automation.scheduler.ts
+apps/backend/src/services/automation/automation.service.ts
+apps/backend/src/services/automation/automation.types.ts
+apps/backend/src/services/automation/execution/automation.worker.ts
+apps/backend/src/services/automation/repositories/automation-execution.repository.ts
+apps/backend/src/services/automation/repositories/automation.repository.ts
 ```
 
-Do not implement all of these at once.
+Automation execution repository supports:
 
-Define one small milestone at a time.
+```text
+createRunning(...)
+markSucceeded(...)
+markFailed(...)
+```
+
+Automation repository also supports atomic due-claiming and recurring
+rescheduling.
+
+Database enums:
+
+```text
+AutomationStatus:
+  ACTIVE
+  PAUSED
+  COMPLETED
+  FAILED
+
+AutomationTriggerType:
+  SCHEDULE
+  TASK_DUE
+  REMINDER_DUE
+
+AutomationActionType:
+  CREATE_TASK
+  CREATE_REMINDER
+
+AutomationExecutionStatus:
+  RUNNING
+  SUCCEEDED
+  FAILED
+```
+
+Automation model includes:
+
+```text
+id
+userId
+name
+status
+triggerType
+actionType
+config
+nextRunAt
+lastRunAt
+claimedAt
+executions
+createdAt
+updatedAt
+deletedAt
+```
+
+Recurring schedules are represented inside `config.recurrence`.
+Current supported recurrence types are:
+
+```text
+DAILY
+WEEKLY
+```
+
+The scheduler/worker architecture remains:
+
+```text
+AutomationScheduler
+        ↓
+AutomationWorker
+        ↓
+find due automations
+        ↓
+claim automation
+        ↓
+create execution
+        ↓
+execute action
+        ↓
+success:
+  recurring → calculate next occurrence → reschedule
+  one-time  → mark completed
+```
+
+# 14. AUTOMATION SCHEDULER
+
+Current polling interval:
+
+```text
+DEFAULT_INTERVAL_MS = 30_000
+```
+
+The scheduler checks approximately every 30 seconds.
+
+Flow:
+
+```text
+start()
+ ↓
+runOnce()
+ ↓
+processDueAutomations()
+ ↓
+processTaskDueAutomations()
+```
+
+The scheduler prevents overlapping runs using a `running` guard.
+
+Architecture:
+
+```text
+AutomationScheduler
+        ↓
+AutomationWorker
+        ↓
+processDueAutomations()
+        +
+processTaskDueAutomations()
+```
+
+Scheduler unit tests cover:
+
+```text
+immediate execution on start
+duplicate start prevention
+overlap prevention
+stop behavior
+minimum interval validation
+both worker paths
+```
+
+The scheduler has been behaviorally verified for the existing TASK_DUE path.
+Recurring execution is driven by the same scheduler → worker path.
+
+# 15. AUTOMATION RECURRENCE
+
+Current recurrence helper supports:
+
+```text
+DAILY
+WEEKLY
+```
+
+with:
+
+```text
+DAILY:
+  hour
+  minute
+
+WEEKLY:
+  dayOfWeek
+  hour
+  minute
+```
+
+Validation:
+
+```text
+valid Date
+hour 0–23
+minute 0–59
+dayOfWeek 0–6
+```
+
+Current recurrence calculation uses JavaScript `Date` local-time setters.
+
+Current tested behavior:
+
+```text
+daily schedule after today's time
+daily schedule later today
+weekly schedule
+invalid hour rejection
+invalid weekday rejection
+invalid date rejection
+```
+
+Recurring worker behavior:
+
+```text
+due recurring automation
+ ↓
+claim
+ ↓
+execute action
+ ↓
+execution SUCCEEDED
+ ↓
+calculate next occurrence
+ ↓
+reschedule ACTIVE automation
+```
+
+Atomic rescheduling requires the automation to remain active and to have a
+claimed state represented by `nextRunAt = null`.
+
+Future recurrence work should explicitly consider:
+
+- timezone ownership
+- daylight-saving transitions
+- user-local scheduling
+- missed schedules
+- recurring action semantics
+- idempotency
+- manual multi-run live scheduler verification
+
+# 16. AUTOMATION SERVICE
+
+`AutomationService` provides:
+
+```text
+createAutomation
+listAutomations
+getAutomation
+updateAutomation
+pauseAutomation
+resumeAutomation
+deleteAutomation
+```
+
+Validation includes:
+
+```text
+userId
+automation ID
+name
+trigger type
+action type
+config
+nextRunAt
+```
+
+For `TASK_DUE`:
+
+```text
+config.taskId
+```
+
+is required and trimmed before persistence.
+
+Completed automations cannot retain a future `nextRunAt`.
+
+Authorization is based on the authenticated user.
 
 ---
 
-# 15. NEXT MAJOR ROADMAP
+# 17. AUTOMATION API / WEB IMPLEMENTATION
 
-The project should evolve in controlled layers.
+Frontend API wrapper:
+
+```text
+apps/web/lib/brainos-api.ts
+```
+
+supports:
+
+```text
+createAutomation
+listAutomations
+getAutomation
+updateAutomation
+pauseAutomation
+resumeAutomation
+deleteAutomation
+```
+
+Dashboard entry:
+
+```text
+apps/web/app/dashboard/page.tsx
+```
+
+Automation dashboard:
+
+```text
+apps/web/app/dashboard/automations/page.tsx
+```
+
+Dashboard currently supports:
+
+- authenticated automation listing
+- automation creation
+- schedule trigger selection
+- task-due trigger selection
+- create-task action
+- create-reminder action
+- task title/configuration
+- task description/configuration
+- task due date/configuration
+- reminder message/configuration
+- reminder scheduling/configuration
+- one-time schedule selection
+- daily recurrence selection
+- weekly recurrence selection
+- recurrence time selection
+- weekly recurrence day selection
+- first-run display for recurring schedules
+- recurrence display in automation listings
+- pause
+- resume
+- delete
+- refresh
+- success/error feedback
+- status display
+- next-run display
+- last-run display
+
+Recurring schedule configuration is stored in `config.recurrence`:
+
+```text
+DAILY:
+{
+  type: "DAILY",
+  hour,
+  minute
+}
+
+WEEKLY:
+{
+  type: "WEEKLY",
+  dayOfWeek,
+  hour,
+  minute
+}
+```
+
+The first run is explicitly supplied by the dashboard. After a successful
+recurring execution, the backend calculates the next occurrence automatically.
+
+The dashboard uses the authenticated Clerk token.
+
+Client ownership IDs are not used to establish authorization.
+
+# 18. VERIFIED AUTOMATION BEHAVIOR
+
+## 18.1 SCHEDULE → CREATE_TASK
+
+Verified flow:
+
+```text
+Create scheduled automation
+ ↓
+Automation appears in dashboard
+ ↓
+Automation stored in PostgreSQL
+ ↓
+Scheduler sees active automation
+ ↓
+Worker claims due automation
+ ↓
+AutomationExecution created
+ ↓
+CREATE_TASK action runs
+ ↓
+TaskService / TaskRepository creates real Task
+ ↓
+AutomationExecution = SUCCEEDED
+ ↓
+Automation = COMPLETED
+ ↓
+nextRunAt = null
+```
+
+A real scheduled automation was tested:
+
+```text
+Name:
+Test task creation
+
+Trigger:
+SCHEDULE
+
+Action:
+CREATE_TASK
+
+Task title:
+Buy groceries
+
+Task description:
+Milk and bread
+```
+
+Database verification:
+
+```text
+Automation:
+status = COMPLETED
+triggerType = SCHEDULE
+actionType = CREATE_TASK
+nextRunAt = null
+```
+
+Resulting task:
+
+```text
+title = Buy groceries
+description = Milk and bread
+status = TODO
+priority = MEDIUM
+```
+
+This proves the scheduled automation path creates a real task.
+
+---
+
+# 19. VERIFIED TASK_DUE → CREATE_TASK
+
+Fully tested end-to-end.
+
+Flow:
+
+```text
+Source Task
+    ↓
+dueAt reached
+    ↓
+AutomationScheduler
+    ↓
+AutomationWorker.processTaskDueAutomations()
+    ↓
+TASK_DUE automation matched
+    ↓
+AutomationExecution created
+    ↓
+CREATE_TASK action
+    ↓
+TaskService
+    ↓
+TaskRepository
+    ↓
+New Task created
+    ↓
+AutomationExecution = SUCCEEDED
+    ↓
+Automation = COMPLETED
+```
+
+Example source due time:
+
+```text
+2026-08-28T10:05:00.000Z
+```
+
+Local UTC+5 development time:
+
+```text
+3:05 PM
+```
+
+Observed execution:
+
+```text
+scheduled due:
+2026-08-28T10:05:00.000Z
+
+execution:
+2026-08-28T10:05:04.790Z
+```
+
+The resulting follow-up task was created successfully.
+
+Example description:
+
+```text
+Created by TASK_DUE automation
+```
+
+Final states:
+
+```text
+Automation:
+COMPLETED
+
+AutomationExecution:
+SUCCEEDED
+```
+
+---
+
+# 20. VERIFIED TASK_DUE FUTURE-DATE BEHAVIOR
+
+Separate future-due test:
+
+```text
+Source task:
+TASK_DUE future test
+```
+
+Due time:
+
+```text
+2026-08-28T10:05:00.000Z
+```
+
+Equivalent local time:
+
+```text
+3:05 PM
+```
+
+Before due time:
+
+```text
+Task:
+TODO
+
+Automation:
+ACTIVE
+
+No follow-up task:
+YES
+```
+
+After due time:
+
+```text
+Automation:
+COMPLETED
+
+AutomationExecution:
+SUCCEEDED
+
+Follow-up task:
+CREATED
+```
+
+This confirms the TASK_DUE automation did not fire before the configured due time and did fire after the due time.
+
+---
+
+# 21. VERIFIED TASK_DUE DUPLICATE PROTECTION
+
+The TASK_DUE automation was observed after successful execution while the scheduler continued polling for approximately 1–2 minutes.
+
+Expected:
+
+```text
+One execution
+One follow-up task
+Automation completed
+No repeated execution
+```
+
+Observed:
+
+```text
+AutomationExecution:
+one successful execution
+
+Follow-up task:
+one created task
+
+Automation:
+COMPLETED
+```
+
+No duplicate follow-up task was created.
+
+Therefore the current one-time TASK_DUE execution path has passed manual duplicate-execution verification.
+
+---
+
+# 22. AUTOMATION EXECUTION STATE
+
+Verified lifecycle:
+
+```text
+RUNNING
+   ↓
+SUCCEEDED
+```
+
+or:
+
+```text
+RUNNING
+   ↓
+FAILED
+```
+
+Successful one-time automation:
+
+```text
+ACTIVE
+ ↓
+claimed
+ ↓
+execution RUNNING
+ ↓
+action succeeds
+ ↓
+execution SUCCEEDED
+ ↓
+automation COMPLETED
+ ↓
+nextRunAt null
+```
+
+A previous failed automation test existed during debugging. That historical failure is not evidence of a current system-wide failure.
+
+Later SCHEDULE and TASK_DUE tests succeeded.
+
+---
+
+# 23. AUTOMATION API CRUD VERIFICATION
+
+Verified:
+
+```text
+CREATE
+LIST
+PAUSE
+RESUME
+DELETE / soft delete
+```
+
+Dashboard status updates correctly.
+
+API requests are authenticated.
+
+Backend validates user ownership and automation identifiers.
+
+---
+
+# 24. AUTOMATION MILESTONE STATUS
+
+## Phase 19 — Tasks / Reminders / Automation
+
+```text
+Task foundation                         COMPLETE
+Reminder foundation                     COMPLETE
+Automation backend foundation           COMPLETE
+Automation API routes                   COMPLETE
+Automation dashboard                    COMPLETE
+Automation CRUD                         VERIFIED
+Automation pause/resume                 VERIFIED
+Scheduled CREATE_TASK execution         VERIFIED
+Real Task creation from automation      VERIFIED
+TASK_DUE trigger                        VERIFIED
+TASK_DUE future-date behavior           VERIFIED
+TASK_DUE duplicate protection            VERIFIED
+AutomationExecution success recording   VERIFIED
+
+Recurring automation:
+DAILY recurrence calculation             VERIFIED
+WEEKLY recurrence calculation            VERIFIED
+Recurrence validation                    VERIFIED
+Recurring worker rescheduling            VERIFIED
+Recurring scheduler path                 IMPLEMENTED
+Recurring dashboard UI                   BUILD VERIFIED
+
+Focused automation tests                 32/32 PASS
+Full backend regression                  343/343 PASS
+Backend TypeScript                       PASS
+Web production build                     PASS
+git diff --check                         PASS
+```
+
+### Automation testing milestone
+
+The original one-time automation milestone remains behaviorally verified.
+
+The newly added recurring automation scope is implemented and covered by
+focused automated tests and full backend regression.
+
+Do not claim a separate manual live multi-run recurring E2E test unless it is
+actually performed and recorded.
+
+Previously verified one-time tests should not be restarted unless a future
+code change could affect them.
+
+# 25. PHASE 19 COMPLETION NOTE
+
+Phase 19 has completed its implemented Tasks / Reminders / Automation scope.
+
+The current automation implementation includes:
+
+```text
+one-time SCHEDULE automations
+TASK_DUE automations
+CREATE_TASK actions
+CREATE_REMINDER actions
+automation CRUD
+pause/resume
+execution history
+claiming / duplicate protection
+DAILY recurrence
+WEEKLY recurrence
+automatic next-run calculation
+recurring rescheduling
+recurring dashboard configuration
+```
+
+Current verification:
+
+```text
+Focused automation tests: 32/32 PASS
+Full backend regression: 343/343 PASS
+Backend typecheck: PASS
+Web production build: PASS
+git diff --check: PASS
+```
+
+The existing one-time SCHEDULE and TASK_DUE paths have also been manually
+verified end-to-end in earlier Phase 19 work.
+
+A separate manual live multi-run recurring scheduler/database test is not
+recorded in this checkpoint. Therefore, future work must not describe that
+specific live E2E scenario as already proven.
+
+Future enhancements remain:
+
+```text
+recurring reminders
+richer conditions
+advanced workflow composition
+retry policies
+advanced idempotency
+richer execution history UI
+proactive assistant behavior
+additional trigger/action types
+timezone-aware recurrence
+missed-schedule policy
+```
+
+Treat these as future focused milestones rather than reasons to rewrite the
+current automation architecture.
+
+# 26. IMPORTANT CURRENT LIMITATIONS
+
+The current automation dashboard is a first usable implementation, not the
+final autonomous workflow builder.
+
+Current trigger enum:
+
+```text
+SCHEDULE
+TASK_DUE
+REMINDER_DUE
+```
+
+Current action enum:
+
+```text
+CREATE_TASK
+CREATE_REMINDER
+```
+
+Current recurring schedule types:
+
+```text
+DAILY
+WEEKLY
+```
+
+Current recurrence uses JavaScript local-time date calculations.
+
+The dashboard requires the first run time for recurring schedules.
+
+The backend calculates the next occurrence after each successful recurring
+execution.
+
+The current TASK_DUE flow is verified.
+
+The current SCHEDULE → CREATE_TASK flow is verified.
+
+The presence of:
+
+```text
+REMINDER_DUE
+CREATE_REMINDER
+```
+
+does not automatically mean their complete end-to-end behavior has been
+verified in the latest session.
+
+A manual live multi-run recurring scheduler/database scenario has not been
+recorded as verified in this checkpoint.
+
+Future work should preserve the current service/repository/worker architecture
+and explicitly define timezone, missed-schedule, idempotency, and recurring
+action semantics before expanding recurrence behavior.
+
+# 27. NEXT MAJOR ROADMAP
 
 ```text
 FOUNDATION
@@ -973,9 +1674,7 @@ These are product milestones, not a promise that every capability will be implem
 
 ---
 
-# 16. COMPUTER AGENT ROADMAP
-
-The computer-control subsystem should be designed separately from the backend.
+# 28. COMPUTER AGENT ROADMAP
 
 Future architecture:
 
@@ -1008,11 +1707,11 @@ Milestones:
 12. Secure device-bound capabilities
 ```
 
-Computer unlock is intentionally later and must receive a dedicated security design before implementation.
+Computer unlock is intentionally later and requires a dedicated security design.
 
 ---
 
-# 17. INTEGRATION ROADMAP
+# 29. INTEGRATION ROADMAP
 
 External integrations should use provider interfaces.
 
@@ -1039,11 +1738,11 @@ MessagingProvider
  └── WhatsApp / supported provider
 ```
 
-The exact provider should be chosen when implementation begins based on API support, privacy, reliability, platform rules, and cost.
+Choose exact providers when implementation begins based on API support, privacy, reliability, platform rules, and cost.
 
 ---
 
-# 18. VOICE ROADMAP
+# 30. VOICE ROADMAP
 
 Voice is an interface, not a separate assistant brain.
 
@@ -1067,7 +1766,7 @@ The same authorization and tool system must apply to voice requests.
 
 ---
 
-# 19. PROACTIVE AGENT ROADMAP
+# 31. PROACTIVE AGENT ROADMAP
 
 Eventually BrainOS should monitor authorized signals and surface useful actions.
 
@@ -1097,7 +1796,7 @@ Proactive behavior must never become uncontrolled background autonomy.
 
 ---
 
-# 20. RAG / KNOWLEDGE QUALITY ROADMAP
+# 32. RAG / KNOWLEDGE QUALITY ROADMAP
 
 After the current document pipeline is proven, improve retrieval quality with:
 
@@ -1116,7 +1815,7 @@ Do not optimize retrieval before proving the end-to-end path.
 
 ---
 
-# 21. TESTING PHILOSOPHY
+# 33. TESTING PHILOSOPHY
 
 A feature is not complete because code exists or TypeScript compiles.
 
@@ -1154,7 +1853,7 @@ Actual behavior must be verified.
 
 ---
 
-# 22. DATABASE / MIGRATION RULES
+# 34. DATABASE / MIGRATION RULES
 
 Once a Prisma migration is applied:
 
@@ -1182,7 +1881,7 @@ For schema changes:
 
 ---
 
-# 23. FUTURE ACCEPTANCE EXAMPLES
+# 35. FUTURE ACCEPTANCE EXAMPLES
 
 Eventually these should work through the same BrainOS assistant architecture:
 
@@ -1220,7 +1919,229 @@ High-impact actions should require appropriate confirmation/authorization.
 
 ---
 
-# 24. FINAL PROJECT STATEMENT
+# 36. CURRENT DEVELOPMENT CHECKPOINT SUMMARY
+
+```text
+Repository:
+D:\Project\BrainOS
+
+Branch:
+main
+
+Committed HEAD:
+6a04c89 feat(web): add automation dashboard
+
+origin/main:
+6a04c89
+
+Current working tree:
+3 intentional modified files
+
+Modified files:
+BrainOS_Master_Project_Context.md
+apps/backend/src/services/automation/automation.service.ts
+apps/web/app/dashboard/automations/page.tsx
+```
+
+Current feature state:
+
+```text
+Tasks:
+COMPLETE
+
+Reminders:
+COMPLETE
+
+Automation:
+COMPLETE for implemented scope
+
+Recurring automation:
+IMPLEMENTED
+
+Daily recurrence:
+TESTED
+
+Weekly recurrence:
+TESTED
+
+Recurring worker rescheduling:
+TESTED
+
+Automation dashboard recurrence UI:
+BUILD VERIFIED
+```
+
+Current validation:
+
+```text
+Focused automation tests:
+32/32 PASS
+
+Full backend regression:
+37/37 test files
+343/343 tests
+0 failures
+
+Backend TypeScript:
+PASS
+
+Web production build:
+PASS
+
+git diff --check:
+PASS
+```
+
+Previously verified behavioral automation paths:
+
+```text
+SCHEDULE → CREATE_TASK:
+verified end-to-end
+
+TASK_DUE → CREATE_TASK:
+verified end-to-end
+
+future TASK_DUE does not fire early:
+verified
+
+TASK_DUE fires after due time:
+verified
+
+TASK_DUE duplicate protection:
+verified
+
+real Task creation:
+verified
+
+AutomationExecution success:
+verified
+```
+
+Current recurring limitation:
+
+```text
+No separate manual live multi-run recurring scheduler/database E2E
+verification has been recorded yet.
+```
+
+This limitation must not be silently converted into a "verified" claim.
+
+The next immediate repository action is to review the final diff, commit the
+intentional recurring automation changes, push them, and verify a clean
+working tree.
+
+After the final Phase 19 commit is clean and synchronized with origin, the
+next major development milestone is:
+
+```text
+Phase 20 — Documents / Knowledge / RAG
+```
+
+# 37. NEXT CHAT INSTRUCTION
+
+The next development chat should start from the final Phase 19 Git checkpoint.
+
+Before changing code:
+
+```text
+cd D:\Project\BrainOS
+
+git status
+git branch --show-current
+git log --oneline -10
+git remote -v
+```
+
+The intended Phase 19 recurring-automation changes are:
+
+```text
+apps/backend/src/services/automation/automation.service.ts
+apps/web/app/dashboard/automations/page.tsx
+```
+
+plus this context document.
+
+The current focused and full backend tests are already green:
+
+```text
+Automation focused:
+32/32 PASS
+
+Full backend:
+343/343 PASS
+```
+
+Backend typecheck and web production build are also passing.
+
+Do not restart the previously verified one-time TASK_DUE/SCHEDULE behavioral
+tests unless a future code change could affect them.
+
+Before declaring the repository ready for Phase 20:
+
+```text
+git diff --check
+git diff --stat
+git diff
+git add <intentional files>
+git commit
+git push origin main
+git status
+git log --oneline -10
+```
+
+The final Git state must be:
+
+```text
+branch:
+main
+
+working tree:
+clean
+
+local main:
+same as origin/main
+```
+
+Then begin:
+
+```text
+Phase 20 — Documents / Knowledge / RAG
+```
+
+Use the normal BrainOS workflow:
+
+```text
+requirements
+ ↓
+repository inspection
+ ↓
+architecture decision
+ ↓
+small implementation
+ ↓
+focused testing
+ ↓
+TypeScript
+ ↓
+behavioral verification
+ ↓
+full regression
+ ↓
+context update
+ ↓
+Git review
+ ↓
+commit
+ ↓
+push
+ ↓
+final Git verification
+```
+
+Do not assume the old roadmap is sufficient. Reconcile the Phase 20 plan with
+the actual repository before coding.
+
+# 38. FINAL PROJECT STATEMENT
 
 BrainOS is being built to become a private personal AI operating system that:
 
@@ -1235,9 +2156,8 @@ BrainOS is being built to become a private personal AI operating system that:
 - communicates
 - automates
 - controls authorized computer actions
-- provides proactive assistance
 - eventually supports voice
-- eventually acts appropriately with user control
+- provides proactive assistance
 
 The technical foundation is deliberately being built before broad autonomous behavior.
 

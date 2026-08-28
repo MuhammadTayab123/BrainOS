@@ -26,6 +26,8 @@ type ApiResponse<T> = {
   };
 };
 
+type RecurrenceType = "NONE" | "DAILY" | "WEEKLY";
+
 const API_URL = "http://localhost:3001";
 
 const triggerOptions = [
@@ -50,6 +52,16 @@ const actionOptions = [
   },
 ];
 
+const dayOptions = [
+  { value: "0", label: "Sunday" },
+  { value: "1", label: "Monday" },
+  { value: "2", label: "Tuesday" },
+  { value: "3", label: "Wednesday" },
+  { value: "4", label: "Thursday" },
+  { value: "5", label: "Friday" },
+  { value: "6", label: "Saturday" },
+];
+
 export default function AutomationsPage() {
   const { getToken } = useAuth();
 
@@ -66,6 +78,13 @@ export default function AutomationsPage() {
   const [triggerType, setTriggerType] = useState("SCHEDULE");
   const [actionType, setActionType] = useState("CREATE_TASK");
   const [nextRunAt, setNextRunAt] = useState("");
+
+  // Recurrence
+  const [recurrenceType, setRecurrenceType] =
+    useState<RecurrenceType>("NONE");
+  const [recurrenceTime, setRecurrenceTime] = useState("09:00");
+  const [recurrenceDayOfWeek, setRecurrenceDayOfWeek] =
+    useState("1");
 
   // TASK_DUE
   const [taskId, setTaskId] = useState("");
@@ -95,13 +114,6 @@ export default function AutomationsPage() {
 
   const loadAutomations = useCallback(async () => {
     try {
-      /*
-       * Important:
-       * Wait for the async authentication operation before
-       * changing React state. This avoids the React
-       * set-state-in-effect lint error when this function
-       * is called by useEffect.
-       */
       const headers = await getAuthHeaders();
 
       setLoading(true);
@@ -132,16 +144,21 @@ export default function AutomationsPage() {
   }, [getAuthHeaders]);
 
   useEffect(() => {
-  // This effect intentionally performs the initial API fetch
-  // and updates component state with the result.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  void loadAutomations();
-}, [loadAutomations]);
+    // The initial load intentionally updates component state
+    // after the asynchronous API request completes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadAutomations();
+  }, [loadAutomations]);
 
   function resetCreateForm() {
     setName("");
     setTriggerType("SCHEDULE");
     setActionType("CREATE_TASK");
+    setNextRunAt("");
+
+    setRecurrenceType("NONE");
+    setRecurrenceTime("09:00");
+    setRecurrenceDayOfWeek("1");
 
     setTaskId("");
 
@@ -152,8 +169,72 @@ export default function AutomationsPage() {
     setReminderMessage("");
     setReminderScheduledFor("");
     setReminderTaskId("");
+  }
 
-    setNextRunAt("");
+  function parseRecurrenceTime() {
+    const parts = recurrenceTime.split(":");
+
+    if (parts.length !== 2) {
+      throw new Error("Recurrence time must be in HH:MM format.");
+    }
+
+    const hour = Number(parts[0]);
+    const minute = Number(parts[1]);
+
+    if (
+      !Number.isInteger(hour) ||
+      hour < 0 ||
+      hour > 23 ||
+      !Number.isInteger(minute) ||
+      minute < 0 ||
+      minute > 59
+    ) {
+      throw new Error("Recurrence time must be a valid time.");
+    }
+
+    return {
+      hour,
+      minute,
+    };
+  }
+
+  function buildRecurrenceConfig(config: Record<string, unknown>) {
+    if (triggerType !== "SCHEDULE") {
+      return;
+    }
+
+    if (recurrenceType === "NONE") {
+      return;
+    }
+
+    const { hour, minute } = parseRecurrenceTime();
+
+    if (recurrenceType === "DAILY") {
+      config.recurrence = {
+        type: "DAILY",
+        hour,
+        minute,
+      };
+
+      return;
+    }
+
+    const dayOfWeek = Number(recurrenceDayOfWeek);
+
+    if (
+      !Number.isInteger(dayOfWeek) ||
+      dayOfWeek < 0 ||
+      dayOfWeek > 6
+    ) {
+      throw new Error("Recurrence day must be valid.");
+    }
+
+    config.recurrence = {
+      type: "WEEKLY",
+      dayOfWeek,
+      hour,
+      minute,
+    };
   }
 
   async function createAutomation() {
@@ -178,6 +259,17 @@ export default function AutomationsPage() {
     if (actionType === "CREATE_REMINDER" && !reminderMessage.trim()) {
       setError(
         "Reminder message is required for a create-reminder automation.",
+      );
+      return;
+    }
+
+    if (
+      triggerType === "SCHEDULE" &&
+      recurrenceType !== "NONE" &&
+      !nextRunAt
+    ) {
+      setError(
+        "Next run is required when creating a recurring schedule.",
       );
       return;
     }
@@ -227,7 +319,9 @@ export default function AutomationsPage() {
           const parsedScheduledFor = new Date(reminderScheduledFor);
 
           if (Number.isNaN(parsedScheduledFor.getTime())) {
-            throw new Error("Reminder scheduled date must be a valid date.");
+            throw new Error(
+              "Reminder scheduled date must be a valid date.",
+            );
           }
 
           config.scheduledFor = parsedScheduledFor.toISOString();
@@ -237,6 +331,28 @@ export default function AutomationsPage() {
           config.taskId = reminderTaskId.trim();
         }
       }
+
+      /*
+       * Recurring schedule configuration.
+       *
+       * The backend already understands:
+       *
+       * DAILY:
+       * {
+       *   type: "DAILY",
+       *   hour,
+       *   minute
+       * }
+       *
+       * WEEKLY:
+       * {
+       *   type: "WEEKLY",
+       *   dayOfWeek,
+       *   hour,
+       *   minute
+       * }
+       */
+      buildRecurrenceConfig(config);
 
       const payload: Record<string, unknown> = {
         name: name.trim(),
@@ -389,6 +505,57 @@ export default function AutomationsPage() {
     }
 
     return date.toLocaleString();
+  }
+
+  function formatRecurrence(config: Record<string, unknown>) {
+    const recurrence = config.recurrence;
+
+    if (
+      recurrence === null ||
+      typeof recurrence !== "object" ||
+      Array.isArray(recurrence)
+    ) {
+      return null;
+    }
+
+    const value = recurrence as Record<string, unknown>;
+
+    if (value.type === "DAILY") {
+      const hour =
+        typeof value.hour === "number"
+          ? String(value.hour).padStart(2, "0")
+          : "--";
+
+      const minute =
+        typeof value.minute === "number"
+          ? String(value.minute).padStart(2, "0")
+          : "--";
+
+      return `Daily at ${hour}:${minute}`;
+    }
+
+    if (value.type === "WEEKLY") {
+      const day =
+        typeof value.dayOfWeek === "number"
+          ? dayOptions.find(
+              (option) => Number(option.value) === value.dayOfWeek,
+            )?.label ?? "Unknown day"
+          : "Unknown day";
+
+      const hour =
+        typeof value.hour === "number"
+          ? String(value.hour).padStart(2, "0")
+          : "--";
+
+      const minute =
+        typeof value.minute === "number"
+          ? String(value.minute).padStart(2, "0")
+          : "--";
+
+      return `Weekly on ${day} at ${hour}:${minute}`;
+    }
+
+    return null;
   }
 
   function statusClass(status: string) {
@@ -634,9 +801,80 @@ export default function AutomationsPage() {
                   </>
                 )}
 
+                {triggerType === "SCHEDULE" && (
+                  <>
+                    <div>
+                      <label className="mb-2 block text-sm text-zinc-400">
+                        Recurrence
+                      </label>
+
+                      <select
+                        value={recurrenceType}
+                        onChange={(event) =>
+                          setRecurrenceType(
+                            event.target.value as RecurrenceType,
+                          )
+                        }
+                        disabled={creating}
+                        className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-zinc-400 disabled:opacity-50"
+                      >
+                        <option value="NONE">One time</option>
+                        <option value="DAILY">Daily</option>
+                        <option value="WEEKLY">Weekly</option>
+                      </select>
+                    </div>
+
+                    {recurrenceType !== "NONE" && (
+                      <div>
+                        <label className="mb-2 block text-sm text-zinc-400">
+                          Recurrence time
+                        </label>
+
+                        <input
+                          type="time"
+                          value={recurrenceTime}
+                          onChange={(event) =>
+                            setRecurrenceTime(event.target.value)
+                          }
+                          disabled={creating}
+                          className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-zinc-400 disabled:opacity-50"
+                        />
+                      </div>
+                    )}
+
+                    {recurrenceType === "WEEKLY" && (
+                      <div>
+                        <label className="mb-2 block text-sm text-zinc-400">
+                          Day of week
+                        </label>
+
+                        <select
+                          value={recurrenceDayOfWeek}
+                          onChange={(event) =>
+                            setRecurrenceDayOfWeek(event.target.value)
+                          }
+                          disabled={creating}
+                          className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-zinc-400 disabled:opacity-50"
+                        >
+                          {dayOptions.map((option) => (
+                            <option
+                              key={option.value}
+                              value={option.value}
+                            >
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </>
+                )}
+
                 <div>
                   <label className="mb-2 block text-sm text-zinc-400">
-                    Next run
+                    {recurrenceType === "NONE"
+                      ? "Next run"
+                      : "First run"}
                   </label>
 
                   <input
@@ -648,6 +886,15 @@ export default function AutomationsPage() {
                   />
                 </div>
               </div>
+
+              {triggerType === "SCHEDULE" &&
+                recurrenceType !== "NONE" && (
+                  <p className="mt-4 text-sm text-zinc-500">
+                    The first run starts at the time above. After each
+                    successful execution, BrainOS will calculate the next
+                    occurrence automatically.
+                  </p>
+                )}
 
               <button
                 onClick={() => void createAutomation()}
@@ -685,129 +932,146 @@ export default function AutomationsPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {automations.map((automation) => (
-                    <div
-                      key={automation.id}
-                      className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5"
-                    >
-                      <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-3">
-                            <h4 className="text-lg font-medium">
-                              {automation.name}
-                            </h4>
+                  {automations.map((automation) => {
+                    const recurrenceText = formatRecurrence(
+                      automation.config,
+                    );
 
-                            <span
-                              className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClass(
-                                automation.status,
-                              )}`}
-                            >
-                              {automation.status}
-                            </span>
+                    return (
+                      <div
+                        key={automation.id}
+                        className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5"
+                      >
+                        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <h4 className="text-lg font-medium">
+                                {automation.name}
+                              </h4>
+
+                              <span
+                                className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClass(
+                                  automation.status,
+                                )}`}
+                              >
+                                {automation.status}
+                              </span>
+                            </div>
+
+                            <div className="mt-4 grid gap-2 text-sm text-zinc-400">
+                              <p>
+                                Trigger:{" "}
+                                <span className="text-zinc-200">
+                                  {automation.triggerType}
+                                </span>
+                              </p>
+
+                              <p>
+                                Action:{" "}
+                                <span className="text-zinc-200">
+                                  {automation.actionType}
+                                </span>
+                              </p>
+
+                              {recurrenceText && (
+                                <p>
+                                  Recurrence:{" "}
+                                  <span className="text-zinc-200">
+                                    {recurrenceText}
+                                  </span>
+                                </p>
+                              )}
+
+                              <p>
+                                Next run:{" "}
+                                <span className="text-zinc-200">
+                                  {formatDate(automation.nextRunAt)}
+                                </span>
+                              </p>
+
+                              {automation.lastRunAt && (
+                                <p>
+                                  Last run:{" "}
+                                  <span className="text-zinc-200">
+                                    {formatDate(automation.lastRunAt)}
+                                  </span>
+                                </p>
+                              )}
+
+                              {automation.triggerType === "TASK_DUE" && (
+                                <p>
+                                  Task ID:{" "}
+                                  <span className="text-zinc-200">
+                                    {String(
+                                      automation.config?.taskId ?? "Unknown",
+                                    )}
+                                  </span>
+                                </p>
+                              )}
+
+                              {automation.actionType === "CREATE_TASK" && (
+                                <p>
+                                  Task title:{" "}
+                                  <span className="text-zinc-200">
+                                    {String(
+                                      automation.config?.title ?? "Unknown",
+                                    )}
+                                  </span>
+                                </p>
+                              )}
+
+                              {automation.actionType === "CREATE_REMINDER" && (
+                                <p>
+                                  Reminder:{" "}
+                                  <span className="text-zinc-200">
+                                    {String(
+                                      automation.config?.message ?? "Unknown",
+                                    )}
+                                  </span>
+                                </p>
+                              )}
+                            </div>
                           </div>
 
-                          <div className="mt-4 grid gap-2 text-sm text-zinc-400">
-                            <p>
-                              Trigger:{" "}
-                              <span className="text-zinc-200">
-                                {automation.triggerType}
-                              </span>
-                            </p>
-
-                            <p>
-                              Action:{" "}
-                              <span className="text-zinc-200">
-                                {automation.actionType}
-                              </span>
-                            </p>
-
-                            <p>
-                              Next run:{" "}
-                              <span className="text-zinc-200">
-                                {formatDate(automation.nextRunAt)}
-                              </span>
-                            </p>
-
-                            {automation.lastRunAt && (
-                              <p>
-                                Last run:{" "}
-                                <span className="text-zinc-200">
-                                  {formatDate(automation.lastRunAt)}
-                                </span>
-                              </p>
+                          <div className="flex shrink-0 flex-wrap gap-2">
+                            {automation.status === "ACTIVE" && (
+                              <button
+                                onClick={() =>
+                                  void pauseAutomation(automation.id)
+                                }
+                                disabled={actionId === automation.id}
+                                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-800 disabled:opacity-50"
+                              >
+                                Pause
+                              </button>
                             )}
 
-                            {automation.triggerType === "TASK_DUE" && (
-                              <p>
-                                Task ID:{" "}
-                                <span className="text-zinc-200">
-                                  {String(
-                                    automation.config?.taskId ?? "Unknown",
-                                  )}
-                                </span>
-                              </p>
+                            {automation.status === "PAUSED" && (
+                              <button
+                                onClick={() =>
+                                  void resumeAutomation(automation.id)
+                                }
+                                disabled={actionId === automation.id}
+                                className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-200 disabled:opacity-50"
+                              >
+                                Resume
+                              </button>
                             )}
 
-                            {automation.actionType === "CREATE_TASK" && (
-                              <p>
-                                Task title:{" "}
-                                <span className="text-zinc-200">
-                                  {String(
-                                    automation.config?.title ?? "Unknown",
-                                  )}
-                                </span>
-                              </p>
-                            )}
-
-                            {automation.actionType === "CREATE_REMINDER" && (
-                              <p>
-                                Reminder:{" "}
-                                <span className="text-zinc-200">
-                                  {String(
-                                    automation.config?.message ?? "Unknown",
-                                  )}
-                                </span>
-                              </p>
-                            )}
+                            <button
+                              onClick={() =>
+                                void deleteAutomation(automation.id)
+                              }
+                              disabled={actionId === automation.id}
+                              className="rounded-lg border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950 disabled:opacity-50"
+                            >
+                              Delete
+                            </button>
                           </div>
-                        </div>
-
-                        <div className="flex shrink-0 flex-wrap gap-2">
-                          {automation.status === "ACTIVE" && (
-                            <button
-                              onClick={() =>
-                                void pauseAutomation(automation.id)
-                              }
-                              disabled={actionId === automation.id}
-                              className="rounded-lg border border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-800 disabled:opacity-50"
-                            >
-                              Pause
-                            </button>
-                          )}
-
-                          {automation.status === "PAUSED" && (
-                            <button
-                              onClick={() =>
-                                void resumeAutomation(automation.id)
-                              }
-                              disabled={actionId === automation.id}
-                              className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-200 disabled:opacity-50"
-                            >
-                              Resume
-                            </button>
-                          )}
-
-                          <button
-                            onClick={() => void deleteAutomation(automation.id)}
-                            disabled={actionId === automation.id}
-                            className="rounded-lg border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950 disabled:opacity-50"
-                          >
-                            Delete
-                          </button>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
