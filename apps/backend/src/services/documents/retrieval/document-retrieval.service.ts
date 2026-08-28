@@ -10,6 +10,9 @@ export interface SearchDocumentChunksInput {
 export interface SearchDocumentChunkResult {
   id: string;
   documentId: string;
+  documentTitle: string;
+  sourceType: string;
+  source: string | null;
   chunkIndex: number;
   content: string;
   similarity: number;

@@ -10,8 +10,7 @@ describe("DocumentRetrievalService", () => {
       generate: vi.fn().mockResolvedValue({
         vector: Array.from(
           { length: 768 },
-          (_, index) =>
-            index === 0 ? 1 : 0,
+          (_, index) => (index === 0 ? 1 : 0),
         ),
         dimensions: 768,
         provider: "test",
@@ -24,6 +23,9 @@ describe("DocumentRetrievalService", () => {
         {
           id: "chunk-1",
           documentId: "document-1",
+          documentTitle: "BrainOS Notes",
+          sourceType: "TEXT",
+          source: "brainos-notes",
           chunkIndex: 0,
           content: "BrainOS document content",
           similarity: 0.91,
@@ -59,6 +61,9 @@ describe("DocumentRetrievalService", () => {
       {
         id: "chunk-1",
         documentId: "document-1",
+        documentTitle: "BrainOS Notes",
+        sourceType: "TEXT",
+        source: "brainos-notes",
         chunkIndex: 0,
         content: "BrainOS document content",
         similarity: 0.91,

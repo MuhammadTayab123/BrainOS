@@ -88,20 +88,27 @@ export class DocumentChunkRepository {
 
   return this.db.$queryRaw<
     Array<{
-      id: string;
-      documentId: string;
-      chunkIndex: number;
-      content: string;
-      similarity: number;
-    }>
+  id: string;
+  documentId: string;
+  documentTitle: string;
+  sourceType: string;
+  source: string | null;
+  chunkIndex: number;
+  content: string;
+  similarity: number;
+}>
   >(
     Prisma.sql`
       SELECT
-        dc."id",
-        dc."documentId",
-        dc."chunkIndex",
-        dc."content",
-        1 - (dc."embedding" <=> ${vector}::vector) AS "similarity"
+  dc."id",
+  dc."documentId",
+  d."title" AS "documentTitle",
+  d."sourceType" AS "sourceType",
+  d."source" AS "source",
+  dc."chunkIndex",
+  dc."content",
+          1 - (dc."embedding" <=> ${vector}::vector) AS "similarity"
+
       FROM "DocumentChunk" dc
       INNER JOIN "Document" d
         ON d."id" = dc."documentId"
