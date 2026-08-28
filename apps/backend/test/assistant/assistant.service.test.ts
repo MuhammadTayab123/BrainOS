@@ -124,83 +124,114 @@ describe("AssistantService", () => {
     });
   });
 
-  it("retrieves document context when document retrieval is enabled", async () => {
-    const llmService = createLlmServiceMock();
-    const memoryService = createMemoryServiceMock();
-    const toolExecutor = createToolExecutorMock();
-    const documentRetrievalService =
-      createDocumentRetrievalServiceMock();
+  it("retrieves document context with source references when document retrieval is enabled", async () => {
+  const llmService = createLlmServiceMock();
+  const memoryService = createMemoryServiceMock();
+  const toolExecutor = createToolExecutorMock();
+  const documentRetrievalService =
+    createDocumentRetrievalServiceMock();
 
-    memoryService.searchMemories.mockResolvedValue(
-      [],
-    );
+  memoryService.searchMemories.mockResolvedValue([]);
 
-    const retrievedDocuments = [
-      {
-        id: "chunk-1",
-        documentId: "document-1",
-        chunkIndex: 0,
-        content:
-          "BrainOS uses semantic document retrieval.",
-        similarity: 0.94,
-      },
-    ];
+  const retrievedDocuments = [
+    {
+      id: "chunk-1",
+      documentId: "document-1",
+      documentTitle: "BrainOS Notes",
+      sourceType: "TEXT",
+      source: "brainos-notes",
+      chunkIndex: 0,
+      content:
+        "BrainOS uses semantic document retrieval.",
+      similarity: 0.94,
+    },
+  ];
 
-    documentRetrievalService.search.mockResolvedValue(
-      retrievedDocuments,
-    );
+  documentRetrievalService.search.mockResolvedValue(
+    retrievedDocuments,
+  );
 
-    llmService.generate.mockResolvedValue({
-      text: "BrainOS uses semantic document retrieval.",
-      model: "test-model",
-      provider: "test",
-      toolCalls: [],
-    });
-
-    const service = new AssistantService(
-      llmService as unknown as LLMService,
-      memoryService as unknown as MemoryService,
-      toolExecutor as unknown as ToolExecutor,
-      undefined,
-      undefined,
-      documentRetrievalService as unknown as DocumentRetrievalService,
-    );
-
-    const result = await service.ask({
-      userId: "user-1",
-      message: "How does BrainOS retrieve documents?",
-      enableDocumentRetrieval: true,
-      documentSearchLimit: 5,
-    });
-
-    expect(
-      documentRetrievalService.search,
-    ).toHaveBeenCalledWith({
-      userId: "user-1",
-      query:
-        "How does BrainOS retrieve documents?",
-      limit: 5,
-    });
-
-    const generationInput =
-      llmService.generate.mock.calls[0][0];
-
-    expect(
-      generationInput.systemPrompt,
-    ).toContain(
-      "[Relevant Context from Documents]",
-    );
-
-    expect(
-      generationInput.systemPrompt,
-    ).toContain(
-      "BrainOS uses semantic document retrieval.",
-    );
-
-    expect(result.retrievedDocuments).toEqual(
-      retrievedDocuments,
-    );
+  llmService.generate.mockResolvedValue({
+    text: "BrainOS uses semantic document retrieval.",
+    model: "test-model",
+    provider: "test",
+    toolCalls: [],
   });
+
+  const service = new AssistantService(
+    llmService as unknown as LLMService,
+    memoryService as unknown as MemoryService,
+    toolExecutor as unknown as ToolExecutor,
+    undefined,
+    undefined,
+    documentRetrievalService as unknown as DocumentRetrievalService,
+  );
+
+  const result = await service.ask({
+    userId: "user-1",
+    message: "How does BrainOS retrieve documents?",
+    enableDocumentRetrieval: true,
+    documentSearchLimit: 5,
+  });
+
+  expect(
+    documentRetrievalService.search,
+  ).toHaveBeenCalledWith({
+    userId: "user-1",
+    query:
+      "How does BrainOS retrieve documents?",
+    limit: 5,
+  });
+
+  const generationInput =
+    llmService.generate.mock.calls[0][0];
+
+  expect(
+    generationInput.systemPrompt,
+  ).toContain(
+    "[Relevant Context from Documents]",
+  );
+
+  expect(
+    generationInput.systemPrompt,
+  ).toContain(
+    "Title: BrainOS Notes",
+  );
+
+  expect(
+    generationInput.systemPrompt,
+  ).toContain(
+    "Source Type: TEXT",
+  );
+
+  expect(
+    generationInput.systemPrompt,
+  ).toContain(
+    "Source: brainos-notes",
+  );
+
+  expect(
+    generationInput.systemPrompt,
+  ).toContain(
+    "Chunk: 0",
+  );
+
+  expect(
+    generationInput.systemPrompt,
+  ).toContain(
+    "Similarity: 0.94",
+  );
+
+  expect(
+    generationInput.systemPrompt,
+  ).toContain(
+    "BrainOS uses semantic document retrieval.",
+  );
+
+  expect(result.retrievedDocuments).toEqual(
+    retrievedDocuments,
+  );
+});
 
   it("skips memory retrieval when disabled", async () => {
     const llmService = createLlmServiceMock();

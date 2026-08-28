@@ -36,9 +36,17 @@ export function formatDocumentsForContext(
   const formatted = documents
     .map(
       (document, index) =>
-        `${index + 1}. ${document.content}`,
+        [
+          `[Document ${index + 1}]`,
+          `Title: ${document.documentTitle}`,
+          `Source Type: ${document.sourceType}`,
+          `Source: ${document.source ?? "unknown"}`,
+          `Chunk: ${document.chunkIndex}`,
+          `Similarity: ${document.similarity.toFixed(2)}`,
+          `Content: ${document.content}`,
+        ].join("\n"),
     )
-    .join("\n");
+    .join("\n\n");
 
   return `\n\n[Relevant Context from Documents]\n${formatted}`;
 }
