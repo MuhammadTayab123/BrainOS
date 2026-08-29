@@ -253,3 +253,92 @@ export async function deleteAutomation(
 
   return parseResponse<{ id: string }>(response);
 }
+// ==========================
+// Document API
+// ==========================
+
+export interface Document {
+  id: string;
+  userId: string;
+  title: string;
+  sourceType: string;
+  source: string | null;
+  content: string | null;
+  mimeType: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentSearchResult {
+  id: string;
+  documentId: string;
+  documentTitle: string;
+  sourceType: string;
+  source: string | null;
+  chunkIndex: number;
+  content: string;
+  similarity: number;
+}
+
+export async function createTextDocument(
+  input: {
+    title: string;
+    content: string;
+  },
+): Promise<Document> {
+  const headers = await getAuthHeaders();
+
+  const response = await fetch(
+    `${API_URL}/api/v1/documents`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        title: input.title,
+        sourceType: "TEXT",
+        content: input.content,
+      }),
+      cache: "no-store",
+    },
+  );
+
+  return parseResponse<Document>(response);
+}
+
+export async function searchDocuments(
+  query: string,
+  limit?: number,
+): Promise<DocumentSearchResult[]> {
+  const headers = await getAuthHeaders();
+
+  const response = await fetch(
+    `${API_URL}/api/v1/documents/search`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        query,
+        limit,
+      }),
+      cache: "no-store",
+    },
+  );
+
+  return parseResponse<DocumentSearchResult[]>(response);
+}
+
+export async function listDocuments(): Promise<Document[]> {
+  const headers = await getAuthHeaders();
+
+  const response = await fetch(
+    `${API_URL}/api/v1/documents`,
+    {
+      method: "GET",
+      headers,
+      cache: "no-store",
+    },
+  );
+
+  return parseResponse<Document[]>(response);
+}
