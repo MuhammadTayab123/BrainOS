@@ -1,12 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  SignInButton,
-  Show,
-  UserButton,
-  useAuth,
-} from "@clerk/nextjs";
+import { SignInButton, Show, UserButton, useAuth } from "@clerk/nextjs";
 
 interface AssistantResponse {
   success: boolean;
@@ -15,7 +10,7 @@ interface AssistantResponse {
     model: string;
     provider: string;
     retrievedMemories: unknown[];
-    retrievedDocuments?: unknown[];
+    retrievedDocuments?: DocumentSearchResult[];
   };
   error?: {
     code: string;
@@ -50,47 +45,37 @@ interface DocumentSearchResult {
 export default function Home() {
   const { getToken } = useAuth();
 
-  const API_URL =
-    process.env.NEXT_PUBLIC_BRAINOS_API_URL;
+  const API_URL = process.env.NEXT_PUBLIC_BRAINOS_API_URL;
 
   const [message, setMessage] = useState("");
   const [response, setResponse] = useState("");
   const [loading, setLoading] = useState(false);
+  const [assistantSources, setAssistantSources] = useState<
+    DocumentSearchResult[]
+  >([]);
+  const [documentTitle, setDocumentTitle] = useState("");
+  const [documentContent, setDocumentContent] = useState("");
+  const [documentLoading, setDocumentLoading] = useState(false);
+  const [documentMessage, setDocumentMessage] = useState("");
 
-  const [documentTitle, setDocumentTitle] =
-    useState("");
-  const [documentContent, setDocumentContent] =
-    useState("");
-  const [documentLoading, setDocumentLoading] =
-    useState(false);
-  const [documentMessage, setDocumentMessage] =
-    useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<DocumentSearchResult[]>(
+    [],
+  );
+  const [searchLoading, setSearchLoading] = useState(false);
 
-  const [searchQuery, setSearchQuery] =
-    useState("");
-  const [searchResults, setSearchResults] =
-    useState<DocumentSearchResult[]>([]);
-  const [searchLoading, setSearchLoading] =
-    useState(false);
-
-  const [documents, setDocuments] =
-    useState<Document[]>([]);
-  const [documentsLoading, setDocumentsLoading] =
-    useState(false);
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
 
   async function getAuthToken() {
     if (!API_URL) {
-      throw new Error(
-        "NEXT_PUBLIC_BRAINOS_API_URL is not configured.",
-      );
+      throw new Error("NEXT_PUBLIC_BRAINOS_API_URL is not configured.");
     }
 
     const token = await getToken();
 
     if (!token) {
-      throw new Error(
-        "Authentication token unavailable.",
-      );
+      throw new Error("Authentication token unavailable.");
     }
 
     return token;
@@ -101,6 +86,7 @@ export default function Home() {
 
     setLoading(true);
     setResponse("");
+    setAssistantSources([]);
 
     try {
       const token = await getAuthToken();
@@ -110,41 +96,31 @@ export default function Home() {
         length: token.length,
       });
 
-      const res = await fetch(
-        `${API_URL}/api/v1/assistant/ask`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            message: message.trim(),
-            enableMemoryRetrieval: true,
-            enableDocumentRetrieval: true,
-          }),
+      const res = await fetch(`${API_URL}/api/v1/assistant/ask`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-      );
+        body: JSON.stringify({
+          message: message.trim(),
+          enableMemoryRetrieval: true,
+          enableDocumentRetrieval: true,
+        }),
+      });
 
-      const result =
-        (await res.json()) as AssistantResponse;
+      const result = (await res.json()) as AssistantResponse;
 
       if (!res.ok || !result.success) {
-        throw new Error(
-          result.error?.message ??
-            "Assistant request failed.",
-        );
+        throw new Error(result.error?.message ?? "Assistant request failed.");
       }
 
-      setResponse(
-        result.data?.text ??
-          "No response received.",
-      );
+      setResponse(result.data?.text ?? "No response received.");
+
+      setAssistantSources(result.data?.retrievedDocuments ?? []);
     } catch (error) {
       setResponse(
-        error instanceof Error
-          ? error.message
-          : "Something went wrong.",
+        error instanceof Error ? error.message : "Something went wrong.",
       );
     } finally {
       setLoading(false);
@@ -152,13 +128,8 @@ export default function Home() {
   }
 
   async function createDocument() {
-    if (
-      !documentTitle.trim() ||
-      !documentContent.trim()
-    ) {
-      setDocumentMessage(
-        "Document title and content are required.",
-      );
+    if (!documentTitle.trim() || !documentContent.trim()) {
+      setDocumentMessage("Document title and content are required.");
       return;
     }
 
@@ -168,34 +139,26 @@ export default function Home() {
     try {
       const token = await getAuthToken();
 
-      const res = await fetch(
-        `${API_URL}/api/v1/documents`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            title: documentTitle.trim(),
-            sourceType: "TEXT",
-            content: documentContent.trim(),
-          }),
+      const res = await fetch(`${API_URL}/api/v1/documents`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-      );
+        body: JSON.stringify({
+          title: documentTitle.trim(),
+          sourceType: "TEXT",
+          content: documentContent.trim(),
+        }),
+      });
 
       const result = await res.json();
 
       if (!res.ok || !result.success) {
-        throw new Error(
-          result.error?.message ??
-            "Document creation failed.",
-        );
+        throw new Error(result.error?.message ?? "Document creation failed.");
       }
 
-      setDocumentMessage(
-        "Document created successfully.",
-      );
+      setDocumentMessage("Document created successfully.");
 
       setDocumentTitle("");
       setDocumentContent("");
@@ -203,9 +166,7 @@ export default function Home() {
       await loadDocuments();
     } catch (error) {
       setDocumentMessage(
-        error instanceof Error
-          ? error.message
-          : "Document creation failed.",
+        error instanceof Error ? error.message : "Document creation failed.",
       );
     } finally {
       setDocumentLoading(false);
@@ -221,38 +182,28 @@ export default function Home() {
     try {
       const token = await getAuthToken();
 
-      const res = await fetch(
-        `${API_URL}/api/v1/documents/search`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            query: searchQuery.trim(),
-            limit: 5,
-          }),
+      const res = await fetch(`${API_URL}/api/v1/documents/search`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-      );
+        body: JSON.stringify({
+          query: searchQuery.trim(),
+          limit: 5,
+        }),
+      });
 
       const result = await res.json();
 
       if (!res.ok || !result.success) {
-        throw new Error(
-          result.error?.message ??
-            "Document search failed.",
-        );
+        throw new Error(result.error?.message ?? "Document search failed.");
       }
 
-      setSearchResults(
-        result.data as DocumentSearchResult[],
-      );
+      setSearchResults(result.data as DocumentSearchResult[]);
     } catch (error) {
       setDocumentMessage(
-        error instanceof Error
-          ? error.message
-          : "Document search failed.",
+        error instanceof Error ? error.message : "Document search failed.",
       );
     } finally {
       setSearchLoading(false);
@@ -265,35 +216,25 @@ export default function Home() {
     try {
       const token = await getAuthToken();
 
-      const res = await fetch(
-        `${API_URL}/api/v1/documents`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          cache: "no-store",
+      const res = await fetch(`${API_URL}/api/v1/documents`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-      );
+        cache: "no-store",
+      });
 
       const result = await res.json();
 
       if (!res.ok || !result.success) {
-        throw new Error(
-          result.error?.message ??
-            "Failed to load documents.",
-        );
+        throw new Error(result.error?.message ?? "Failed to load documents.");
       }
 
-      setDocuments(
-        result.data as Document[],
-      );
+      setDocuments(result.data as Document[]);
     } catch (error) {
       setDocumentMessage(
-        error instanceof Error
-          ? error.message
-          : "Failed to load documents.",
+        error instanceof Error ? error.message : "Failed to load documents.",
       );
     } finally {
       setDocumentsLoading(false);
@@ -305,9 +246,7 @@ export default function Home() {
       <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10">
         <header className="mb-10 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-semibold">
-              BrainOS
-            </h1>
+            <h1 className="text-3xl font-semibold">BrainOS</h1>
 
             <p className="mt-2 text-zinc-400">
               Your Personal AI Operating System
@@ -321,13 +260,10 @@ export default function Home() {
 
         <Show when="signed-out">
           <section className="flex flex-1 flex-col items-center justify-center text-center">
-            <h2 className="text-3xl font-semibold">
-              Welcome to BrainOS
-            </h2>
+            <h2 className="text-3xl font-semibold">Welcome to BrainOS</h2>
 
             <p className="mt-3 max-w-md text-zinc-400">
-              Sign in to talk to your BrainOS
-              assistant.
+              Sign in to talk to your BrainOS assistant.
             </p>
 
             <SignInButton mode="modal">
@@ -343,24 +279,19 @@ export default function Home() {
             {/* Assistant */}
             <section>
               <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-                <p className="mb-4 text-sm text-zinc-400">
-                  Assistant
-                </p>
+                <p className="mb-4 text-sm text-zinc-400">Assistant</p>
 
                 <div className="min-h-40 whitespace-pre-wrap rounded-xl bg-zinc-950 p-5 text-zinc-200">
                   {loading
                     ? "BrainOS is thinking..."
-                    : response ||
-                      "Ask BrainOS something."}
+                    : response || "Ask BrainOS something."}
                 </div>
               </div>
 
               <div className="mt-6 flex gap-3">
                 <input
                   value={message}
-                  onChange={(e) =>
-                    setMessage(e.target.value)
-                  }
+                  onChange={(e) => setMessage(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       askAssistant();
@@ -373,44 +304,65 @@ export default function Home() {
 
                 <button
                   onClick={askAssistant}
-                  disabled={
-                    loading || !message.trim()
-                  }
+                  disabled={loading || !message.trim()}
                   className="rounded-xl bg-white px-6 py-3 font-medium text-black disabled:opacity-50"
                 >
-                  {loading
-                    ? "Thinking..."
-                    : "Ask"}
+                  {loading ? "Thinking..." : "Ask"}
                 </button>
               </div>
             </section>
+            {assistantSources.length > 0 && (
+              <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+                <h2 className="text-xl font-semibold">Sources</h2>
 
+                <p className="mt-1 text-sm text-zinc-400">
+                  Documents retrieved to help answer your question.
+                </p>
+
+                <div className="mt-5 space-y-3">
+                  {assistantSources.map((source, index) => (
+                    <div key={source.id} className="rounded-xl bg-zinc-950 p-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <h3 className="font-medium">
+                          {index + 1}. {source.documentTitle}
+                        </h3>
+
+                        <span className="text-xs text-zinc-500">
+                          similarity: {source.similarity.toFixed(3)}
+                        </span>
+                      </div>
+
+                      <p className="mt-1 text-xs text-zinc-500">
+                        {source.sourceType} · Chunk {source.chunkIndex}
+                      </p>
+
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-400">
+                        {source.content}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
             {/* Document ingestion */}
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-              <h2 className="text-xl font-semibold">
-                Add Document
-              </h2>
+              <h2 className="text-xl font-semibold">Add Document</h2>
 
               <p className="mt-1 text-sm text-zinc-400">
-                Add text that BrainOS can retrieve
-                during conversations.
+                Add text that BrainOS can retrieve during conversations.
               </p>
 
               <div className="mt-5 space-y-3">
                 <input
                   value={documentTitle}
-                  onChange={(e) =>
-                    setDocumentTitle(e.target.value)
-                  }
+                  onChange={(e) => setDocumentTitle(e.target.value)}
                   placeholder="Document title"
                   className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-zinc-400"
                 />
 
                 <textarea
                   value={documentContent}
-                  onChange={(e) =>
-                    setDocumentContent(e.target.value)
-                  }
+                  onChange={(e) => setDocumentContent(e.target.value)}
                   placeholder="Document content..."
                   rows={6}
                   className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-zinc-400"
@@ -425,31 +377,23 @@ export default function Home() {
                   }
                   className="rounded-xl bg-white px-5 py-3 font-medium text-black disabled:opacity-50"
                 >
-                  {documentLoading
-                    ? "Creating..."
-                    : "Create Document"}
+                  {documentLoading ? "Creating..." : "Create Document"}
                 </button>
 
                 {documentMessage && (
-                  <p className="text-sm text-zinc-400">
-                    {documentMessage}
-                  </p>
+                  <p className="text-sm text-zinc-400">{documentMessage}</p>
                 )}
               </div>
             </section>
 
             {/* Document search */}
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-              <h2 className="text-xl font-semibold">
-                Search Documents
-              </h2>
+              <h2 className="text-xl font-semibold">Search Documents</h2>
 
               <div className="mt-5 flex gap-3">
                 <input
                   value={searchQuery}
-                  onChange={(e) =>
-                    setSearchQuery(e.target.value)
-                  }
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       searchDocuments();
@@ -461,35 +405,22 @@ export default function Home() {
 
                 <button
                   onClick={searchDocuments}
-                  disabled={
-                    searchLoading ||
-                    !searchQuery.trim()
-                  }
+                  disabled={searchLoading || !searchQuery.trim()}
                   className="rounded-xl bg-white px-5 py-3 font-medium text-black disabled:opacity-50"
                 >
-                  {searchLoading
-                    ? "Searching..."
-                    : "Search"}
+                  {searchLoading ? "Searching..." : "Search"}
                 </button>
               </div>
 
               {searchResults.length > 0 && (
                 <div className="mt-5 space-y-3">
                   {searchResults.map((result) => (
-                    <div
-                      key={result.id}
-                      className="rounded-xl bg-zinc-950 p-4"
-                    >
+                    <div key={result.id} className="rounded-xl bg-zinc-950 p-4">
                       <div className="flex items-center justify-between gap-4">
-                        <h3 className="font-medium">
-                          {result.documentTitle}
-                        </h3>
+                        <h3 className="font-medium">{result.documentTitle}</h3>
 
                         <span className="text-xs text-zinc-500">
-                          similarity:{" "}
-                          {result.similarity.toFixed(
-                            3,
-                          )}
+                          similarity: {result.similarity.toFixed(3)}
                         </span>
                       </div>
 
@@ -506,13 +437,10 @@ export default function Home() {
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold">
-                    Documents
-                  </h2>
+                  <h2 className="text-xl font-semibold">Documents</h2>
 
                   <p className="mt-1 text-sm text-zinc-400">
-                    Documents currently available to
-                    BrainOS.
+                    Documents currently available to BrainOS.
                   </p>
                 </div>
 
@@ -521,9 +449,7 @@ export default function Home() {
                   disabled={documentsLoading}
                   className="rounded-xl border border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-800 disabled:opacity-50"
                 >
-                  {documentsLoading
-                    ? "Loading..."
-                    : "Refresh"}
+                  {documentsLoading ? "Loading..." : "Refresh"}
                 </button>
               </div>
 
@@ -535,9 +461,7 @@ export default function Home() {
                       className="rounded-xl bg-zinc-950 p-4"
                     >
                       <div className="flex items-center justify-between">
-                        <h3 className="font-medium">
-                          {document.title}
-                        </h3>
+                        <h3 className="font-medium">{document.title}</h3>
 
                         <span className="text-xs text-zinc-500">
                           {document.status}
@@ -552,12 +476,11 @@ export default function Home() {
                 </div>
               )}
 
-              {documents.length === 0 &&
-                !documentsLoading && (
-                  <p className="mt-5 text-sm text-zinc-500">
-                    No documents loaded yet.
-                  </p>
-                )}
+              {documents.length === 0 && !documentsLoading && (
+                <p className="mt-5 text-sm text-zinc-500">
+                  No documents loaded yet.
+                </p>
+              )}
             </section>
           </div>
         </Show>
