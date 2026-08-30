@@ -42,6 +42,17 @@ const userA = {
   imageUrl: null,
 };
 
+const documentSource = {
+  id: "chunk-a",
+  documentId: "document-a",
+  documentTitle: "BrainOS Notes",
+  sourceType: "TEXT",
+  source: null,
+  chunkIndex: 0,
+  content: "BrainOS is a personal AI operating system.",
+  similarity: 0.87,
+};
+
 describe("assistant API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -53,6 +64,7 @@ describe("assistant API", () => {
       model: "test-model",
       provider: "test",
       retrievedMemories: [],
+      retrievedDocuments: [],
     });
   });
 
@@ -99,56 +111,119 @@ describe("assistant API", () => {
           model: "test-model",
           provider: "test",
           retrievedMemories: [],
+          retrievedDocuments: [],
         },
       });
 
       expect(fakes.ask).toHaveBeenCalledWith({
         userId: "user-a",
-       message: "Hello BrainOS",
-       conversationId: undefined,
+        message: "Hello BrainOS",
+        conversationId: undefined,
         systemPrompt: undefined,
         conversationHistory: undefined,
         enableMemoryRetrieval: undefined,
         memorySearchLimit: undefined,
+        enableDocumentRetrieval: undefined,
+        documentSearchLimit: undefined,
         model: undefined,
       });
     });
 
     it("passes optional assistant parameters through", async () => {
       const response = await request(app)
-  .post("/api/v1/assistant/ask")
-  .send({
-    message: "What do you remember?",
-    conversationId: "conversation-a",
-    systemPrompt: "Be concise.",
-    conversationHistory: [
-      {
-        role: "user",
-        content: "Hello",
-      },
-    ],
-    enableMemoryRetrieval: true,
-    memorySearchLimit: 5,
-    model: "test-model",
-  });
+        .post("/api/v1/assistant/ask")
+        .send({
+          message: "What do you remember?",
+          conversationId: "conversation-a",
+          systemPrompt: "Be concise.",
+          conversationHistory: [
+            {
+              role: "user",
+              content: "Hello",
+            },
+          ],
+          enableMemoryRetrieval: true,
+          memorySearchLimit: 5,
+          enableDocumentRetrieval: true,
+          documentSearchLimit: 10,
+          model: "test-model",
+        });
 
       expect(response.status).toBe(200);
 
       expect(fakes.ask).toHaveBeenCalledWith({
-  userId: "user-a",
-  message: "What do you remember?",
-  conversationId: "conversation-a",
-  systemPrompt: "Be concise.",
-  conversationHistory: [
-    {
-      role: "user",
-      content: "Hello",
-    },
-  ],
-  enableMemoryRetrieval: true,
-  memorySearchLimit: 5,
-  model: "test-model",
-});
+        userId: "user-a",
+        message: "What do you remember?",
+        conversationId: "conversation-a",
+        systemPrompt: "Be concise.",
+        conversationHistory: [
+          {
+            role: "user",
+            content: "Hello",
+          },
+        ],
+        enableMemoryRetrieval: true,
+        memorySearchLimit: 5,
+        enableDocumentRetrieval: true,
+        documentSearchLimit: 10,
+        model: "test-model",
+      });
+    });
+
+    it("passes document retrieval parameters through", async () => {
+      const response = await request(app)
+        .post("/api/v1/assistant/ask")
+        .send({
+          message: "What does my document say about BrainOS?",
+          enableDocumentRetrieval: true,
+          documentSearchLimit: 7,
+        });
+
+      expect(response.status).toBe(200);
+
+      expect(fakes.ask).toHaveBeenCalledWith({
+        userId: "user-a",
+        message: "What does my document say about BrainOS?",
+        conversationId: undefined,
+        systemPrompt: undefined,
+        conversationHistory: undefined,
+        enableMemoryRetrieval: undefined,
+        memorySearchLimit: undefined,
+        enableDocumentRetrieval: true,
+        documentSearchLimit: 7,
+        model: undefined,
+      });
+    });
+
+    it("returns retrieved document sources", async () => {
+      fakes.ask.mockResolvedValueOnce({
+        text: "BrainOS is a personal AI operating system.",
+        model: "test-model",
+        provider: "test",
+        retrievedMemories: [],
+        retrievedDocuments: [documentSource],
+      });
+
+      const response = await request(app)
+        .post("/api/v1/assistant/ask")
+        .send({
+          message: "What is BrainOS?",
+          enableDocumentRetrieval: true,
+          documentSearchLimit: 5,
+        });
+
+      expect(response.status).toBe(200);
+
+      expect(response.body).toEqual({
+        success: true,
+        data: {
+          text: "BrainOS is a personal AI operating system.",
+          model: "test-model",
+          provider: "test",
+          retrievedMemories: [],
+          retrievedDocuments: [documentSource],
+        },
+      });
     });
 
     it("rejects an empty message", async () => {
@@ -165,6 +240,158 @@ describe("assistant API", () => {
         error: {
           code: "INVALID_MESSAGE",
           message: "Message is required.",
+        },
+      });
+
+      expect(fakes.ask).not.toHaveBeenCalled();
+    });
+
+    it("rejects an invalid conversationId", async () => {
+      const response = await request(app)
+        .post("/api/v1/assistant/ask")
+        .send({
+          message: "Hello BrainOS",
+          conversationId: "   ",
+        });
+
+      expect(response.status).toBe(400);
+
+      expect(response.body).toEqual({
+        success: false,
+        error: {
+          code: "INVALID_CONVERSATION_ID",
+          message:
+            "conversationId must be a non-empty string.",
+        },
+      });
+
+      expect(fakes.ask).not.toHaveBeenCalled();
+    });
+
+    it("rejects an invalid systemPrompt", async () => {
+      const response = await request(app)
+        .post("/api/v1/assistant/ask")
+        .send({
+          message: "Hello BrainOS",
+          systemPrompt: 123,
+        });
+
+      expect(response.status).toBe(400);
+
+      expect(response.body).toEqual({
+        success: false,
+        error: {
+          code: "INVALID_SYSTEM_PROMPT",
+          message: "systemPrompt must be a string.",
+        },
+      });
+
+      expect(fakes.ask).not.toHaveBeenCalled();
+    });
+
+    it("rejects an invalid memory retrieval flag", async () => {
+      const response = await request(app)
+        .post("/api/v1/assistant/ask")
+        .send({
+          message: "Hello BrainOS",
+          enableMemoryRetrieval: "true",
+        });
+
+      expect(response.status).toBe(400);
+
+      expect(response.body).toEqual({
+        success: false,
+        error: {
+          code: "INVALID_MEMORY_RETRIEVAL",
+          message:
+            "enableMemoryRetrieval must be a boolean.",
+        },
+      });
+
+      expect(fakes.ask).not.toHaveBeenCalled();
+    });
+
+    it("rejects an invalid memory search limit", async () => {
+      const response = await request(app)
+        .post("/api/v1/assistant/ask")
+        .send({
+          message: "Hello BrainOS",
+          memorySearchLimit: 51,
+        });
+
+      expect(response.status).toBe(400);
+
+      expect(response.body).toEqual({
+        success: false,
+        error: {
+          code: "INVALID_MEMORY_SEARCH_LIMIT",
+          message:
+            "memorySearchLimit must be an integer between 1 and 50.",
+        },
+      });
+
+      expect(fakes.ask).not.toHaveBeenCalled();
+    });
+
+    it("rejects an invalid document retrieval flag", async () => {
+      const response = await request(app)
+        .post("/api/v1/assistant/ask")
+        .send({
+          message: "Hello BrainOS",
+          enableDocumentRetrieval: "true",
+        });
+
+      expect(response.status).toBe(400);
+
+      expect(response.body).toEqual({
+        success: false,
+        error: {
+          code: "INVALID_DOCUMENT_RETRIEVAL",
+          message:
+            "enableDocumentRetrieval must be a boolean.",
+        },
+      });
+
+      expect(fakes.ask).not.toHaveBeenCalled();
+    });
+
+    it("rejects an invalid document search limit", async () => {
+      const response = await request(app)
+        .post("/api/v1/assistant/ask")
+        .send({
+          message: "Hello BrainOS",
+          documentSearchLimit: 21,
+        });
+
+      expect(response.status).toBe(400);
+
+      expect(response.body).toEqual({
+        success: false,
+        error: {
+          code: "INVALID_DOCUMENT_SEARCH_LIMIT",
+          message:
+            "documentSearchLimit must be an integer between 1 and 20.",
+        },
+      });
+
+      expect(fakes.ask).not.toHaveBeenCalled();
+    });
+
+    it("rejects an invalid model", async () => {
+      const response = await request(app)
+        .post("/api/v1/assistant/ask")
+        .send({
+          message: "Hello BrainOS",
+          model: 123,
+        });
+
+      expect(response.status).toBe(400);
+
+      expect(response.body).toEqual({
+        success: false,
+        error: {
+          code: "INVALID_MODEL",
+          message: "model must be a string.",
         },
       });
 
