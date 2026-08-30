@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 import {
   readFile,
   readdir,
+  stat,
   writeFile,
 } from "node:fs/promises";
 
@@ -18,6 +19,9 @@ import {
 } from "./computer-agent.types";
 
 import { resolveSafeComputerPath } from "../security/computer-file-path";
+import {
+  MAX_COMPUTER_FILE_SIZE_BYTES,
+} from "../security/computer-file-limits";
 
 const execFileAsync = promisify(execFile);
 
@@ -148,6 +152,23 @@ export class LocalComputerAgent
         requestedPath,
       );
 
+    const fileStats = await stat(targetPath);
+
+    if (!fileStats.isFile()) {
+      throw new Error(
+        "The requested path is not a file.",
+      );
+    }
+
+    if (
+      fileStats.size >
+      MAX_COMPUTER_FILE_SIZE_BYTES
+    ) {
+      throw new Error(
+        "File exceeds the maximum allowed size.",
+      );
+    }
+
     const fileContent = await readFile(
       targetPath,
       "utf8",
@@ -169,10 +190,50 @@ export class LocalComputerAgent
       );
     }
 
+    const contentSize =
+      Buffer.byteLength(content, "utf8");
+
+    if (
+      contentSize >
+      MAX_COMPUTER_FILE_SIZE_BYTES
+    ) {
+      throw new Error(
+        "File content exceeds the maximum allowed size.",
+      );
+    }
+
     const targetPath =
       await resolveSafeComputerPath(
         requestedPath,
       );
+
+    try {
+      const existingStats = await stat(
+        targetPath,
+      );
+
+      if (!existingStats.isFile()) {
+        throw new Error(
+          "The requested path is not a file.",
+        );
+      }
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message ===
+          "The requested path is not a file."
+      ) {
+        throw error;
+      }
+
+      if (
+        !(error instanceof Error) ||
+        !("code" in error) ||
+        error.code !== "ENOENT"
+      ) {
+        throw error;
+      }
+    }
 
     await writeFile(
       targetPath,
