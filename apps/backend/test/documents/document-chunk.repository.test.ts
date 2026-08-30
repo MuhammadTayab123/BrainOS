@@ -299,6 +299,10 @@ describe("DocumentChunkRepository", () => {
   );
 
   expect(db.$queryRaw).toHaveBeenCalledTimes(1);
+
+  const query = db.$queryRaw.mock.calls[0][0];
+
+  expect(query.values).toContain(0.2);
 });
   it("rejects invalid search embedding dimensions", async () => {
     const db = createDbMock();
