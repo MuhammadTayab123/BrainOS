@@ -6,6 +6,9 @@ import { AssembledContext } from "./assistant.types";
 export const DEFAULT_SYSTEM_PROMPT =
   "You are BrainOS, a private personal AI assistant and second brain. Answer the user's questions accurately, concisely, and helpfully.";
 
+const DOCUMENT_SOURCE_INSTRUCTION =
+  "When answering from document context, cite the relevant document sources using their exact [Source N] reference. Do not invent source references. If the answer is not supported by the provided document context, say so.";
+
 export function formatMemoriesForContext(
   memories: MemorySearchResult[],
 ): string {
@@ -37,7 +40,7 @@ export function formatDocumentsForContext(
     .map(
       (document, index) =>
         [
-          `[Document ${index + 1}]`,
+          `[Source ${index + 1}]`,
           `Title: ${document.documentTitle}`,
           `Source Type: ${document.sourceType}`,
           `Source: ${document.source ?? "unknown"}`,
@@ -48,7 +51,12 @@ export function formatDocumentsForContext(
     )
     .join("\n\n");
 
-  return `\n\n[Relevant Context from Documents]\n${formatted}`;
+  return [
+    `\n\n[Relevant Context from Documents]`,
+    formatted,
+    `\n[Document Source Instructions]`,
+    DOCUMENT_SOURCE_INSTRUCTION,
+  ].join("\n");
 }
 
 export function assembleAssistantContext(
