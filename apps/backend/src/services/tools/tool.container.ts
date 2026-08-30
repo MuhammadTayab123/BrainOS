@@ -4,6 +4,7 @@ import {
   listComputerApplicationsTool,
   launchComputerApplicationTool,
   listComputerFilesTool,
+  readComputerFileTool,
 } from "./computer.tools";
 
 import { ToolRegistry } from "./tool.registry";
@@ -34,5 +35,6 @@ export function createToolRegistry(): ToolRegistry {
 registry.register(listComputerApplicationsTool);
 registry.register(launchComputerApplicationTool);
 registry.register(listComputerFilesTool);
+registry.register(readComputerFileTool);
   return registry;
 }

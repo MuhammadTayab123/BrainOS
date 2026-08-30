@@ -7,9 +7,8 @@ import {
   ComputerAgent,
   ComputerAgentInfo,
   ComputerApplication,
-ComputerFileContent,
+  ComputerFileContent,
   ComputerFileEntry,
-
 } from "./computer-agent.types";
 
 const execFileAsync = promisify(execFile);
@@ -143,7 +142,7 @@ export class LocalComputerAgent implements ComputerAgent {
       appId,
     };
   }
-    async readFile(
+      async readFile(
     requestedPath: string,
   ): Promise<ComputerFileContent> {
     const homeDirectory = os.homedir();
