@@ -5,6 +5,11 @@ import {
 } from "./tool.types";
 import { LLMToolDefinition } from "../ai/provider.interface";
 
+import {
+  isComputerTool,
+  requiresComputerAuthorization,
+} from "../security/computer-action.policy";
+
 export class ToolExecutor {
   constructor(
     private readonly registry: ToolRegistry,
@@ -31,6 +36,20 @@ export class ToolExecutor {
       throw new Error(
         `Tool "${name}" is not registered.`,
       );
+    }
+
+    if (
+      isComputerTool(name) &&
+      requiresComputerAuthorization(name)
+    ) {
+      const authorizedActions =
+        context.authorizedComputerActions ?? [];
+
+      if (!authorizedActions.includes(name)) {
+        throw new Error(
+          `Computer action "${name}" requires authorization.`,
+        );
+      }
     }
 
     return tool.execute(input, context);

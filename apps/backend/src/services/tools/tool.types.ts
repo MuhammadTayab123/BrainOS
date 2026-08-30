@@ -1,5 +1,7 @@
 export interface ToolContext {
   userId: string;
+
+  authorizedComputerActions?: string[];
 }
 
 export interface ToolParameterSchema {
