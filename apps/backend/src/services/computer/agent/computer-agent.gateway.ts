@@ -28,7 +28,9 @@ export class ComputerAgentGateway {
   async listApplications(): Promise<ComputerApplication[]> {
     return this.agent.listApplications();
   }
-
+    async readFile(path: string) {
+    return this.agent.readFile(path);
+  }
   async launchApplication(
     appId: string,
   ): Promise<{ success: boolean; appId: string }> {

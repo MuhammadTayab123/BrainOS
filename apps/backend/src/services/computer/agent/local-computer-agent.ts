@@ -1,18 +1,21 @@
 import { execFile } from "node:child_process";
 import os from "node:os";
 import { promisify } from "node:util";
-import { readdir } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import {
   ComputerAgent,
   ComputerAgentInfo,
   ComputerApplication,
+ComputerFileContent,
   ComputerFileEntry,
+
 } from "./computer-agent.types";
 
 const execFileAsync = promisify(execFile);
 
 export class LocalComputerAgent implements ComputerAgent {
+
   async getInfo(): Promise<ComputerAgentInfo> {
     return {
       agentId: `local-${os.hostname()}`,
@@ -138,6 +141,47 @@ export class LocalComputerAgent implements ComputerAgent {
     return {
       success: true,
       appId,
+    };
+  }
+    async readFile(
+    requestedPath: string,
+  ): Promise<ComputerFileContent> {
+    const homeDirectory = os.homedir();
+
+    if (
+      typeof requestedPath !== "string" ||
+      requestedPath.trim().length === 0
+    ) {
+      throw new Error("File path is required.");
+    }
+
+    const targetPath = path.resolve(
+      homeDirectory,
+      requestedPath,
+    );
+
+    const relativePath = path.relative(
+      homeDirectory,
+      targetPath,
+    );
+
+    if (
+      relativePath.startsWith("..") ||
+      path.isAbsolute(relativePath)
+    ) {
+      throw new Error(
+        "File access is restricted to the user home directory.",
+      );
+    }
+
+    const fileContent = await readFile(
+      targetPath,
+      "utf8",
+    );
+
+    return {
+      path: targetPath,
+      content: fileContent,
     };
   }
 }

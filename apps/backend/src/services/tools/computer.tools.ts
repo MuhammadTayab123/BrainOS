@@ -135,3 +135,39 @@ export const listComputerFilesTool: ToolDefinition = {
     );
   },
 };
+export const readComputerFileTool: ToolDefinition = {
+  name: "computer_read_file",
+
+  description:
+    "Read a UTF-8 text file inside the local user's home directory. Read-only.",
+
+  parameters: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description:
+          "Path to the text file relative to the user's home directory.",
+      },
+    },
+    required: ["path"],
+  },
+
+  async execute(
+    input: unknown,
+    _context: ToolContext,
+  ) {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      !("path" in input) ||
+      typeof input.path !== "string"
+    ) {
+      throw new Error("path is required.");
+    }
+
+    return computerAgentGateway.readFile(
+      input.path,
+    );
+  },
+};
