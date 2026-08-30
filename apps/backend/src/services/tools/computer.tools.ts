@@ -1,11 +1,15 @@
-import { ComputerService } from "../computer/computer.service";
+import { ComputerAgentGateway } from "../computer/agent/computer-agent.gateway";
+import { LocalComputerAgent } from "../computer/agent/local-computer-agent";
 
 import {
   ToolContext,
   ToolDefinition,
 } from "./tool.types";
 
-const computerService = new ComputerService();
+const computerAgentGateway =
+  new ComputerAgentGateway(
+    new LocalComputerAgent(),
+  );
 
 export const getComputerStatusTool: ToolDefinition = {
   name: "computer_get_status",
@@ -22,6 +26,6 @@ export const getComputerStatusTool: ToolDefinition = {
     _input: unknown,
     _context: ToolContext,
   ) {
-    return computerService.getStatus();
+    return computerAgentGateway.getInfo();
   },
 };
