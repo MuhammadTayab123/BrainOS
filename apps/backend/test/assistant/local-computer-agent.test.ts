@@ -15,7 +15,7 @@ describe("LocalComputerAgent", () => {
 
     expect(info.capabilities).toEqual({
       status: true,
-      applications: false,
+      applications: true,
       files: false,
       browser: false,
     });

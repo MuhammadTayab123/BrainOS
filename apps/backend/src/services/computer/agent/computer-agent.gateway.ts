@@ -1,6 +1,7 @@
 import {
   ComputerAgent,
   ComputerAgentInfo,
+  ComputerApplication,
 } from "./computer-agent.types";
 
 export class ComputerAgentGateway {
@@ -16,5 +17,9 @@ export class ComputerAgentGateway {
     const info = await this.agent.getInfo();
 
     return info.status === "ONLINE";
+  }
+
+  async listApplications(): Promise<ComputerApplication[]> {
+    return this.agent.listApplications();
   }
 }

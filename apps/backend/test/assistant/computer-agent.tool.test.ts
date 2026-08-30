@@ -18,7 +18,7 @@ describe("computer_get_status tool", () => {
       architecture: expect.any(String),
       capabilities: {
         status: true,
-        applications: false,
+        applications: true,
         files: false,
         browser: false,
       },

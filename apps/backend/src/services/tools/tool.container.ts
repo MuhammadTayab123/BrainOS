@@ -1,6 +1,11 @@
-import { getComputerStatusTool } from "./computer.tools";
+import {
+  getComputerStatusTool,
+  listComputerApplicationsTool,
+} from "./computer.tools";
+
 import { ToolRegistry } from "./tool.registry";
 import { testTool } from "./test.tool";
+
 import {
   createTaskTool,
   listTasksTool,
@@ -18,9 +23,12 @@ export function createToolRegistry(): ToolRegistry {
   registry.register(createTaskTool);
   registry.register(listTasksTool);
   registry.register(getTaskTool);
-registry.register(updateTaskTool);
+  registry.register(updateTaskTool);
   registry.register(completeTaskTool);
   registry.register(deleteTaskTool);
+
   registry.register(getComputerStatusTool);
+  registry.register(listComputerApplicationsTool);
+
   return registry;
 }

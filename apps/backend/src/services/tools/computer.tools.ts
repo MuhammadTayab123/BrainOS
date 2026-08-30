@@ -29,3 +29,22 @@ export const getComputerStatusTool: ToolDefinition = {
     return computerAgentGateway.getInfo();
   },
 };
+
+export const listComputerApplicationsTool: ToolDefinition = {
+  name: "computer_list_applications",
+
+  description:
+    "List applications installed or registered on the local computer.",
+
+  parameters: {
+    type: "object",
+    properties: {},
+  },
+
+  async execute(
+    _input: unknown,
+    _context: ToolContext,
+  ) {
+    return computerAgentGateway.listApplications();
+  },
+};

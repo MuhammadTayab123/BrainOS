@@ -18,6 +18,12 @@ export interface ComputerAgentInfo {
   capabilities: ComputerAgentCapabilities;
 }
 
+export interface ComputerApplication {
+  name: string;
+  appId: string;
+}
+
 export interface ComputerAgent {
   getInfo(): Promise<ComputerAgentInfo>;
+  listApplications(): Promise<ComputerApplication[]>;
 }
