@@ -85,7 +85,20 @@ export function assembleAssistantContext(
     );
 
   const finalSystemPrompt =
-    `${basePrompt}${memoryContext}${documentContext}`;
+  `${basePrompt}
+
+When answering the user's question, use the retrieved document context below when it is relevant.
+
+IMPORTANT DOCUMENT RULES:
+- Treat retrieved document context as authoritative context for the user's question.
+- If the answer is explicitly present in the retrieved documents, answer directly from that information.
+- Do not claim that information is unavailable when it is present in the retrieved documents.
+- Do not ignore retrieved document context.
+- If the retrieved documents do not contain the answer, say that the available documents do not contain enough information.
+
+${memoryContext}
+
+${documentContext}`;
 
   return {
     systemPrompt: finalSystemPrompt,
