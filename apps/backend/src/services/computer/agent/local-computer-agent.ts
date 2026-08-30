@@ -1,8 +1,12 @@
 import { execFile } from "node:child_process";
 import os from "node:os";
-import { promisify } from "node:util";
-import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
+import {
+  readFile,
+  readdir,
+  writeFile,
+} from "node:fs/promises";
 
 import {
   ComputerAgent,
@@ -13,9 +17,13 @@ import {
   ComputerFileWriteResult,
 } from "./computer-agent.types";
 
+import { resolveSafeComputerPath } from "../security/computer-file-path";
+
 const execFileAsync = promisify(execFile);
 
-export class LocalComputerAgent implements ComputerAgent {
+export class LocalComputerAgent
+  implements ComputerAgent
+{
   async getInfo(): Promise<ComputerAgentInfo> {
     return {
       agentId: `local-${os.hostname()}`,
@@ -31,45 +39,13 @@ export class LocalComputerAgent implements ComputerAgent {
     };
   }
 
-  private resolveSecurePath(requestedPath: string): string {
-    const homeDirectory = os.homedir();
-
-    if (
-      typeof requestedPath !== "string" ||
-      requestedPath.trim().length === 0
-    ) {
-      throw new Error("File path is required.");
-    }
-
-    const targetPath = path.resolve(
-      homeDirectory,
-      requestedPath,
-    );
-
-    const relativePath = path.relative(
-      homeDirectory,
-      targetPath,
-    );
-
-    if (
-      relativePath === ".." ||
-      relativePath.startsWith(`..${path.sep}`) ||
-      path.isAbsolute(relativePath)
-    ) {
-      throw new Error(
-        "File access is restricted to the user home directory.",
-      );
-    }
-
-    return targetPath;
-  }
-
   async listFiles(
     requestedPath?: string,
   ): Promise<ComputerFileEntry[]> {
-    const targetPath = this.resolveSecurePath(
-      requestedPath ?? ".",
-    );
+    const targetPath =
+      await resolveSafeComputerPath(
+        requestedPath ?? ".",
+      );
 
     const entries = await readdir(targetPath, {
       withFileTypes: true,
@@ -78,7 +54,9 @@ export class LocalComputerAgent implements ComputerAgent {
     return entries.map((entry) => ({
       name: entry.name,
       path: path.join(targetPath, entry.name),
-      type: entry.isDirectory() ? "directory" : "file",
+      type: entry.isDirectory()
+        ? "directory"
+        : "file",
     }));
   }
 
@@ -165,7 +143,10 @@ export class LocalComputerAgent implements ComputerAgent {
   async readFile(
     requestedPath: string,
   ): Promise<ComputerFileContent> {
-    const targetPath = this.resolveSecurePath(requestedPath);
+    const targetPath =
+      await resolveSafeComputerPath(
+        requestedPath,
+      );
 
     const fileContent = await readFile(
       targetPath,
@@ -183,10 +164,15 @@ export class LocalComputerAgent implements ComputerAgent {
     content: string,
   ): Promise<ComputerFileWriteResult> {
     if (typeof content !== "string") {
-      throw new Error("File content must be a string.");
+      throw new Error(
+        "File content must be a string.",
+      );
     }
 
-    const targetPath = this.resolveSecurePath(requestedPath);
+    const targetPath =
+      await resolveSafeComputerPath(
+        requestedPath,
+      );
 
     await writeFile(
       targetPath,
