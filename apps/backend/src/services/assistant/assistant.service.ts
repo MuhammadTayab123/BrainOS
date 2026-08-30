@@ -20,18 +20,19 @@ import { ConversationRepository } from "../conversation/repositories/conversatio
 import { decideAssistantRetrieval } from "./assistant.retrieval.policy";
 import { MessageRepository } from "../conversation/repositories/message.repository";
 import { AssistantRuntime } from "./assistant.runtime";
+
 const MAX_TOOL_ROUNDS = 5;
 
 export class AssistantService {
   constructor(
-  private readonly llmService: LLMService,
-  private readonly memoryService: MemoryService,
-  private readonly toolExecutor: ToolExecutor,
-  private readonly conversationRepository?: ConversationRepository,
-  private readonly messageRepository?: MessageRepository,
-  private readonly documentRetrievalService?: DocumentRetrievalService,
-  private readonly runtime: AssistantRuntime = new AssistantRuntime(),
-) {}
+    private readonly llmService: LLMService,
+    private readonly memoryService: MemoryService,
+    private readonly toolExecutor: ToolExecutor,
+    private readonly conversationRepository?: ConversationRepository,
+    private readonly messageRepository?: MessageRepository,
+    private readonly documentRetrievalService?: DocumentRetrievalService,
+    private readonly runtime: AssistantRuntime = new AssistantRuntime(),
+  ) {}
 
   async ask(
     input: AssistantMessageInput,
@@ -56,15 +57,16 @@ export class AssistantService {
 
     const userId = input.userId.trim();
     const trimmedMessage = input.message.trim();
+
     this.runtime.setState("THINKING");
+
     const retrievedMemories: MemorySearchResult[] = [];
     const retrievedDocuments: SearchDocumentChunkResult[] = [];
 
-    const retrievalPolicy = decideAssistantRetrieval(input);
+    const retrievalPolicy =
+      decideAssistantRetrieval(input);
 
-    const shouldRetrieveMemories = retrievalPolicy.memory;
-
-    if (shouldRetrieveMemories) {
+    if (retrievalPolicy.memory) {
       const memories =
         await this.memoryService.searchMemories({
           userId,
@@ -75,10 +77,8 @@ export class AssistantService {
       retrievedMemories.push(...memories);
     }
 
-    const shouldRetrieveDocuments = retrievalPolicy.documents;
-
     if (
-      shouldRetrieveDocuments &&
+      retrievalPolicy.documents &&
       this.documentRetrievalService
     ) {
       const documents =
@@ -204,49 +204,49 @@ export class AssistantService {
       });
 
       for (const toolCall of toolCalls) {
-  const taskId = `task-${toolCall.id}`;
+        const taskId =
+          `task-${toolCall.id}`;
 
-  this.runtime.startTask(taskId);
+        this.runtime.startTask(taskId);
 
-  this.runtime.progressTask(
-    taskId,
-    `Executing ${toolCall.name}.`,
-  );
+        this.runtime.progressTask(
+          taskId,
+          `Executing ${toolCall.name}.`,
+        );
 
-  try {
-    const toolResult =
-      await this.toolExecutor.execute(
-        toolCall.name,
-        toolCall.arguments,
-        {
-          userId,
-        },
-      );
+        try {
+          const toolResult =
+            await this.toolExecutor.execute(
+              toolCall.name,
+              toolCall.arguments,
+              {
+                userId,
+              },
+            );
 
-    this.runtime.completeTask(
-      taskId,
-      `${toolCall.name} completed.`,
-    );
+          this.runtime.completeTask(
+            taskId,
+            `${toolCall.name} completed.`,
+          );
 
-    messages.push({
-      role: "tool",
-      content:
-        JSON.stringify(toolResult),
-      toolCallId: toolCall.id,
-      toolName: toolCall.name,
-    });
-  } catch (error) {
-    this.runtime.failTask(
-      taskId,
-      error instanceof Error
-        ? error.message
-        : "Tool execution failed.",
-    );
+          messages.push({
+            role: "tool",
+            content:
+              JSON.stringify(toolResult),
+            toolCallId: toolCall.id,
+            toolName: toolCall.name,
+          });
+        } catch (error) {
+          this.runtime.failTask(
+            taskId,
+            error instanceof Error
+              ? error.message
+              : "Tool execution failed.",
+          );
 
-    throw error;
-  }
-}
-
+          throw error;
+        }
+      }
 
       llmResponse =
         await this.llmService.generate({
@@ -265,18 +265,25 @@ export class AssistantService {
       this.messageRepository
     ) {
       await this.messageRepository.create({
-        conversationId: input.conversationId.trim(),
+        conversationId:
+          input.conversationId.trim(),
         role: "ASSISTANT",
         content: llmResponse.text,
       });
     }
-     this.runtime.setState("SPEAKING");
-    return {
+
+    this.runtime.setState("SPEAKING");
+
+    const response: AssistantResponse = {
       text: llmResponse.text,
       model: llmResponse.model,
       provider: llmResponse.provider,
       retrievedMemories,
       retrievedDocuments,
     };
+
+    this.runtime.setState("IDLE");
+
+    return response;
   }
 }

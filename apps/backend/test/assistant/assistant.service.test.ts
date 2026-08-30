@@ -669,9 +669,10 @@ describe("AssistantService", () => {
   });
 
   expect(states).toEqual([
-    "IDLE",
-    "THINKING",
-    "SPEAKING",
-  ]);
+  "IDLE",
+  "THINKING",
+  "SPEAKING",
+  "IDLE",
+]);
 });
 });
