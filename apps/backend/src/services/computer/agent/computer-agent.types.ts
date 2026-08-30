@@ -23,6 +23,12 @@ export interface ComputerApplication {
   appId: string;
 }
 
+export interface ComputerFileEntry {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+}
+
 export interface ComputerAgent {
   getInfo(): Promise<ComputerAgentInfo>;
   listApplications(): Promise<ComputerApplication[]>;
@@ -30,4 +36,5 @@ export interface ComputerAgent {
     success: boolean;
     appId: string;
   }>;
+  listFiles(path?: string): Promise<ComputerFileEntry[]>;
 }

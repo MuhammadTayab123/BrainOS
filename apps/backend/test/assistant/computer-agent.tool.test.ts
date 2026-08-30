@@ -19,7 +19,7 @@ describe("computer_get_status tool", () => {
       capabilities: {
         status: true,
         applications: true,
-        files: false,
+        files: true,
         browser: false,
       },
     });

@@ -2,13 +2,18 @@ import {
   ComputerAgent,
   ComputerAgentInfo,
   ComputerApplication,
+  ComputerFileEntry,
 } from "./computer-agent.types";
 
 export class ComputerAgentGateway {
   constructor(
     private readonly agent: ComputerAgent,
   ) {}
-
+   async listFiles(
+    path?: string,
+  ): Promise<ComputerFileEntry[]> {
+    return this.agent.listFiles(path);
+  }
   async getInfo(): Promise<ComputerAgentInfo> {
     return this.agent.getInfo();
   }
@@ -18,6 +23,7 @@ export class ComputerAgentGateway {
 
     return info.status === "ONLINE";
   }
+
 
   async listApplications(): Promise<ComputerApplication[]> {
     return this.agent.listApplications();

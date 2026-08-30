@@ -1,11 +1,13 @@
 import { execFile } from "node:child_process";
 import os from "node:os";
 import { promisify } from "node:util";
-
+import { readdir } from "node:fs/promises";
+import path from "node:path";
 import {
   ComputerAgent,
   ComputerAgentInfo,
   ComputerApplication,
+  ComputerFileEntry,
 } from "./computer-agent.types";
 
 const execFileAsync = promisify(execFile);
@@ -20,12 +22,45 @@ export class LocalComputerAgent implements ComputerAgent {
       capabilities: {
         status: true,
         applications: os.platform() === "win32",
-        files: false,
+        files: true,
         browser: false,
       },
     };
   }
+    async listFiles(
+    requestedPath?: string,
+  ): Promise<ComputerFileEntry[]> {
+    const homeDirectory = os.homedir();
 
+    const targetPath = path.resolve(
+      homeDirectory,
+      requestedPath ?? ".",
+    );
+
+    const relativePath = path.relative(
+      homeDirectory,
+      targetPath,
+    );
+
+    if (
+      relativePath.startsWith("..") ||
+      path.isAbsolute(relativePath)
+    ) {
+      throw new Error(
+        "File access is restricted to the user home directory.",
+      );
+    }
+
+    const entries = await readdir(targetPath, {
+      withFileTypes: true,
+    });
+
+    return entries.map((entry) => ({
+      name: entry.name,
+      path: path.join(targetPath, entry.name),
+      type: entry.isDirectory() ? "directory" : "file",
+    }));
+  }
   async listApplications(): Promise<ComputerApplication[]> {
     if (os.platform() !== "win32") {
       return [];

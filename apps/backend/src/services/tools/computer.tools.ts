@@ -85,3 +85,53 @@ export const launchComputerApplicationTool: ToolDefinition = {
     );
   },
 };
+export const listComputerFilesTool: ToolDefinition = {
+  name: "computer_list_files",
+
+  description:
+    "List files and directories inside the local user's home directory. Read-only.",
+
+  parameters: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description:
+          "Optional path relative to the user's home directory.",
+      },
+    },
+  },
+
+  async execute(
+    input: unknown,
+    _context: ToolContext,
+  ) {
+    if (
+      input !== undefined &&
+      input !== null &&
+      typeof input !== "object"
+    ) {
+      throw new Error("Input must be an object.");
+    }
+
+    let requestedPath: string | undefined;
+
+    if (
+      typeof input === "object" &&
+      input !== null &&
+      "path" in input
+    ) {
+      if (
+        typeof input.path !== "string"
+      ) {
+        throw new Error("path must be a string.");
+      }
+
+      requestedPath = input.path;
+    }
+
+    return computerAgentGateway.listFiles(
+      requestedPath,
+    );
+  },
+};
