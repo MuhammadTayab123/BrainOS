@@ -19,18 +19,19 @@ import { assembleAssistantContext } from "./context.builder";
 import { ConversationRepository } from "../conversation/repositories/conversation.repository";
 import { decideAssistantRetrieval } from "./assistant.retrieval.policy";
 import { MessageRepository } from "../conversation/repositories/message.repository";
-
+import { AssistantRuntime } from "./assistant.runtime";
 const MAX_TOOL_ROUNDS = 5;
 
 export class AssistantService {
   constructor(
-    private readonly llmService: LLMService,
-    private readonly memoryService: MemoryService,
-    private readonly toolExecutor: ToolExecutor,
-    private readonly conversationRepository?: ConversationRepository,
-    private readonly messageRepository?: MessageRepository,
-    private readonly documentRetrievalService?: DocumentRetrievalService,
-  ) {}
+  private readonly llmService: LLMService,
+  private readonly memoryService: MemoryService,
+  private readonly toolExecutor: ToolExecutor,
+  private readonly conversationRepository?: ConversationRepository,
+  private readonly messageRepository?: MessageRepository,
+  private readonly documentRetrievalService?: DocumentRetrievalService,
+  private readonly runtime: AssistantRuntime = new AssistantRuntime(),
+) {}
 
   async ask(
     input: AssistantMessageInput,
@@ -55,7 +56,7 @@ export class AssistantService {
 
     const userId = input.userId.trim();
     const trimmedMessage = input.message.trim();
-
+    this.runtime.setState("THINKING");
     const retrievedMemories: MemorySearchResult[] = [];
     const retrievedDocuments: SearchDocumentChunkResult[] = [];
 
@@ -203,23 +204,49 @@ export class AssistantService {
       });
 
       for (const toolCall of toolCalls) {
-        const toolResult =
-          await this.toolExecutor.execute(
-            toolCall.name,
-            toolCall.arguments,
-            {
-              userId,
-            },
-          );
+  const taskId = `task-${toolCall.id}`;
 
-        messages.push({
-          role: "tool",
-          content:
-            JSON.stringify(toolResult),
-          toolCallId: toolCall.id,
-          toolName: toolCall.name,
-        });
-      }
+  this.runtime.startTask(taskId);
+
+  this.runtime.progressTask(
+    taskId,
+    `Executing ${toolCall.name}.`,
+  );
+
+  try {
+    const toolResult =
+      await this.toolExecutor.execute(
+        toolCall.name,
+        toolCall.arguments,
+        {
+          userId,
+        },
+      );
+
+    this.runtime.completeTask(
+      taskId,
+      `${toolCall.name} completed.`,
+    );
+
+    messages.push({
+      role: "tool",
+      content:
+        JSON.stringify(toolResult),
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+    });
+  } catch (error) {
+    this.runtime.failTask(
+      taskId,
+      error instanceof Error
+        ? error.message
+        : "Tool execution failed.",
+    );
+
+    throw error;
+  }
+}
+
 
       llmResponse =
         await this.llmService.generate({
@@ -243,7 +270,7 @@ export class AssistantService {
         content: llmResponse.text,
       });
     }
-
+     this.runtime.setState("SPEAKING");
     return {
       text: llmResponse.text,
       model: llmResponse.model,

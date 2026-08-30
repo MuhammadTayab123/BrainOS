@@ -1,3 +1,4 @@
+import { getComputerStatusTool } from "./computer.tools";
 import { ToolRegistry } from "./tool.registry";
 import { testTool } from "./test.tool";
 import {
@@ -20,6 +21,6 @@ export function createToolRegistry(): ToolRegistry {
 registry.register(updateTaskTool);
   registry.register(completeTaskTool);
   registry.register(deleteTaskTool);
-
+  registry.register(getComputerStatusTool);
   return registry;
 }

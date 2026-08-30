@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-
+import { AssistantRuntime } from "../../src/services/assistant/assistant.runtime";
 import { AssistantService } from "../../src/services/assistant/assistant.service";
 import { DocumentRetrievalService } from "../../src/services/documents/retrieval/document-retrieval.service";
 import { MemoryService } from "../../src/services/memory/memory.service";
@@ -630,4 +630,48 @@ describe("AssistantService", () => {
       retrievedDocuments: [],
     });
   });
+  it("updates runtime state during assistant execution", async () => {
+  const llmService = createLlmServiceMock();
+  const memoryService = createMemoryServiceMock();
+  const toolExecutor = createToolExecutorMock();
+  const runtime = new AssistantRuntime();
+
+  memoryService.searchMemories.mockResolvedValue([]);
+
+  llmService.generate.mockResolvedValue({
+    text: "Hello from BrainOS.",
+    model: "test-model",
+    provider: "test",
+    toolCalls: [],
+  });
+
+  const states: string[] = [];
+
+  runtime.subscribe((event) => {
+    if (event.type === "STATE_CHANGED") {
+      states.push(event.snapshot.state);
+    }
+  });
+
+  const service = new AssistantService(
+    llmService as unknown as LLMService,
+    memoryService as unknown as MemoryService,
+    toolExecutor as unknown as ToolExecutor,
+    undefined,
+    undefined,
+    undefined,
+    runtime,
+  );
+
+  await service.ask({
+    userId: "user-1",
+    message: "Hello",
+  });
+
+  expect(states).toEqual([
+    "IDLE",
+    "THINKING",
+    "SPEAKING",
+  ]);
+});
 });
