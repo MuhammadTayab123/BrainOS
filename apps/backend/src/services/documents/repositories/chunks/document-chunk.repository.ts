@@ -10,7 +10,20 @@ export interface CreateDocumentChunkInput {
   content: string;
 }
 
+export interface DocumentChunkSearchResult {
+  id: string;
+  documentId: string;
+  documentTitle: string;
+  sourceType: string;
+  source: string | null;
+  chunkIndex: number;
+  content: string;
+  similarity: number;
+}
+
 const DOCUMENT_CHUNK_EMBEDDING_DIMENSIONS = 768;
+const MAX_DOCUMENT_CHUNK_SEARCH_LIMIT = 20;
+const MIN_DOCUMENT_CHUNK_SIMILARITY = 0.2;
 
 export class DocumentChunkRepository {
   constructor(
@@ -46,83 +59,78 @@ export class DocumentChunkRepository {
       },
     });
   }
+
   async searchSimilar(
-  userId: string,
-  embedding: number[],
-  limit: number,
-) {
-  const DOCUMENT_CHUNK_EMBEDDING_DIMENSIONS = 768;
-  const MAX_DOCUMENT_CHUNK_SEARCH_LIMIT = 20;
-  const MIN_DOCUMENT_CHUNK_SIMILARITY = 0.2;
+    userId: string,
+    embedding: number[],
+    limit: number,
+  ): Promise<DocumentChunkSearchResult[]> {
+    if (
+      embedding.length !==
+      DOCUMENT_CHUNK_EMBEDDING_DIMENSIONS
+    ) {
+      throw new Error(
+        `Invalid embedding dimensions. Expected ${DOCUMENT_CHUNK_EMBEDDING_DIMENSIONS}, received ${embedding.length}.`,
+      );
+    }
 
-  if (
-    embedding.length !==
-    DOCUMENT_CHUNK_EMBEDDING_DIMENSIONS
-  ) {
-    throw new Error(
-      `Invalid embedding dimensions. Expected ${DOCUMENT_CHUNK_EMBEDDING_DIMENSIONS}, received ${embedding.length}.`,
+    if (
+      embedding.some(
+        (value) => !Number.isFinite(value),
+      )
+    ) {
+      throw new Error(
+        "Embedding contains invalid numeric values.",
+      );
+    }
+
+    if (
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > MAX_DOCUMENT_CHUNK_SEARCH_LIMIT
+    ) {
+      throw new Error(
+        `Search limit must be an integer between 1 and ${MAX_DOCUMENT_CHUNK_SEARCH_LIMIT}.`,
+      );
+    }
+
+    if (
+      !userId ||
+      userId.trim().length === 0
+    ) {
+      throw new Error("User ID is required.");
+    }
+
+    const vector = `[${embedding.join(",")}]`;
+
+    return this.db.$queryRaw<DocumentChunkSearchResult[]>(
+      Prisma.sql`
+        SELECT
+          dc."id",
+          dc."documentId",
+          d."title" AS "documentTitle",
+          d."sourceType" AS "sourceType",
+          d."source" AS "source",
+          dc."chunkIndex",
+          dc."content",
+          1 - (
+            dc."embedding" <=> ${vector}::vector
+          ) AS "similarity"
+        FROM "DocumentChunk" dc
+        INNER JOIN "Document" d
+          ON d."id" = dc."documentId"
+        WHERE d."userId" = ${userId}
+          AND d."deletedAt" IS NULL
+          AND d."status" <> 'DELETED'
+          AND dc."embedding" IS NOT NULL
+          AND 1 - (
+            dc."embedding" <=> ${vector}::vector
+          ) >= ${MIN_DOCUMENT_CHUNK_SIMILARITY}
+        ORDER BY dc."embedding" <=> ${vector}::vector
+        LIMIT ${limit}
+      `,
     );
   }
-
-  if (
-    embedding.some(
-      (value) => !Number.isFinite(value),
-    )
-  ) {
-    throw new Error(
-      "Embedding contains invalid numeric values.",
-    );
-  }
-
-  if (
-    !Number.isInteger(limit) ||
-    limit < 1 ||
-    limit > MAX_DOCUMENT_CHUNK_SEARCH_LIMIT
-  ) {
-    throw new Error(
-      `Search limit must be an integer between 1 and ${MAX_DOCUMENT_CHUNK_SEARCH_LIMIT}.`,
-    );
-  }
-
-  const vector = `[${embedding.join(",")}]`;
-
-  return this.db.$queryRaw<
-    Array<{
-  id: string;
-  documentId: string;
-  documentTitle: string;
-  sourceType: string;
-  source: string | null;
-  chunkIndex: number;
-  content: string;
-  similarity: number;
-}>
-  >(
-    Prisma.sql`
-      SELECT
-  dc."id",
-  dc."documentId",
-  d."title" AS "documentTitle",
-  d."sourceType" AS "sourceType",
-  d."source" AS "source",
-  dc."chunkIndex",
-  dc."content",
-          1 - (dc."embedding" <=> ${vector}::vector) AS "similarity"
-
-      FROM "DocumentChunk" dc
-      INNER JOIN "Document" d
-        ON d."id" = dc."documentId"
-      WHERE d."userId" = ${userId}
-        AND d."deletedAt" IS NULL
-        AND d."status" <> 'DELETED'
-        AND dc."embedding" IS NOT NULL
-        AND 1 - (dc."embedding" <=> ${vector}::vector)
-            >= ${MIN_DOCUMENT_CHUNK_SIMILARITY}
-      ORDER BY dc."embedding" <=> ${vector}::vector
-      LIMIT ${limit}
-    `,
-  );
-}
 
   async updateEmbedding(
     documentId: string,

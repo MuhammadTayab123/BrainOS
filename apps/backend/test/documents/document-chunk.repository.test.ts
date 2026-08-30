@@ -277,7 +277,29 @@ describe("DocumentChunkRepository", () => {
       },
     ]);
   });
+  it("uses the minimum similarity threshold for document retrieval", async () => {
+  const db = createDbMock();
 
+  db.$queryRaw.mockResolvedValue([]);
+
+  const repository = new DocumentChunkRepository(
+    db as any,
+  );
+
+  const embedding = Array.from(
+    { length: 768 },
+    (_, index) =>
+      index === 0 ? 1 : 0,
+  );
+
+  await repository.searchSimilar(
+    "user-1",
+    embedding,
+    5,
+  );
+
+  expect(db.$queryRaw).toHaveBeenCalledTimes(1);
+});
   it("rejects invalid search embedding dimensions", async () => {
     const db = createDbMock();
 
