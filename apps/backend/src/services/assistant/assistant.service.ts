@@ -17,6 +17,7 @@ import {
 import { assembleAssistantContext } from "./context.builder";
 
 import { ConversationRepository } from "../conversation/repositories/conversation.repository";
+import { decideAssistantRetrieval } from "./assistant.retrieval.policy";
 import { MessageRepository } from "../conversation/repositories/message.repository";
 
 const MAX_TOOL_ROUNDS = 5;
@@ -62,8 +63,9 @@ export class AssistantService {
     const retrievedDocuments: SearchDocumentChunkResult[] =
       [];
 
-    const shouldRetrieveMemories =
-      input.enableMemoryRetrieval ?? true;
+    const retrievalPolicy = decideAssistantRetrieval(input);
+
+    const shouldRetrieveMemories = retrievalPolicy.memory;
 
     if (shouldRetrieveMemories) {
       const memories =
@@ -76,8 +78,7 @@ export class AssistantService {
       retrievedMemories.push(...memories);
     }
 
-    const shouldRetrieveDocuments =
-      input.enableDocumentRetrieval ?? false;
+    const shouldRetrieveDocuments = retrievalPolicy.documents;
 
     if (
       shouldRetrieveDocuments &&
