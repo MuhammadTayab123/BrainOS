@@ -48,3 +48,40 @@ export const listComputerApplicationsTool: ToolDefinition = {
     return computerAgentGateway.listApplications();
   },
 };
+
+export const launchComputerApplicationTool: ToolDefinition = {
+  name: "computer_launch_application",
+
+  description:
+    "Launch a local application using its discovered application ID.",
+
+  parameters: {
+    type: "object",
+    properties: {
+      appId: {
+        type: "string",
+        description:
+          "The application ID returned by computer_list_applications.",
+      },
+    },
+    required: ["appId"],
+  },
+
+  async execute(
+    input: unknown,
+    _context: ToolContext,
+  ) {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      !("appId" in input) ||
+      typeof input.appId !== "string"
+    ) {
+      throw new Error("appId is required.");
+    }
+
+    return computerAgentGateway.launchApplication(
+      input.appId,
+    );
+  },
+};

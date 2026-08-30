@@ -66,4 +66,43 @@ export class LocalComputerAgent implements ComputerAgent {
         appId: application.AppID,
       }));
   }
+
+  async launchApplication(
+    appId: string,
+  ): Promise<{ success: boolean; appId: string }> {
+    if (os.platform() !== "win32") {
+      return {
+        success: false,
+        appId,
+      };
+    }
+
+    if (
+      typeof appId !== "string" ||
+      appId.trim().length === 0
+    ) {
+      return {
+        success: false,
+        appId,
+      };
+    }
+
+    await execFileAsync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-Command",
+        "Start-Process explorer.exe -ArgumentList ('shell:AppsFolder\\' + $args[0])",
+        appId,
+      ],
+      {
+        windowsHide: true,
+      },
+    );
+
+    return {
+      success: true,
+      appId,
+    };
+  }
 }

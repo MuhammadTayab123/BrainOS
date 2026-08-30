@@ -22,4 +22,10 @@ export class ComputerAgentGateway {
   async listApplications(): Promise<ComputerApplication[]> {
     return this.agent.listApplications();
   }
+
+  async launchApplication(
+    appId: string,
+  ): Promise<{ success: boolean; appId: string }> {
+    return this.agent.launchApplication(appId);
+  }
 }

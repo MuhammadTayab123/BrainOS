@@ -26,4 +26,8 @@ export interface ComputerApplication {
 export interface ComputerAgent {
   getInfo(): Promise<ComputerAgentInfo>;
   listApplications(): Promise<ComputerApplication[]>;
+  launchApplication(appId: string): Promise<{
+    success: boolean;
+    appId: string;
+  }>;
 }
