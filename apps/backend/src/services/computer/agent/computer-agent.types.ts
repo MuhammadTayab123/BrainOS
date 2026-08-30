@@ -32,7 +32,13 @@ export interface ComputerFileContent {
   path: string;
   content: string;
 }
+export interface ComputerFileWriteResult {
+  path: string;
+  success: boolean;
+}
+
 export interface ComputerAgent {
+
   getInfo(): Promise<ComputerAgentInfo>;
   listApplications(): Promise<ComputerApplication[]>;
   launchApplication(appId: string): Promise<{
@@ -41,4 +47,8 @@ export interface ComputerAgent {
   }>;
   listFiles(path?: string): Promise<ComputerFileEntry[]>;
   readFile(path: string): Promise<ComputerFileContent>;
+    writeFile(
+    path: string,
+    content: string,
+  ): Promise<ComputerFileWriteResult>;
 }

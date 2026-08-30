@@ -3,6 +3,7 @@ import {
   ComputerAgentInfo,
   ComputerApplication,
   ComputerFileEntry,
+  ComputerFileWriteResult,
 } from "./computer-agent.types";
 
 export class ComputerAgentGateway {
@@ -38,5 +39,11 @@ export class ComputerAgentGateway {
 
   async readFile(path: string) {
     return this.agent.readFile(path);
+  }
+  async writeFile(
+    path: string,
+    content: string,
+  ): Promise<ComputerFileWriteResult> {
+    return this.agent.writeFile(path, content);
   }
 }

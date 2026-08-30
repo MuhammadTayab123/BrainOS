@@ -171,3 +171,52 @@ export const readComputerFileTool: ToolDefinition = {
     );
   },
 };
+export const writeComputerFileTool: ToolDefinition = {
+  name: "computer_write_file",
+
+  description:
+    "Write UTF-8 text content to a file inside the local user's home directory.",
+
+  parameters: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description:
+          "Path to the file relative to the user's home directory.",
+      },
+      content: {
+        type: "string",
+        description:
+          "UTF-8 text content to write to the file.",
+      },
+    },
+    required: ["path", "content"],
+  },
+
+  async execute(
+    input: unknown,
+    _context: ToolContext,
+  ) {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      !("path" in input) ||
+      typeof input.path !== "string"
+    ) {
+      throw new Error("path is required.");
+    }
+
+    if (
+      !("content" in input) ||
+      typeof input.content !== "string"
+    ) {
+      throw new Error("content is required.");
+    }
+
+    return computerAgentGateway.writeFile(
+      input.path,
+      input.content,
+    );
+  },
+};

@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import os from "node:os";
 import { promisify } from "node:util";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   ComputerAgent,
@@ -9,6 +9,7 @@ import {
   ComputerApplication,
   ComputerFileContent,
   ComputerFileEntry,
+  ComputerFileWriteResult,
 } from "./computer-agent.types";
 
 const execFileAsync = promisify(execFile);
@@ -181,6 +182,53 @@ export class LocalComputerAgent implements ComputerAgent {
     return {
       path: targetPath,
       content: fileContent,
+    };
+  }
+  async writeFile(
+    requestedPath: string,
+    content: string,
+  ): Promise<ComputerFileWriteResult> {
+    const homeDirectory = os.homedir();
+
+    if (
+      typeof requestedPath !== "string" ||
+      requestedPath.trim().length === 0
+    ) {
+      throw new Error("File path is required.");
+    }
+
+    if (typeof content !== "string") {
+      throw new Error("File content must be a string.");
+    }
+
+    const targetPath = path.resolve(
+      homeDirectory,
+      requestedPath,
+    );
+
+    const relativePath = path.relative(
+      homeDirectory,
+      targetPath,
+    );
+
+    if (
+      relativePath.startsWith("..") ||
+      path.isAbsolute(relativePath)
+    ) {
+      throw new Error(
+        "File access is restricted to the user home directory.",
+      );
+    }
+
+    await writeFile(
+      targetPath,
+      content,
+      "utf8",
+    );
+
+    return {
+      path: targetPath,
+      success: true,
     };
   }
 }

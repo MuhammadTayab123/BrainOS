@@ -5,6 +5,7 @@ import {
   launchComputerApplicationTool,
   listComputerFilesTool,
   readComputerFileTool,
+  writeComputerFileTool,
 } from "./computer.tools";
 
 import { ToolRegistry } from "./tool.registry";
@@ -31,10 +32,11 @@ export function createToolRegistry(): ToolRegistry {
   registry.register(completeTaskTool);
   registry.register(deleteTaskTool);
 
-  registry.register(getComputerStatusTool);
-registry.register(listComputerApplicationsTool);
-registry.register(launchComputerApplicationTool);
-registry.register(listComputerFilesTool);
-registry.register(readComputerFileTool);
+    registry.register(getComputerStatusTool);
+  registry.register(listComputerApplicationsTool);
+  registry.register(launchComputerApplicationTool);
+  registry.register(listComputerFilesTool);
+  registry.register(readComputerFileTool);
+  registry.register(writeComputerFileTool);
   return registry;
 }
