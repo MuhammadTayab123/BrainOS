@@ -54,14 +54,10 @@ export class AssistantService {
     }
 
     const userId = input.userId.trim();
-    const trimmedMessage =
-      input.message.trim();
+    const trimmedMessage = input.message.trim();
 
-    const retrievedMemories: MemorySearchResult[] =
-      [];
-
-    const retrievedDocuments: SearchDocumentChunkResult[] =
-      [];
+    const retrievedMemories: MemorySearchResult[] = [];
+    const retrievedDocuments: SearchDocumentChunkResult[] = [];
 
     const retrievalPolicy = decideAssistantRetrieval(input);
 
@@ -242,8 +238,7 @@ export class AssistantService {
       this.messageRepository
     ) {
       await this.messageRepository.create({
-        conversationId:
-          input.conversationId.trim(),
+        conversationId: input.conversationId.trim(),
         role: "ASSISTANT",
         content: llmResponse.text,
       });
