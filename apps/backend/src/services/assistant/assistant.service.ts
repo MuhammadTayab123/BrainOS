@@ -220,8 +220,10 @@ export class AssistantService {
               toolCall.name,
               toolCall.arguments,
               {
-                userId,
-              },
+  userId,
+  authorizedComputerActions:
+    input.authorizedComputerActions,
+},
             );
 
           this.runtime.completeTask(

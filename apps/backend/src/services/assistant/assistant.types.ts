@@ -14,7 +14,7 @@ export interface AssistantMessageInput {
 
   enableDocumentRetrieval?: boolean;
   documentSearchLimit?: number;
-
+  authorizedComputerActions?: string[];
   model?: string;
 }
 
