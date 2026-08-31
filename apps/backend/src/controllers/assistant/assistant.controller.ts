@@ -76,6 +76,7 @@ export async function askAssistant(
   enableDocumentRetrieval,
   documentSearchLimit,
   model,
+  authorizedComputerActions,
 } = req.body;
 
   if (
@@ -188,6 +189,33 @@ if (
     },
   });
 }
+
+if (
+  authorizedComputerActions !== undefined &&
+  (!Array.isArray(authorizedComputerActions) ||
+    authorizedComputerActions.some(
+      (action) =>
+        typeof action !== "string" ||
+        action.trim().length === 0,
+    ))
+) {
+  return res.status(400).json({
+    success: false,
+    error: {
+      code: "INVALID_AUTHORIZED_COMPUTER_ACTIONS",
+      message:
+        "authorizedComputerActions must be an array of non-empty strings.",
+    },
+  });
+}
+
+  const sanitizedAuthorizedComputerActions =
+    authorizedComputerActions !== undefined
+      ? authorizedComputerActions.map(
+          (action: string) => action.trim(),
+        )
+      : undefined;
+
   const result = await assistantService.ask({
     userId: req.user.id,
     message,
@@ -202,6 +230,8 @@ if (
     enableDocumentRetrieval,
     documentSearchLimit,
     model,
+    authorizedComputerActions:
+      sanitizedAuthorizedComputerActions,
   });
 
   return res.status(200).json({

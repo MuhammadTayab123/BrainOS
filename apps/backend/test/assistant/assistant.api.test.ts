@@ -126,6 +126,7 @@ describe("assistant API", () => {
         enableDocumentRetrieval: undefined,
         documentSearchLimit: undefined,
         model: undefined,
+        authorizedComputerActions: undefined,
       });
     });
 
@@ -147,6 +148,10 @@ describe("assistant API", () => {
           enableDocumentRetrieval: true,
           documentSearchLimit: 10,
           model: "test-model",
+          authorizedComputerActions: [
+            "computer_write_file",
+            "computer_launch_application",
+          ],
         });
 
       expect(response.status).toBe(200);
@@ -167,6 +172,10 @@ describe("assistant API", () => {
         enableDocumentRetrieval: true,
         documentSearchLimit: 10,
         model: "test-model",
+        authorizedComputerActions: [
+          "computer_write_file",
+          "computer_launch_application",
+        ],
       });
     });
 
@@ -192,6 +201,7 @@ describe("assistant API", () => {
         enableDocumentRetrieval: true,
         documentSearchLimit: 7,
         model: undefined,
+        authorizedComputerActions: undefined,
       });
     });
 
@@ -223,6 +233,62 @@ describe("assistant API", () => {
           retrievedMemories: [],
           retrievedDocuments: [documentSource],
         },
+      });
+    });
+
+    it("accepts an empty authorizedComputerActions array", async () => {
+      const response = await request(app)
+        .post("/api/v1/assistant/ask")
+        .send({
+          message: "Hello BrainOS",
+          authorizedComputerActions: [],
+        });
+
+      expect(response.status).toBe(200);
+
+      expect(fakes.ask).toHaveBeenCalledWith({
+        userId: "user-a",
+        message: "Hello BrainOS",
+        conversationId: undefined,
+        systemPrompt: undefined,
+        conversationHistory: undefined,
+        enableMemoryRetrieval: undefined,
+        memorySearchLimit: undefined,
+        enableDocumentRetrieval: undefined,
+        documentSearchLimit: undefined,
+        model: undefined,
+        authorizedComputerActions: [],
+      });
+    });
+
+    it("trims authorizedComputerActions strings before passing to AssistantService", async () => {
+      const response = await request(app)
+        .post("/api/v1/assistant/ask")
+        .send({
+          message: "Hello BrainOS",
+          authorizedComputerActions: [
+            "  computer_write_file  ",
+            " computer_launch_application ",
+          ],
+        });
+
+      expect(response.status).toBe(200);
+
+      expect(fakes.ask).toHaveBeenCalledWith({
+        userId: "user-a",
+        message: "Hello BrainOS",
+        conversationId: undefined,
+        systemPrompt: undefined,
+        conversationHistory: undefined,
+        enableMemoryRetrieval: undefined,
+        memorySearchLimit: undefined,
+        enableDocumentRetrieval: undefined,
+        documentSearchLimit: undefined,
+        model: undefined,
+        authorizedComputerActions: [
+          "computer_write_file",
+          "computer_launch_application",
+        ],
       });
     });
 
@@ -392,6 +458,72 @@ describe("assistant API", () => {
         error: {
           code: "INVALID_MODEL",
           message: "model must be a string.",
+        },
+      });
+
+      expect(fakes.ask).not.toHaveBeenCalled();
+    });
+
+    it("rejects a non-array authorizedComputerActions", async () => {
+      const response = await request(app)
+        .post("/api/v1/assistant/ask")
+        .send({
+          message: "Hello BrainOS",
+          authorizedComputerActions: "computer_write_file",
+        });
+
+      expect(response.status).toBe(400);
+
+      expect(response.body).toEqual({
+        success: false,
+        error: {
+          code: "INVALID_AUTHORIZED_COMPUTER_ACTIONS",
+          message:
+            "authorizedComputerActions must be an array of non-empty strings.",
+        },
+      });
+
+      expect(fakes.ask).not.toHaveBeenCalled();
+    });
+
+    it("rejects an authorizedComputerActions array containing non-string items", async () => {
+      const response = await request(app)
+        .post("/api/v1/assistant/ask")
+        .send({
+          message: "Hello BrainOS",
+          authorizedComputerActions: [123],
+        });
+
+      expect(response.status).toBe(400);
+
+      expect(response.body).toEqual({
+        success: false,
+        error: {
+          code: "INVALID_AUTHORIZED_COMPUTER_ACTIONS",
+          message:
+            "authorizedComputerActions must be an array of non-empty strings.",
+        },
+      });
+
+      expect(fakes.ask).not.toHaveBeenCalled();
+    });
+
+    it("rejects an authorizedComputerActions array containing empty or whitespace strings", async () => {
+      const response = await request(app)
+        .post("/api/v1/assistant/ask")
+        .send({
+          message: "Hello BrainOS",
+          authorizedComputerActions: ["   "],
+        });
+
+      expect(response.status).toBe(400);
+
+      expect(response.body).toEqual({
+        success: false,
+        error: {
+          code: "INVALID_AUTHORIZED_COMPUTER_ACTIONS",
+          message:
+            "authorizedComputerActions must be an array of non-empty strings.",
         },
       });
 
