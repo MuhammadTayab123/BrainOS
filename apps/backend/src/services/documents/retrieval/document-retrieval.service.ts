@@ -1,4 +1,5 @@
 import { EmbeddingsService } from "../../memory/embeddings.service";
+import { DocumentSourceReference } from "../document.types";
 import { DocumentChunkRepository } from "../repositories/chunks/document-chunk.repository";
 
 export interface SearchDocumentChunksInput {
@@ -7,13 +8,9 @@ export interface SearchDocumentChunksInput {
   limit?: number;
 }
 
-export interface SearchDocumentChunkResult {
+export interface SearchDocumentChunkResult
+  extends DocumentSourceReference {
   id: string;
-  documentId: string;
-  documentTitle: string;
-  sourceType: string;
-  source: string | null;
-  chunkIndex: number;
   content: string;
   similarity: number;
 }

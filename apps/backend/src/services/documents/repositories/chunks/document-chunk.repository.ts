@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { NotFoundError } from "../../../../errors";
 import { prisma } from "../../../../lib/prisma";
 import { DatabaseClient } from "../../../../lib/prisma.types";
+import { DocumentSourceReference } from "../../document.types";
 
 export interface CreateDocumentChunkInput {
   documentId: string;
@@ -10,13 +11,9 @@ export interface CreateDocumentChunkInput {
   content: string;
 }
 
-export interface DocumentChunkSearchResult {
+export interface DocumentChunkSearchResult
+  extends DocumentSourceReference {
   id: string;
-  documentId: string;
-  documentTitle: string;
-  sourceType: string;
-  source: string | null;
-  chunkIndex: number;
   content: string;
   similarity: number;
 }

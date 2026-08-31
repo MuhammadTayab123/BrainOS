@@ -7,7 +7,13 @@ export {
   DocumentSourceType,
   DocumentStatus,
 };
-
+export interface DocumentSourceReference {
+  documentId: string;
+  documentTitle: string;
+  sourceType: DocumentSourceType | string;
+  source: string | null;
+  chunkIndex: number;
+}
 export interface CreateDocumentInput {
   userId: string;
   title: string;
