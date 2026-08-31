@@ -7,6 +7,8 @@ import { ToolExecutor } from "../../src/services/tools/tool.executor";
 import { ConversationRepository } from "../../src/services/conversation/repositories/conversation.repository";
 import { MessageRepository } from "../../src/services/conversation/repositories/message.repository";
 import { LLMService } from "../../src/services/ai";
+import { ToolRegistry } from "../../src/services/tools/tool.registry";
+import { createDocumentSearchTool } from "../../src/services/tools/document.tools";
 
 describe("AssistantService", () => {
   function createLlmServiceMock() {
@@ -675,4 +677,111 @@ describe("AssistantService", () => {
   "IDLE",
 ]);
 });
+
+  it("executes document_search tool call and returns retrieval results to the LLM", async () => {
+    const llmService = createLlmServiceMock();
+    const memoryService = createMemoryServiceMock();
+    const documentRetrievalService =
+      createDocumentRetrievalServiceMock();
+
+    memoryService.searchMemories.mockResolvedValue([]);
+
+    const sampleChunks = [
+      {
+        id: "chunk-1",
+        documentId: "doc-1",
+        documentTitle: "BrainOS Architecture",
+        sourceType: "TEXT",
+        source: null,
+        chunkIndex: 0,
+        content:
+          "BrainOS provides personal companion intelligence.",
+        similarity: 0.92,
+      },
+    ];
+
+    documentRetrievalService.search.mockResolvedValue(
+      sampleChunks,
+    );
+
+    const registry = new ToolRegistry();
+    const documentTool = createDocumentSearchTool(
+      documentRetrievalService as unknown as DocumentRetrievalService,
+    );
+    registry.register(documentTool);
+
+    const toolExecutor = new ToolExecutor(registry);
+
+    llmService.generate
+      .mockResolvedValueOnce({
+        text: "",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [
+          {
+            id: "call-doc-search",
+            name: "document_search",
+            arguments: {
+              query: "BrainOS architecture",
+              limit: 3,
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        text: "Based on the documents, BrainOS provides personal companion intelligence.",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [],
+      });
+
+    const service = new AssistantService(
+      llmService as unknown as LLMService,
+      memoryService as unknown as MemoryService,
+      toolExecutor,
+      undefined,
+      undefined,
+      documentRetrievalService as unknown as DocumentRetrievalService,
+    );
+
+    const result = await service.ask({
+      userId: "user-1",
+      message:
+        "Search documents for BrainOS architecture.",
+    });
+
+    expect(
+      documentRetrievalService.search,
+    ).toHaveBeenCalledWith({
+      userId: "user-1",
+      query: "BrainOS architecture",
+      limit: 3,
+    });
+
+    expect(
+      llmService.generate,
+    ).toHaveBeenCalledTimes(2);
+
+    const secondCall =
+      llmService.generate.mock.calls[1][0];
+
+    expect(secondCall.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "tool",
+          toolCallId: "call-doc-search",
+          toolName: "document_search",
+          content: JSON.stringify(sampleChunks),
+        }),
+      ]),
+    );
+
+    expect(result).toEqual({
+      text: "Based on the documents, BrainOS provides personal companion intelligence.",
+      model: "test-model",
+      provider: "test",
+      retrievedMemories: [],
+      retrievedDocuments: [],
+    });
+  });
 });
