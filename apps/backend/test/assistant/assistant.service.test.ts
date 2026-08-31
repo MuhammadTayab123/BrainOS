@@ -784,4 +784,174 @@ describe("AssistantService", () => {
       retrievedDocuments: [],
     });
   });
+
+  it("handles unauthorized tool errors gracefully and passes error to LLM for next round", async () => {
+    const llmService = createLlmServiceMock();
+    const memoryService = createMemoryServiceMock();
+    const runtime = new AssistantRuntime();
+
+    memoryService.searchMemories.mockResolvedValue([]);
+
+    const registry = new ToolRegistry();
+    registry.register({
+      name: "computer_write_file",
+      description: "Write to a file.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+      execute: vi.fn(),
+    });
+
+    const toolExecutor = new ToolExecutor(registry);
+
+    llmService.generate
+      .mockResolvedValueOnce({
+        text: "",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [
+          {
+            id: "call-write-file",
+            name: "computer_write_file",
+            arguments: {
+              path: "notes.txt",
+              content: "hello",
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        text: "I need your authorization before I can write to files.",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [],
+      });
+
+    const service = new AssistantService(
+      llmService as unknown as LLMService,
+      memoryService as unknown as MemoryService,
+      toolExecutor,
+      undefined,
+      undefined,
+      undefined,
+      runtime,
+    );
+
+    const result = await service.ask({
+      userId: "user-1",
+      message: "Write hello to notes.txt",
+    });
+
+    expect(llmService.generate).toHaveBeenCalledTimes(2);
+
+    const secondCall =
+      llmService.generate.mock.calls[1][0];
+
+    expect(secondCall.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "tool",
+          toolCallId: "call-write-file",
+          toolName: "computer_write_file",
+          content: JSON.stringify({
+            error:
+              'Computer action "computer_write_file" requires authorization.',
+          }),
+        }),
+      ]),
+    );
+
+    expect(result).toEqual({
+      text: "I need your authorization before I can write to files.",
+      model: "test-model",
+      provider: "test",
+      retrievedMemories: [],
+      retrievedDocuments: [],
+    });
+  });
+
+  it("handles tool validation/execution errors gracefully and passes error to LLM for next round", async () => {
+    const llmService = createLlmServiceMock();
+    const memoryService = createMemoryServiceMock();
+    const runtime = new AssistantRuntime();
+
+    memoryService.searchMemories.mockResolvedValue([]);
+
+    const registry = new ToolRegistry();
+    registry.register({
+      name: "create_task",
+      description: "Create a task.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+      execute: vi.fn().mockRejectedValue(
+        new Error("title is required."),
+      ),
+    });
+
+    const toolExecutor = new ToolExecutor(registry);
+
+    llmService.generate
+      .mockResolvedValueOnce({
+        text: "",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [
+          {
+            id: "call-bad-task",
+            name: "create_task",
+            arguments: {},
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        text: "Please specify a title for the task.",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [],
+      });
+
+    const service = new AssistantService(
+      llmService as unknown as LLMService,
+      memoryService as unknown as MemoryService,
+      toolExecutor,
+      undefined,
+      undefined,
+      undefined,
+      runtime,
+    );
+
+    const result = await service.ask({
+      userId: "user-1",
+      message: "Create an empty task",
+    });
+
+    expect(llmService.generate).toHaveBeenCalledTimes(2);
+
+    const secondCall =
+      llmService.generate.mock.calls[1][0];
+
+    expect(secondCall.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "tool",
+          toolCallId: "call-bad-task",
+          toolName: "create_task",
+          content: JSON.stringify({
+            error: "title is required.",
+          }),
+        }),
+      ]),
+    );
+
+    expect(result).toEqual({
+      text: "Please specify a title for the task.",
+      model: "test-model",
+      provider: "test",
+      retrievedMemories: [],
+      retrievedDocuments: [],
+    });
+  });
 });

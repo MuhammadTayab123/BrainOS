@@ -239,14 +239,24 @@ export class AssistantService {
             toolName: toolCall.name,
           });
         } catch (error) {
-          this.runtime.failTask(
-            taskId,
+          const errorMessage =
             error instanceof Error
               ? error.message
-              : "Tool execution failed.",
+              : "Tool execution failed.";
+
+          this.runtime.failTask(
+            taskId,
+            errorMessage,
           );
 
-          throw error;
+          messages.push({
+            role: "tool",
+            content: JSON.stringify({
+              error: errorMessage,
+            }),
+            toolCallId: toolCall.id,
+            toolName: toolCall.name,
+          });
         }
       }
 
