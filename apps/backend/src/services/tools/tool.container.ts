@@ -7,6 +7,7 @@ import {
   readComputerFileTool,
   writeComputerFileTool,
 } from "./computer.tools";
+import { documentSearchTool } from "./document.tools";
 
 import { ToolRegistry } from "./tool.registry";
 import { testTool } from "./test.tool";
@@ -32,7 +33,9 @@ export function createToolRegistry(): ToolRegistry {
   registry.register(completeTaskTool);
   registry.register(deleteTaskTool);
 
-    registry.register(getComputerStatusTool);
+  registry.register(documentSearchTool);
+
+  registry.register(getComputerStatusTool);
   registry.register(listComputerApplicationsTool);
   registry.register(launchComputerApplicationTool);
   registry.register(listComputerFilesTool);
