@@ -16,6 +16,7 @@ import assistantRoutes from "./routes/assistant.routes";
 import conversationRoutes from "./routes/conversation.routes";
 import documentRoutes from "./routes/document.routes";
 import automationRoutes from "./routes/automation.routes";
+import taskRoutes from "./routes/task.routes";
 
 // Clerk webhooks
 const app = express();
@@ -67,6 +68,9 @@ app.use("/api/v1/conversations", conversationRoutes);
 
 // Automation routes
 app.use("/api/v1/automations", automationRoutes);
+
+// Task routes
+app.use("/api/v1/tasks", taskRoutes);
 
 // Development routes
 app.use("/api/v1/dev", devRoutes);
