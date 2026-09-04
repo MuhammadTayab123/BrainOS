@@ -186,3 +186,216 @@ export async function listMessages(
 
   return parseResponse<Message[]>(response);
 }
+
+// ==========================
+// Tasks API
+// ==========================
+
+export type TaskStatus = "TODO" | "COMPLETED";
+export type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
+
+export interface Task {
+  id: string;
+  userId: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  dueAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTaskInput {
+  title: string;
+  description?: string;
+  priority?: TaskPriority;
+  dueAt?: string | Date;
+}
+
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string | null;
+  priority?: TaskPriority;
+  dueAt?: string | Date | null;
+}
+
+export interface ListTasksOptions {
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  dueBefore?: string | Date;
+  dueAfter?: string | Date;
+  limit?: number;
+}
+
+export async function listTasks(
+  token: string,
+  options?: ListTasksOptions,
+): Promise<Task[]> {
+  const params = new URLSearchParams();
+
+  if (options?.limit !== undefined) {
+    params.set("limit", String(options.limit));
+  }
+
+  if (options?.status) {
+    params.set("status", options.status);
+  }
+
+  if (options?.priority) {
+    params.set("priority", options.priority);
+  }
+
+  if (options?.dueBefore) {
+    params.set(
+      "dueBefore",
+      options.dueBefore instanceof Date
+        ? options.dueBefore.toISOString()
+        : options.dueBefore,
+    );
+  }
+
+  if (options?.dueAfter) {
+    params.set(
+      "dueAfter",
+      options.dueAfter instanceof Date
+        ? options.dueAfter.toISOString()
+        : options.dueAfter,
+    );
+  }
+
+  const queryString = params.toString();
+
+  const response = await fetch(
+    `${API_URL}/api/v1/tasks${
+      queryString ? `?${queryString}` : ""
+    }`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    },
+  );
+
+  return parseResponse<Task[]>(response);
+}
+
+export async function createTask(
+  token: string,
+  input: CreateTaskInput,
+): Promise<Task> {
+  const payload = {
+    title: input.title.trim(),
+    description: input.description?.trim(),
+    priority: input.priority,
+    dueAt:
+      input.dueAt instanceof Date
+        ? input.dueAt.toISOString()
+        : input.dueAt,
+  };
+
+  const response = await fetch(`${API_URL}/api/v1/tasks`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseResponse<Task>(response);
+}
+
+export async function getTask(
+  token: string,
+  taskId: string,
+): Promise<Task> {
+  const response = await fetch(
+    `${API_URL}/api/v1/tasks/${encodeURIComponent(taskId)}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    },
+  );
+
+  return parseResponse<Task>(response);
+}
+
+export async function updateTask(
+  token: string,
+  taskId: string,
+  input: UpdateTaskInput,
+): Promise<{ id: string }> {
+  const payload = {
+    title: input.title !== undefined ? input.title.trim() : undefined,
+    description:
+      input.description === null
+        ? null
+        : input.description?.trim(),
+    priority: input.priority,
+    dueAt:
+      input.dueAt === null
+        ? null
+        : input.dueAt instanceof Date
+          ? input.dueAt.toISOString()
+          : input.dueAt,
+  };
+
+  const response = await fetch(
+    `${API_URL}/api/v1/tasks/${encodeURIComponent(taskId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  return parseResponse<{ id: string }>(response);
+}
+
+export async function completeTask(
+  token: string,
+  taskId: string,
+): Promise<{ id: string; status: TaskStatus }> {
+  const response = await fetch(
+    `${API_URL}/api/v1/tasks/${encodeURIComponent(taskId)}/complete`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return parseResponse<{ id: string; status: TaskStatus }>(response);
+}
+
+export async function deleteTask(
+  token: string,
+  taskId: string,
+): Promise<{ id: string }> {
+  const response = await fetch(
+    `${API_URL}/api/v1/tasks/${encodeURIComponent(taskId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return parseResponse<{ id: string }>(response);
+}
