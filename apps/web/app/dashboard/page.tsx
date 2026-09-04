@@ -20,12 +20,14 @@ import {
 export default function Home() {
   const { getToken, isSignedIn } = useAuth();
 
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversation, setConversation] =
     useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -46,18 +48,21 @@ export default function Home() {
           throw new Error("Authentication token unavailable.");
         }
 
-        const conversations = await listConversations(token);
+        const existingConversations =
+          await listConversations(token);
 
-        let activeConversation = conversations[0];
+        let activeConversation = existingConversations[0];
 
         if (!activeConversation) {
           activeConversation = await createConversation(token);
+          existingConversations.unshift(activeConversation);
         }
 
         if (cancelled) {
           return;
         }
 
+        setConversations(existingConversations);
         setConversation(activeConversation);
 
         const conversationMessages = await listMessages(
@@ -73,7 +78,7 @@ export default function Home() {
           setError(
             err instanceof Error
               ? err.message
-              : "Failed to load conversation.",
+              : "Failed to load conversations.",
           );
         }
       } finally {
@@ -89,6 +94,81 @@ export default function Home() {
       cancelled = true;
     };
   }, [getToken, isSignedIn]);
+
+  async function handleNewConversation() {
+    if (loading || switching) {
+      return;
+    }
+
+    setSwitching(true);
+    setError("");
+
+    try {
+      const token = await getToken();
+
+      if (!token) {
+        throw new Error("Authentication token unavailable.");
+      }
+
+      const newConversation = await createConversation(token);
+
+      setConversations((current) => [
+        newConversation,
+        ...current,
+      ]);
+      setConversation(newConversation);
+      setMessages([]);
+      setMessage("");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to create conversation.",
+      );
+    } finally {
+      setSwitching(false);
+    }
+  }
+
+  async function handleSelectConversation(
+    selectedConversation: Conversation,
+  ) {
+    if (
+      selectedConversation.id === conversation?.id ||
+      loading ||
+      switching
+    ) {
+      return;
+    }
+
+    setSwitching(true);
+    setError("");
+
+    try {
+      const token = await getToken();
+
+      if (!token) {
+        throw new Error("Authentication token unavailable.");
+      }
+
+      const conversationMessages = await listMessages(
+        token,
+        selectedConversation.id,
+      );
+
+      setConversation(selectedConversation);
+      setMessages(conversationMessages);
+      setMessage("");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to load conversation.",
+      );
+    } finally {
+      setSwitching(false);
+    }
+  }
 
   async function handleAskAssistant() {
     if (!message.trim() || !conversation || loading) {
@@ -142,7 +222,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
-      <div className="mx-auto flex min-h-screen w-full max-w-4xl flex-col px-6 py-10">
+      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-6 py-10">
         <header className="flex items-center justify-between border-b border-zinc-800 pb-6">
           <div>
             <h1 className="text-2xl font-semibold">
@@ -187,120 +267,170 @@ export default function Home() {
         </Show>
 
         <Show when="signed-in">
-          <section className="flex flex-1 flex-col">
-            <div className="py-8">
-              <h2 className="text-3xl font-semibold">
-                {conversation?.title ?? "BrainOS"}
-              </h2>
+          <div className="flex flex-1 gap-6 pt-6">
+            {/* Conversation sidebar */}
+            <aside className="hidden w-64 shrink-0 flex-col rounded-xl border border-zinc-800 bg-zinc-900 p-3 md:flex">
+              <button
+                onClick={() => void handleNewConversation()}
+                disabled={loading || switching}
+                className="mb-3 rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {switching
+                  ? "Loading..."
+                  : "+ New Chat"}
+              </button>
 
-              <p className="mt-2 text-zinc-400">
-                Your conversation is saved automatically.
-              </p>
-            </div>
+              <div className="flex-1 space-y-1 overflow-y-auto">
+                {conversations.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() =>
+                      void handleSelectConversation(item)
+                    }
+                    disabled={loading || switching}
+                    className={`w-full rounded-lg px-3 py-3 text-left text-sm transition ${
+                      item.id === conversation?.id
+                        ? "bg-zinc-800 text-white"
+                        : "text-zinc-400 hover:bg-zinc-800/70 hover:text-white"
+                    }`}
+                  >
+                    <p className="truncate font-medium">
+                      {item.title ?? "New conversation"}
+                    </p>
 
-            {initializing ? (
-              <div className="flex flex-1 items-center justify-center text-zinc-500">
-                Loading conversation...
+                    <p className="mt-1 text-xs text-zinc-600">
+                      {new Date(
+                        item.updatedAt,
+                      ).toLocaleDateString()}
+                    </p>
+                  </button>
+                ))}
               </div>
-            ) : (
-              <>
-                <div className="flex-1 space-y-4 pb-6">
-                  {messages.length === 0 && (
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-center text-zinc-500">
-                      Start a conversation with BrainOS.
-                    </div>
-                  )}
+            </aside>
 
-                  {messages.map((item) => (
-                    <div
-                      key={item.id}
-                      className={
-                        item.role === "USER"
-                          ? "ml-auto max-w-2xl rounded-xl bg-white p-4 text-black"
-                          : "mr-auto max-w-2xl rounded-xl border border-zinc-800 bg-zinc-900 p-4"
-                      }
-                    >
-                      <p
+            {/* Main conversation */}
+            <section className="flex min-w-0 flex-1 flex-col">
+              <div className="pb-6">
+                <h2 className="text-3xl font-semibold">
+                  {conversation?.title ?? "BrainOS"}
+                </h2>
+
+                <p className="mt-2 text-zinc-400">
+                  Your conversation is saved automatically.
+                </p>
+              </div>
+
+              {initializing ? (
+                <div className="flex flex-1 items-center justify-center text-zinc-500">
+                  Loading conversations...
+                </div>
+              ) : (
+                <>
+                  <div className="flex-1 space-y-4 overflow-y-auto pb-6">
+                    {messages.length === 0 && (
+                      <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-center text-zinc-500">
+                        Start a conversation with BrainOS.
+                      </div>
+                    )}
+
+                    {messages.map((item) => (
+                      <div
+                        key={item.id}
                         className={
                           item.role === "USER"
-                            ? "mb-2 text-sm font-medium text-zinc-600"
-                            : "mb-2 text-sm font-medium text-zinc-400"
+                            ? "ml-auto max-w-2xl rounded-xl bg-white p-4 text-black"
+                            : "mr-auto max-w-2xl rounded-xl border border-zinc-800 bg-zinc-900 p-4"
                         }
                       >
-                        {item.role === "USER"
-                          ? "You"
-                          : item.role === "ASSISTANT"
-                            ? "BrainOS"
-                            : "System"}
-                      </p>
+                        <p
+                          className={
+                            item.role === "USER"
+                              ? "mb-2 text-sm font-medium text-zinc-600"
+                              : "mb-2 text-sm font-medium text-zinc-400"
+                          }
+                        >
+                          {item.role === "USER"
+                            ? "You"
+                            : item.role === "ASSISTANT"
+                              ? "BrainOS"
+                              : "System"}
+                        </p>
 
-                      <p className="whitespace-pre-wrap leading-7">
-                        {item.content}
-                      </p>
-                    </div>
-                  ))}
+                        <p className="whitespace-pre-wrap leading-7">
+                          {item.content}
+                        </p>
+                      </div>
+                    ))}
 
-                  {loading && (
-                    <div className="mr-auto max-w-2xl rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-                      <p className="text-sm text-zinc-500">
-                        BrainOS is thinking...
-                      </p>
+                    {loading && (
+                      <div className="mr-auto max-w-2xl rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+                        <p className="text-sm text-zinc-500">
+                          BrainOS is thinking...
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {error && (
+                    <div className="mb-4 rounded-lg border border-red-900 bg-red-950/40 p-4 text-red-300">
+                      {error}
                     </div>
                   )}
-                </div>
 
-                {error && (
-                  <div className="mb-4 rounded-lg border border-red-900 bg-red-950/40 p-4 text-red-300">
-                    {error}
-                  </div>
-                )}
-
-                <div className="sticky bottom-0 border-t border-zinc-800 bg-zinc-950 py-5">
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-                    <textarea
-                      value={message}
-                      onChange={(event) =>
-                        setMessage(event.target.value)
-                      }
-                      onKeyDown={(event) => {
-                        if (
-                          event.key === "Enter" &&
-                          !event.shiftKey
-                        ) {
-                          event.preventDefault();
-                          void handleAskAssistant();
+                  <div className="sticky bottom-0 border-t border-zinc-800 bg-zinc-950 py-5">
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+                      <textarea
+                        value={message}
+                        onChange={(event) =>
+                          setMessage(event.target.value)
                         }
-                      }}
-                      placeholder="Message BrainOS..."
-                      rows={3}
-                      disabled={loading || !conversation}
-                      className="w-full resize-none bg-transparent p-2 text-white outline-none placeholder:text-zinc-500"
-                    />
-
-                    <div className="mt-3 flex items-center justify-between">
-                      <p className="text-xs text-zinc-500">
-                        Enter to send · Shift+Enter for new line
-                      </p>
-
-                      <button
-                        onClick={() => void handleAskAssistant()}
+                        onKeyDown={(event) => {
+                          if (
+                            event.key === "Enter" &&
+                            !event.shiftKey
+                          ) {
+                            event.preventDefault();
+                            void handleAskAssistant();
+                          }
+                        }}
+                        placeholder="Message BrainOS..."
+                        rows={3}
                         disabled={
                           loading ||
-                          !conversation ||
-                          !message.trim()
+                          switching ||
+                          !conversation
                         }
-                        className="rounded-lg bg-white px-5 py-2.5 font-medium text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        {loading
-                          ? "Thinking..."
-                          : "Send"}
-                      </button>
+                        className="w-full resize-none bg-transparent p-2 text-white outline-none placeholder:text-zinc-500"
+                      />
+
+                      <div className="mt-3 flex items-center justify-between">
+                        <p className="text-xs text-zinc-500">
+                          Enter to send · Shift+Enter for new line
+                        </p>
+
+                        <button
+                          onClick={() =>
+                            void handleAskAssistant()
+                          }
+                          disabled={
+                            loading ||
+                            switching ||
+                            !conversation ||
+                            !message.trim()
+                          }
+                          className="rounded-lg bg-white px-5 py-2.5 font-medium text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {loading
+                            ? "Thinking..."
+                            : "Send"}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </>
-            )}
-          </section>
+                </>
+              )}
+            </section>
+          </div>
         </Show>
       </div>
     </main>
