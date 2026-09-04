@@ -8,10 +8,10 @@
 **Branch:** `main`
 **OS:** Windows
 **Editor:** VS Code
-**Current date checkpoint:** 2026-08-30
-**Latest verified Git commit:** `58057d2 test(documents): verify retrieval similarity threshold`
-**Working tree at latest user verification:** clean
-**Remote:** `origin/main` matched local `main`
+**Current date checkpoint:** 2026-09-04
+**Latest verified Git commit:** `49e7675 feat(ai): add OmniRoute provider routing`
+**Working tree at latest user verification:** modified (unrelated unstaged edit in `apps/backend/test/tools/tool.executor.audit.test.ts`)
+**Remote:** `origin/main` matched local `main` at `49e7675`
 
 ---
 
@@ -199,9 +199,11 @@ Every new capability should connect to the same BrainOS core.
 
 ## AI
 
-- Ollama-first during development
-- Current chat model configuration is authoritative in the repository/environment.
-- Current development does not assume OpenAI API access.
+- Multi-provider abstraction (`LLMProvider` interface + `createLLMProvider()` factory)
+- Configured via `LLM_PROVIDER` environment variable (`ollama` | `omniroute`)
+- **Ollama**: Local development provider (`http://localhost:11434`, default `qwen2.5:3b`)
+- **OmniRoute**: OpenAI-compatible gateway (`http://localhost:20128`, default model `BrainOS-Coding`) for high-performance agent reasoning and function calling
+- Extensible to other OpenAI/Azure/Claude adapters without domain rewrites
 
 ## Embeddings
 
@@ -409,6 +411,14 @@ TASK_DUE duplicate protection — VERIFIED
 Real Task creation from automation — VERIFIED
 AutomationExecution success recording — VERIFIED
 Recurring automation implementation/tests — VERIFIED
+
+Computer action authorization API — COMPLETE
+Computer file operation security & limits — COMPLETE
+Tool execution audit recording — COMPLETE
+Assistant document search tool integration — COMPLETE
+Assistant graceful tool error recovery — COMPLETE
+Pluggable LLM provider abstraction & factory — COMPLETE
+OmniRoute provider & BrainOS-Coding model routing — COMPLETE
 ```
 
 ---
@@ -422,28 +432,28 @@ Branch:
 main
 
 HEAD:
-58057d2 test(documents): verify retrieval similarity threshold
+49e7675 feat(ai): add OmniRoute provider routing
 
 origin/main:
-58057d2
+49e7675 (synchronized)
 
 Working tree:
-clean
+modified (unrelated unstaged edit in apps/backend/test/tools/tool.executor.audit.test.ts)
 ```
 
 Recent relevant commits:
 
 ```text
-58057d2 test(documents): verify retrieval similarity threshold
-40af791 feat(assistant): fix retrieval policy integration
-cb6b9d0 feat(assistant): centralize retrieval policy
-f4edf21 test(assistant): add document grounding context tests
-5c10812 feat(assistant): complete grounded document RAG
-69dbaf9 feat(assistant): improve document context formatting
-8cb745b test(documents): harden semantic retrieval validation
-c8e5d22 test(assistant): cover document retrieval API
-76b7d04 feat(web): show assistant document sources
-eab4191 feat(web): add document assistant integration
+49e7675 feat(ai): add OmniRoute provider routing
+1014923 feat(assistant): recover gracefully from tool errors
+cbdb56a test(assistant): verify document search tool flow
+34661de refactor(documents): reuse source reference type
+c11c440 feat(tools): add document search tool
+dd7bc3b feat(assistant): expose computer action authorization API
+d27081d feat(assistant): pass authorized computer actions to tools
+0acd488 feat(tools): add tool execution auditing
+ef5db62 feat(computer): enforce action authorization
+563319b feat(computer): enforce file operation limits
 ```
 
 The latest verified checkpoint is clean and synchronized.
@@ -526,9 +536,13 @@ Conversation Context
  ↓
 Context Builder
  ↓
-LLM Service
+LLMService
  ↓
-Tool Executor
+createLLMProvider() Factory
+ ├── OllamaLLMProvider (Ollama local /api/chat)
+ └── OmniRouteLLMProvider (OpenAI-compatible /v1/chat/completions + BrainOS-Coding)
+ ↓
+Tool Executor (with audit logging & authorization enforcement)
  ↓
 Tool Registry
  ↓
@@ -559,23 +573,23 @@ Recent verified backend validation includes:
 Backend TypeScript build:
 PASS
 
-Focused retrieval-policy testing:
-performed
+AI provider factory dynamic resolution tests:
+PASS (test/ai/provider.factory.test.ts)
 
-Document retrieval service tests:
+OmniRoute provider & tool-calling tests:
+PASS (test/ai/omniroute.provider.test.ts)
+
+OmniRoute client URL normalization & secret redaction tests:
+PASS (test/ai/omniroute.client.test.ts)
+
+Document retrieval service & search tool tests:
 PASS
 
-Document chunk repository tests:
+Assistant context & tool recovery tests:
 PASS
 
-Assistant context tests:
-PASS
-
-Document API tests:
-PASS
-
-Full backend regression:
-previously verified green during Phase 20 work
+Full backend test suite:
+PASS (52 test files, 424 passed)
 ```
 
 A successful TypeScript build does not replace behavioral testing.
@@ -954,24 +968,24 @@ Do not build billing or complex enterprise RBAC prematurely.
 
 # 22. PROVIDER INDEPENDENCE
 
-BrainOS should not permanently depend on one AI provider.
+BrainOS does not permanently depend on one AI provider.
 
-Desired architecture:
+Implemented provider architecture:
 
 ```text
-BrainOS AI Service
+BrainOS AI Service (LLMService)
         ↓
-AI Provider Interface
-        ├── Ollama
-        ├── OpenAI
-        ├── Azure OpenAI
-        ├── Claude
-        └── Other providers
+createLLMProvider(provider = env.LLM_PROVIDER)
+        ↓
+LLMProvider Interface (generate(input))
+        ├── OllamaLLMProvider (local /api/chat)
+        ├── OmniRouteLLMProvider (OpenAI-compatible /v1/chat/completions + BrainOS-Coding model)
+        └── Future provider adapters (Azure, Claude, etc.)
 ```
 
-The assistant, memory, document, task, and tool layers should not require rewrites when the AI provider changes.
+The assistant, memory, document, task, computer agent, and tool layers interact strictly through the unified `LLMProvider` contract and require zero changes when switching models or providers.
 
-OpenAI API support may be introduced later when it becomes useful for product quality, scale, or user-facing deployment.
+OmniRoute acts as a flexible OpenAI-compatible routing and gateway layer, enabling BrainOS to leverage specialized models such as `BrainOS-Coding` for complex agentic workflows and tool execution while keeping local development seamless with Ollama.
 
 ---
 
@@ -1414,22 +1428,22 @@ The assistant must:
 
 ```text
 Date:
-2026-08-30
+2026-09-04
 
 Current product state:
-Core BrainOS foundation + Tasks/Reminders/Automation + Documents/RAG foundation verified.
+Core BrainOS foundation + Tasks/Reminders/Automation + Documents/RAG foundation + Computer Action Authorization/Audit + Provider-independent LLM Architecture (Ollama & OmniRoute with BrainOS-Coding) verified.
 
 Latest Git checkpoint:
-58057d2 test(documents): verify retrieval similarity threshold
+49e7675 feat(ai): add OmniRoute provider routing
 
 Branch:
 main
 
 Working tree:
-clean at latest user verification
+modified (unrelated unstaged edit in apps/backend/test/tools/tool.executor.audit.test.ts)
 
 Remote:
-origin/main synchronized at latest user verification
+origin/main synchronized at 49e7675
 ```
 
 The immediate next development direction is **not to rebuild existing foundations**.
