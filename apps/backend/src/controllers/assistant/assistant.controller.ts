@@ -68,18 +68,19 @@ export async function askAssistant(
     });
   }
 
-   const {
-  message,
-  conversationId,
-  systemPrompt,
-  conversationHistory,
-  enableMemoryRetrieval,
-  memorySearchLimit,
-  enableDocumentRetrieval,
-  documentSearchLimit,
-  model,
-  authorizedComputerActions,
-} = req.body;
+  const {
+    message,
+    conversationId,
+    systemPrompt,
+    conversationHistory,
+    enableMemoryRetrieval,
+    memorySearchLimit,
+    enableDocumentRetrieval,
+    documentSearchLimit,
+    model,
+    authorizedComputerActions,
+    timezone,
+  } = req.body;
 
   if (
     typeof message !== "string" ||
@@ -211,6 +212,19 @@ if (
   });
 }
 
+  if (
+    timezone !== undefined &&
+    (typeof timezone !== "string" || timezone.trim().length === 0)
+  ) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: "INVALID_TIMEZONE",
+        message: "timezone must be a non-empty string.",
+      },
+    });
+  }
+
   const sanitizedAuthorizedComputerActions =
     authorizedComputerActions !== undefined
       ? authorizedComputerActions.map(
@@ -218,10 +232,13 @@ if (
         )
       : undefined;
 
+  const sanitizedTimezone =
+    typeof timezone === "string" ? timezone.trim() : undefined;
+
   const result = await assistantService.ask({
     userId: req.user.id,
     message,
-        conversationId:
+    conversationId:
       typeof conversationId === "string"
         ? conversationId.trim()
         : undefined,
@@ -234,6 +251,7 @@ if (
     model,
     authorizedComputerActions:
       sanitizedAuthorizedComputerActions,
+    timezone: sanitizedTimezone,
   });
 
   return res.status(200).json({

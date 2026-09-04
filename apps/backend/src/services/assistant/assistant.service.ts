@@ -33,6 +33,7 @@ export class AssistantService {
     private readonly messageRepository?: MessageRepository,
     private readonly documentRetrievalService?: DocumentRetrievalService,
     private readonly runtime: AssistantRuntime = new AssistantRuntime(),
+    private readonly clock: () => Date = () => new Date(),
   ) {}
 
   async ask(
@@ -164,6 +165,8 @@ export class AssistantService {
       }
     }
 
+    const now = input.now ?? this.clock();
+
     const assembledContext =
       assembleAssistantContext({
         message: trimmedMessage,
@@ -171,6 +174,8 @@ export class AssistantService {
         conversationHistory,
         retrievedMemories,
         retrievedDocuments,
+        now,
+        timezone: input.timezone,
       });
 
     let messages: LLMMessage[] = [

@@ -90,4 +90,57 @@ describe("assistant context builder", () => {
       "[Source 1]",
     );
   });
+
+  it("includes provided date and time in the system prompt", () => {
+    const fixedDate = new Date("2026-09-04T19:00:00.000Z");
+    const result = assembleAssistantContext({
+      message: "Create a task called Study DSA tomorrow at 7 PM",
+      retrievedMemories: [],
+      retrievedDocuments: [],
+      now: fixedDate,
+    });
+
+    expect(result.systemPrompt).toContain(
+      "Current UTC Time: 2026-09-04T19:00:00.000Z",
+    );
+    expect(result.systemPrompt).toContain(
+      "Instructions for Date & Time Handling:",
+    );
+  });
+
+  it("defaults to current date and time when now parameter is omitted", () => {
+    const result = assembleAssistantContext({
+      message: "What is the date today?",
+      retrievedMemories: [],
+      retrievedDocuments: [],
+    });
+
+    expect(result.systemPrompt).toMatch(
+      /Current UTC Time: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/,
+    );
+  });
+
+  it("includes user timezone and local time in the system prompt when provided", () => {
+    const fixedDate = new Date("2026-09-04T16:55:00.000Z");
+    const result = assembleAssistantContext({
+      message: "Create a task called Study DSA tomorrow at 7 PM",
+      retrievedMemories: [],
+      retrievedDocuments: [],
+      now: fixedDate,
+      timezone: "Asia/Karachi",
+    });
+
+    expect(result.systemPrompt).toContain(
+      "Current UTC Time: 2026-09-04T16:55:00.000Z",
+    );
+    expect(result.systemPrompt).toContain(
+      "User Timezone: Asia/Karachi",
+    );
+    expect(result.systemPrompt).toContain(
+      "Interpret all relative dates and times (such as \"today\", \"tomorrow\", \"next Monday\", \"at 7 PM\") in the user's local timezone (Asia/Karachi).",
+    );
+    expect(result.systemPrompt).toContain(
+      "When invoking tools that require an ISO 8601 timestamp (such as dueAt in create_task), compute the exact moment in time based on the user's local timezone",
+    );
+  });
 });

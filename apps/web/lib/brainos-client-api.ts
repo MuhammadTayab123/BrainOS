@@ -38,8 +38,15 @@ export async function askAssistant(
     memoryLimit?: number;
     enableDocumentRetrieval?: boolean;
     documentLimit?: number;
+    timezone?: string;
   },
 ): Promise<AssistantResponse> {
+  const clientTimezone =
+    options?.timezone ??
+    (typeof Intl !== "undefined"
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : undefined);
+
   const response = await fetch(
     `${API_URL}/api/v1/assistant/ask`,
     {
@@ -50,6 +57,7 @@ export async function askAssistant(
       },
       body: JSON.stringify({
         message: message.trim(),
+        timezone: clientTimezone,
         ...options,
       }),
     },

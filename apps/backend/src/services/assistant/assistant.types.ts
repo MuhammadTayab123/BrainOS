@@ -16,6 +16,8 @@ export interface AssistantMessageInput {
   documentSearchLimit?: number;
   authorizedComputerActions?: string[];
   model?: string;
+  now?: Date;
+  timezone?: string;
 }
 
 export interface AssistantResponse {

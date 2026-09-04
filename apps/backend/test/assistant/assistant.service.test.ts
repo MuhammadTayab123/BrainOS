@@ -1116,4 +1116,51 @@ describe("AssistantService", () => {
       retrievedDocuments: [],
     });
   });
+
+  it("passes current date and time to LLM system prompt via injected clock or input", async () => {
+    const llmService = createLlmServiceMock();
+    const memoryService = createMemoryServiceMock();
+    const toolExecutor = createToolExecutorMock();
+    const fixedDate = new Date("2026-09-04T16:00:00.000Z");
+
+    memoryService.searchMemories.mockResolvedValue([]);
+
+    llmService.generate.mockResolvedValue({
+      text: "Task scheduled.",
+      model: "test-model",
+      provider: "test",
+      toolCalls: [],
+    });
+
+    const service = new AssistantService(
+      llmService as unknown as LLMService,
+      memoryService as unknown as MemoryService,
+      toolExecutor as unknown as ToolExecutor,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      () => fixedDate,
+    );
+
+    await service.ask({
+      userId: "user-1",
+      message: "Create a task called Study DSA tomorrow at 7 PM",
+      timezone: "Asia/Karachi",
+    });
+
+    expect(llmService.generate).toHaveBeenCalledTimes(1);
+
+    const callInput = llmService.generate.mock.calls[0][0];
+
+    expect(callInput.systemPrompt).toContain(
+      "Current UTC Time: 2026-09-04T16:00:00.000Z",
+    );
+    expect(callInput.systemPrompt).toContain(
+      "User Timezone: Asia/Karachi",
+    );
+    expect(callInput.systemPrompt).toContain(
+      "Interpret all relative dates and times (such as \"today\", \"tomorrow\", \"next Monday\", \"at 7 PM\") in the user's local timezone (Asia/Karachi).",
+    );
+  });
 });

@@ -106,6 +106,10 @@ export default function Home() {
           message: message.trim(),
           enableMemoryRetrieval: true,
           enableDocumentRetrieval: true,
+          timezone:
+            typeof Intl !== "undefined"
+              ? Intl.DateTimeFormat().resolvedOptions().timeZone
+              : undefined,
         }),
       });
 

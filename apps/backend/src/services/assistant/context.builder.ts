@@ -66,6 +66,8 @@ export function assembleAssistantContext(
     conversationHistory?: LLMMessage[];
     retrievedMemories: MemorySearchResult[];
     retrievedDocuments: SearchDocumentChunkResult[];
+    now?: Date;
+    timezone?: string;
   },
 ): AssembledContext {
   const basePrompt =
@@ -73,6 +75,35 @@ export function assembleAssistantContext(
     params.systemPrompt.trim().length > 0
       ? params.systemPrompt.trim()
       : DEFAULT_SYSTEM_PROMPT;
+
+  const now = params.now ?? new Date();
+
+  let userLocalTime: string | undefined;
+  if (params.timezone) {
+    try {
+      userLocalTime = new Intl.DateTimeFormat("en-US", {
+        timeZone: params.timezone,
+        dateStyle: "full",
+        timeStyle: "long",
+      }).format(now);
+    } catch {
+      // Ignore invalid timezone string and proceed without localized string
+    }
+  }
+
+  const timezoneLines = [
+    `Current UTC Time: ${now.toISOString()}`,
+    params.timezone
+      ? `User Timezone: ${params.timezone}${userLocalTime ? ` (Local: ${userLocalTime})` : ""}`
+      : undefined,
+    `Instructions for Date & Time Handling:`,
+    `- Interpret all relative dates and times (such as "today", "tomorrow", "next Monday", "at 7 PM") in the user's local timezone${params.timezone ? ` (${params.timezone})` : ""}.`,
+    `- When invoking tools that require an ISO 8601 timestamp (such as dueAt in create_task), compute the exact moment in time based on the user's local timezone and output a valid ISO 8601 string (in UTC or with the proper timezone offset).`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const timeContext = `[Date and Time Context]\n${timezoneLines}`;
 
   const memoryContext =
     formatMemoriesForContext(
@@ -86,6 +117,8 @@ export function assembleAssistantContext(
 
   const finalSystemPrompt =
   `${basePrompt}
+
+${timeContext}
 
 When answering the user's question, use the retrieved document context below when it is relevant.
 
