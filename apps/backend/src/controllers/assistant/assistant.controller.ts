@@ -4,8 +4,10 @@ import { MessageRepository } from "../../services/conversation/repositories/mess
 import { Request, Response } from "express";
 import { DocumentRetrievalService } from "../../services/documents/retrieval/document-retrieval.service";
 import { DocumentChunkRepository } from "../../services/documents/repositories/chunks/document-chunk.repository";
-import { LLMService } from "../../services/ai";
-import { OllamaLLMProvider } from "../../services/ai/providers/ollama.provider";
+import {
+  createLLMProvider,
+  LLMService,
+} from "../../services/ai";
 import { EmbeddingsService } from "../../services/memory/embeddings.service";
 import { MemoryService } from "../../services/memory/memory.service";
 import { OllamaProvider } from "../../services/memory/providers";
@@ -13,7 +15,7 @@ import { AssistantService } from "../../services/assistant/assistant.service";
 import { ToolExecutor } from "../../services/tools/tool.executor";
 import { createToolRegistry } from "../../services/tools/tool.container";
 const llmService = new LLMService(
-  new OllamaLLMProvider(),
+  createLLMProvider(),
 );
 
 const embeddingsService = new EmbeddingsService(

@@ -5,6 +5,7 @@ import { z } from "zod";
 dotenv.config({
   path: path.resolve(__dirname, "../../.env"),
 });
+
 // Define environment schema
 const envSchema = z.object({
   NODE_ENV: z
@@ -17,9 +18,9 @@ const envSchema = z.object({
     .string()
     .min(1, "DATABASE_URL is required"),
 
-    CLERK_PUBLISHABLE_KEY: z
-  .string()
-  .min(1, "CLERK_PUBLISHABLE_KEY is required"),
+  CLERK_PUBLISHABLE_KEY: z
+    .string()
+    .min(1, "CLERK_PUBLISHABLE_KEY is required"),
 
   CLERK_SECRET_KEY: z
     .string()
@@ -29,29 +30,46 @@ const envSchema = z.object({
     .string()
     .min(1, "CLERK_WEBHOOK_SECRET is required"),
 
- // ==========================
-// AI Providers
-// ==========================
+    // ==========================
+  // AI Providers
+  // ==========================
 
-OLLAMA_HOST: z
-  .string()
-  .default("http://localhost:11434"),
+  LLM_PROVIDER: z
+    .enum(["ollama", "omniroute"])
+    .default("ollama"),
 
-OLLAMA_CHAT_MODEL: z
-  .string()
-  .default("qwen2.5:3b"),
+  OLLAMA_HOST: z
+    .string()
+    .default("http://localhost:11434"),
 
-OLLAMA_EMBEDDING_MODEL: z
-  .string()
-  .default("nomic-embed-text"),
+  OLLAMA_CHAT_MODEL: z
+    .string()
+    .default("qwen2.5:3b"),
 
-OPENAI_API_KEY: z.string().optional(),
+  OLLAMA_EMBEDDING_MODEL: z
+    .string()
+    .default("nomic-embed-text"),
 
-AZURE_OPENAI_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
 
-AZURE_OPENAI_ENDPOINT: z.string().optional(),
+  AZURE_OPENAI_API_KEY: z.string().optional(),
 
-GOOGLE_API_KEY: z.string().optional(),
+  AZURE_OPENAI_ENDPOINT: z.string().optional(),
+
+  GOOGLE_API_KEY: z.string().optional(),
+
+  OMNIROUTE_HOST: z
+    .string()
+    .default("http://localhost:20128"),
+
+  OMNIROUTE_API_KEY: z
+    .string()
+    .optional(),
+
+  OMNIROUTE_MODEL: z
+    .string()
+    .default("BrainOS-Coding"),
+
   LOG_LEVEL: z
     .enum(["trace", "debug", "info", "warn", "error"])
     .default("info"),
