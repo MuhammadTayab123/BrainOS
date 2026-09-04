@@ -1,222 +1,255 @@
 import { ComputerAgentGateway } from "../computer/agent/computer-agent.gateway";
-import { LocalComputerAgent } from "../computer/agent/local-computer-agent";
-
 import {
   ToolContext,
   ToolDefinition,
 } from "./tool.types";
 
-const computerAgentGateway =
-  new ComputerAgentGateway(
-    new LocalComputerAgent(),
-  );
+export function createGetComputerStatusTool(
+  gateway: ComputerAgentGateway,
+): ToolDefinition {
+  return {
+    name: "computer_get_status",
 
-export const getComputerStatusTool: ToolDefinition = {
-  name: "computer_get_status",
+    description:
+      "Get safe, read-only information about the computer running BrainOS.",
 
-  description:
-    "Get safe, read-only information about the computer running BrainOS.",
-
-  parameters: {
-    type: "object",
-    properties: {},
-  },
-
-  async execute(
-    _input: unknown,
-    _context: ToolContext,
-  ) {
-    return computerAgentGateway.getInfo();
-  },
-};
-
-export const listComputerApplicationsTool: ToolDefinition = {
-  name: "computer_list_applications",
-
-  description:
-    "List applications installed or registered on the local computer.",
-
-  parameters: {
-    type: "object",
-    properties: {},
-  },
-
-  async execute(
-    _input: unknown,
-    _context: ToolContext,
-  ) {
-    return computerAgentGateway.listApplications();
-  },
-};
-
-export const launchComputerApplicationTool: ToolDefinition = {
-  name: "computer_launch_application",
-
-  description:
-    "Launch a local application using its discovered application ID.",
-
-  parameters: {
-    type: "object",
-    properties: {
-      appId: {
-        type: "string",
-        description:
-          "The application ID returned by computer_list_applications.",
-      },
+    parameters: {
+      type: "object",
+      properties: {},
     },
-    required: ["appId"],
-  },
 
-  async execute(
-    input: unknown,
-    _context: ToolContext,
-  ) {
-    if (
-      typeof input !== "object" ||
-      input === null ||
-      !("appId" in input) ||
-      typeof input.appId !== "string"
+    async execute(
+      _input: unknown,
+      _context: ToolContext,
     ) {
-      throw new Error("appId is required.");
-    }
-
-    return computerAgentGateway.launchApplication(
-      input.appId,
-    );
-  },
-};
-export const listComputerFilesTool: ToolDefinition = {
-  name: "computer_list_files",
-
-  description:
-    "List files and directories inside the local user's home directory. Read-only.",
-
-  parameters: {
-    type: "object",
-    properties: {
-      path: {
-        type: "string",
-        description:
-          "Optional path relative to the user's home directory.",
-      },
+      return gateway.getInfo();
     },
-  },
+  };
+}
 
-  async execute(
-    input: unknown,
-    _context: ToolContext,
-  ) {
-    if (
-      input !== undefined &&
-      input !== null &&
-      typeof input !== "object"
+export function createListComputerApplicationsTool(
+  gateway: ComputerAgentGateway,
+): ToolDefinition {
+  return {
+    name: "computer_list_applications",
+
+    description:
+      "List applications installed or registered on the local computer.",
+
+    parameters: {
+      type: "object",
+      properties: {},
+    },
+
+    async execute(
+      _input: unknown,
+      _context: ToolContext,
     ) {
-      throw new Error("Input must be an object.");
-    }
+      return gateway.listApplications();
+    },
+  };
+}
 
-    let requestedPath: string | undefined;
+export function createLaunchComputerApplicationTool(
+  gateway: ComputerAgentGateway,
+): ToolDefinition {
+  return {
+    name: "computer_launch_application",
 
-    if (
-      typeof input === "object" &&
-      input !== null &&
-      "path" in input
+    description:
+      "Launch a local application using its discovered application ID.",
+
+    parameters: {
+      type: "object",
+      properties: {
+        appId: {
+          type: "string",
+          description:
+            "The application ID returned by computer_list_applications.",
+        },
+      },
+      required: ["appId"],
+    },
+
+    async execute(
+      input: unknown,
+      _context: ToolContext,
     ) {
       if (
-        typeof input.path !== "string"
+        typeof input !== "object" ||
+        input === null ||
+        !("appId" in input) ||
+        typeof (input as Record<string, unknown>).appId !== "string"
       ) {
-        throw new Error("path must be a string.");
+        throw new Error("appId is required.");
       }
 
-      requestedPath = input.path;
-    }
+      return gateway.launchApplication(
+        (input as Record<string, unknown>).appId as string,
+      );
+    },
+  };
+}
 
-    return computerAgentGateway.listFiles(
-      requestedPath,
-    );
-  },
-};
-export const readComputerFileTool: ToolDefinition = {
-  name: "computer_read_file",
+export function createListComputerFilesTool(
+  gateway: ComputerAgentGateway,
+): ToolDefinition {
+  return {
+    name: "computer_list_files",
 
-  description:
-    "Read a UTF-8 text file inside the local user's home directory. Read-only.",
+    description:
+      "List files and directories inside the local user's home directory. Read-only.",
 
-  parameters: {
-    type: "object",
-    properties: {
-      path: {
-        type: "string",
-        description:
-          "Path to the text file relative to the user's home directory.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description:
+            "Optional path relative to the user's home directory.",
+        },
       },
     },
-    required: ["path"],
-  },
 
-  async execute(
-    input: unknown,
-    _context: ToolContext,
-  ) {
-    if (
-      typeof input !== "object" ||
-      input === null ||
-      !("path" in input) ||
-      typeof input.path !== "string"
+    async execute(
+      input: unknown,
+      _context: ToolContext,
     ) {
-      throw new Error("path is required.");
-    }
+      if (
+        input !== undefined &&
+        input !== null &&
+        typeof input !== "object"
+      ) {
+        throw new Error("Input must be an object.");
+      }
 
-    return computerAgentGateway.readFile(
-      input.path,
-    );
-  },
-};
-export const writeComputerFileTool: ToolDefinition = {
-  name: "computer_write_file",
+      let requestedPath: string | undefined;
 
-  description:
-    "Write UTF-8 text content to a file inside the local user's home directory.",
+      if (
+        typeof input === "object" &&
+        input !== null &&
+        "path" in input
+      ) {
+        if (
+          typeof (input as Record<string, unknown>).path !== "string"
+        ) {
+          throw new Error("path must be a string.");
+        }
 
-  parameters: {
-    type: "object",
-    properties: {
-      path: {
-        type: "string",
-        description:
-          "Path to the file relative to the user's home directory.",
-      },
-      content: {
-        type: "string",
-        description:
-          "UTF-8 text content to write to the file.",
-      },
+        requestedPath = (input as Record<string, unknown>).path as string;
+      }
+
+      return gateway.listFiles(
+        requestedPath,
+      );
     },
-    required: ["path", "content"],
-  },
+  };
+}
 
-  async execute(
-    input: unknown,
-    _context: ToolContext,
-  ) {
-    if (
-      typeof input !== "object" ||
-      input === null ||
-      !("path" in input) ||
-      typeof input.path !== "string"
+export function createReadComputerFileTool(
+  gateway: ComputerAgentGateway,
+): ToolDefinition {
+  return {
+    name: "computer_read_file",
+
+    description:
+      "Read a UTF-8 text file inside the local user's home directory. Read-only.",
+
+    parameters: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description:
+            "Path to the text file relative to the user's home directory.",
+        },
+      },
+      required: ["path"],
+    },
+
+    async execute(
+      input: unknown,
+      _context: ToolContext,
     ) {
-      throw new Error("path is required.");
-    }
+      if (
+        typeof input !== "object" ||
+        input === null ||
+        !("path" in input) ||
+        typeof (input as Record<string, unknown>).path !== "string"
+      ) {
+        throw new Error("path is required.");
+      }
 
-    if (
-      !("content" in input) ||
-      typeof input.content !== "string"
+      return gateway.readFile(
+        (input as Record<string, unknown>).path as string,
+      );
+    },
+  };
+}
+
+export function createWriteComputerFileTool(
+  gateway: ComputerAgentGateway,
+): ToolDefinition {
+  return {
+    name: "computer_write_file",
+
+    description:
+      "Write UTF-8 text content to a file inside the local user's home directory.",
+
+    parameters: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description:
+            "Path to the file relative to the user's home directory.",
+        },
+        content: {
+          type: "string",
+          description:
+            "UTF-8 text content to write to the file.",
+        },
+      },
+      required: ["path", "content"],
+    },
+
+    async execute(
+      input: unknown,
+      _context: ToolContext,
     ) {
-      throw new Error("content is required.");
-    }
+      if (
+        typeof input !== "object" ||
+        input === null ||
+        !("path" in input) ||
+        typeof (input as Record<string, unknown>).path !== "string"
+      ) {
+        throw new Error("path is required.");
+      }
 
-    return computerAgentGateway.writeFile(
-      input.path,
-      input.content,
-    );
-  },
-};
+      if (
+        !("content" in input) ||
+        typeof (input as Record<string, unknown>).content !== "string"
+      ) {
+        throw new Error("content is required.");
+      }
+
+      return gateway.writeFile(
+        (input as Record<string, unknown>).path as string,
+        (input as Record<string, unknown>).content as string,
+      );
+    },
+  };
+}
+
+export function createComputerTools(
+  gateway: ComputerAgentGateway,
+): ToolDefinition[] {
+  return [
+    createGetComputerStatusTool(gateway),
+    createListComputerApplicationsTool(gateway),
+    createLaunchComputerApplicationTool(gateway),
+    createListComputerFilesTool(gateway),
+    createReadComputerFileTool(gateway),
+    createWriteComputerFileTool(gateway),
+  ];
+}

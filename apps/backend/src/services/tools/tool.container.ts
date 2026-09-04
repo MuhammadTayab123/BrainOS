@@ -1,12 +1,6 @@
-
-import {
-  getComputerStatusTool,
-  listComputerApplicationsTool,
-  launchComputerApplicationTool,
-  listComputerFilesTool,
-  readComputerFileTool,
-  writeComputerFileTool,
-} from "./computer.tools";
+import { ComputerAgentGateway } from "../computer/agent/computer-agent.gateway";
+import { LocalComputerAgent } from "../computer/agent/local-computer-agent";
+import { createComputerTools } from "./computer.tools";
 import { documentSearchTool } from "./document.tools";
 
 import { ToolRegistry } from "./tool.registry";
@@ -21,7 +15,13 @@ import {
   deleteTaskTool,
 } from "./task.tools";
 
-export function createToolRegistry(): ToolRegistry {
+export interface ToolContainerOptions {
+  computerAgentGateway?: ComputerAgentGateway;
+}
+
+export function createToolRegistry(
+  options: ToolContainerOptions = {},
+): ToolRegistry {
   const registry = new ToolRegistry();
 
   registry.register(testTool);
@@ -35,11 +35,14 @@ export function createToolRegistry(): ToolRegistry {
 
   registry.register(documentSearchTool);
 
-  registry.register(getComputerStatusTool);
-  registry.register(listComputerApplicationsTool);
-  registry.register(launchComputerApplicationTool);
-  registry.register(listComputerFilesTool);
-  registry.register(readComputerFileTool);
-  registry.register(writeComputerFileTool);
+  const computerAgentGateway =
+    options.computerAgentGateway ??
+    new ComputerAgentGateway(new LocalComputerAgent());
+
+  const computerTools = createComputerTools(computerAgentGateway);
+  for (const tool of computerTools) {
+    registry.register(tool);
+  }
+
   return registry;
 }
