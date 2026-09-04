@@ -74,7 +74,7 @@ export class ConversationRepository {
     conversationId: string,
     userId: string,
   ): Promise<void> {
-    const result =
+        const result =
       await this.db.conversation.updateMany({
         where: {
           id: conversationId,
@@ -85,6 +85,29 @@ export class ConversationRepository {
           deletedAt: new Date(),
         },
       });
+
+    if (result.count === 0) {
+      throw new NotFoundError(
+        "Conversation not found for the authenticated user.",
+      );
+    }
+  }
+
+  async updateTitleForUser(
+    conversationId: string,
+    userId: string,
+    title: string,
+  ): Promise<void> {
+    const result = await this.db.conversation.updateMany({
+      where: {
+        id: conversationId,
+        userId,
+        deletedAt: null,
+      },
+      data: {
+        title,
+      },
+    });
 
     if (result.count === 0) {
       throw new NotFoundError(

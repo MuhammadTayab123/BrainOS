@@ -33,6 +33,7 @@ describe("AssistantService", () => {
   function createConversationRepositoryMock() {
     return {
       findByIdForUser: vi.fn(),
+      updateTitleForUser: vi.fn(),
     };
   }
 
@@ -358,6 +359,166 @@ describe("AssistantService", () => {
     });
   });
 
+  it("automatically titles a conversation from its first user message", async () => {
+    const llmService = createLlmServiceMock();
+    const memoryService = createMemoryServiceMock();
+    const toolExecutor = createToolExecutorMock();
+    const conversationRepository =
+      createConversationRepositoryMock();
+    const messageRepository =
+      createMessageRepositoryMock();
+
+    memoryService.searchMemories.mockResolvedValue([]);
+
+    conversationRepository.findByIdForUser.mockResolvedValue({
+      id: "conversation-1",
+      userId: "user-1",
+      title: null,
+    });
+
+    messageRepository.listByConversation.mockResolvedValue([]);
+    messageRepository.create.mockResolvedValue(undefined);
+
+    llmService.generate.mockResolvedValue({
+      text: "Hello! How can I help?",
+      model: "test-model",
+      provider: "test",
+      toolCalls: [],
+    });
+
+    const service = new AssistantService(
+      llmService as unknown as LLMService,
+      memoryService as unknown as MemoryService,
+      toolExecutor as unknown as ToolExecutor,
+      conversationRepository as unknown as ConversationRepository,
+      messageRepository as unknown as MessageRepository,
+    );
+
+    await service.ask({
+      userId: "user-1",
+      message: "  Help me plan my BrainOS project.  ",
+      conversationId: "conversation-1",
+    });
+
+    expect(
+      messageRepository.create,
+    ).toHaveBeenNthCalledWith(
+      1,
+      {
+        conversationId: "conversation-1",
+        role: "USER",
+        content: "Help me plan my BrainOS project.",
+      },
+    );
+
+    expect(
+      conversationRepository.updateTitleForUser,
+    ).toHaveBeenCalledWith(
+      "conversation-1",
+      "user-1",
+      "Help me plan my BrainOS project.",
+    );
+  });
+
+    it("truncates long conversation titles to 60 characters", async () => {
+    const llmService = createLlmServiceMock();
+    const memoryService = createMemoryServiceMock();
+    const toolExecutor = createToolExecutorMock();
+    const conversationRepository =
+      createConversationRepositoryMock();
+    const messageRepository =
+      createMessageRepositoryMock();
+
+    memoryService.searchMemories.mockResolvedValue([]);
+
+    conversationRepository.findByIdForUser.mockResolvedValue({
+      id: "conversation-1",
+      userId: "user-1",
+      title: null,
+    });
+
+    messageRepository.listByConversation.mockResolvedValue([]);
+    messageRepository.create.mockResolvedValue(undefined);
+
+    llmService.generate.mockResolvedValue({
+      text: "Done.",
+      model: "test-model",
+      provider: "test",
+      toolCalls: [],
+    });
+
+    const service = new AssistantService(
+      llmService as unknown as LLMService,
+      memoryService as unknown as MemoryService,
+      toolExecutor as unknown as ToolExecutor,
+      conversationRepository as unknown as ConversationRepository,
+      messageRepository as unknown as MessageRepository,
+    );
+
+    const longMessage =
+      "This is a very long BrainOS conversation message that should be truncated when used as a title.";
+
+    await service.ask({
+      userId: "user-1",
+      message: longMessage,
+      conversationId: "conversation-1",
+    });
+
+    expect(
+      conversationRepository.updateTitleForUser,
+    ).toHaveBeenCalledWith(
+      "conversation-1",
+      "user-1",
+      `${longMessage.slice(0, 57)}...`,
+    );
+  });
+
+  it("preserves an existing conversation title", async () => {
+    const llmService = createLlmServiceMock();
+    const memoryService = createMemoryServiceMock();
+    const toolExecutor = createToolExecutorMock();
+    const conversationRepository =
+      createConversationRepositoryMock();
+    const messageRepository =
+      createMessageRepositoryMock();
+
+    memoryService.searchMemories.mockResolvedValue([]);
+
+    conversationRepository.findByIdForUser.mockResolvedValue({
+      id: "conversation-1",
+      userId: "user-1",
+      title: "Existing conversation",
+    });
+
+    messageRepository.listByConversation.mockResolvedValue([]);
+    messageRepository.create.mockResolvedValue(undefined);
+
+    llmService.generate.mockResolvedValue({
+      text: "Welcome back.",
+      model: "test-model",
+      provider: "test",
+      toolCalls: [],
+    });
+
+    const service = new AssistantService(
+      llmService as unknown as LLMService,
+      memoryService as unknown as MemoryService,
+      toolExecutor as unknown as ToolExecutor,
+      conversationRepository as unknown as ConversationRepository,
+      messageRepository as unknown as MessageRepository,
+    );
+
+    await service.ask({
+      userId: "user-1",
+      message: "Continue working on BrainOS.",
+      conversationId: "conversation-1",
+    });
+
+    expect(
+      conversationRepository.updateTitleForUser,
+    ).not.toHaveBeenCalled();
+  });
+
   it("loads persistent conversation history and saves user and assistant messages", async () => {
     const llmService = createLlmServiceMock();
     const memoryService = createMemoryServiceMock();
@@ -375,6 +536,7 @@ describe("AssistantService", () => {
       {
         id: "conversation-1",
         userId: "user-1",
+        title: "Existing conversation",
       },
     );
 

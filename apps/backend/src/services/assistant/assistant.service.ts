@@ -22,6 +22,7 @@ import { MessageRepository } from "../conversation/repositories/message.reposito
 import { AssistantRuntime } from "./assistant.runtime";
 
 const MAX_TOOL_ROUNDS = 5;
+const MAX_CONVERSATION_TITLE_LENGTH = 60;
 
 export class AssistantService {
   constructor(
@@ -144,6 +145,23 @@ export class AssistantService {
         role: "USER",
         content: trimmedMessage,
       });
+
+      if (conversation.title === null) {
+        const title =
+          trimmedMessage.length >
+          MAX_CONVERSATION_TITLE_LENGTH
+            ? `${trimmedMessage.slice(
+                0,
+                MAX_CONVERSATION_TITLE_LENGTH - 3,
+              )}...`
+            : trimmedMessage;
+
+        await this.conversationRepository.updateTitleForUser(
+          conversationId,
+          userId,
+          title,
+        );
+      }
     }
 
     const assembledContext =
