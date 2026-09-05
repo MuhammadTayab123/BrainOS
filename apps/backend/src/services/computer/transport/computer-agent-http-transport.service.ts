@@ -9,6 +9,11 @@ import {
   ProtocolErrorCode,
   validateProtocolRequestEnvelope,
 } from "../protocol";
+import {
+  ComputerActionRequest,
+  ComputerAgentActionContext,
+  ComputerAgentActionDispatcher,
+} from "../dispatch";
 import { EnvelopeReplayGuard } from "./envelope-replay-guard.interface";
 
 export const DEFAULT_MAX_TIMESTAMP_DRIFT_MS = 60_000; // ±60 seconds
@@ -38,18 +43,21 @@ export interface TransportExecutionResult {
 export interface ComputerAgentHttpTransportOptions {
   authenticator: ComputerAgentAuthenticator;
   replayGuard: EnvelopeReplayGuard;
+  dispatcher?: ComputerAgentActionDispatcher;
   clock?: () => number;
   maxDriftMs?: number;
 }
 
 /**
  * HTTP Transport Service for Computer Agent communication.
- * Ingress only: authenticates credentials, validates protocol envelopes, asserts identity,
- * enforces timestamp bounds, prevents replay, and returns safe acknowledgement.
+ * Ingress: authenticates credentials, validates protocol envelopes, asserts identity,
+ * enforces timestamp bounds, prevents replay, and dispatches action_request envelopes
+ * to the authorized action-dispatch pipeline while preserving safe acknowledgement
+ * for non-action messages.
  *
  * Security guarantees:
- * - Does NOT execute computer actions directly.
- * - Does NOT invoke Gateway, filesystem, shell, or OS operations.
+ * - Does NOT execute computer actions directly (delegates exclusively via ComputerAgentActionDispatcher).
+ * - Does NOT invoke Gateway, filesystem, shell, or OS operations directly.
  * - Keeps Clerk User Identity separate from Computer Agent Identity.
  * - Derives user ownership strictly from authenticated agent records.
  * - Records replay IDs strictly after authentication and timestamp validation succeed.
@@ -58,12 +66,14 @@ export interface ComputerAgentHttpTransportOptions {
 export class ComputerAgentHttpTransportService {
   private readonly authenticator: ComputerAgentAuthenticator;
   private readonly replayGuard: EnvelopeReplayGuard;
+  private readonly dispatcher?: ComputerAgentActionDispatcher;
   private readonly clock: () => number;
   private readonly maxDriftMs: number;
 
   constructor(options: ComputerAgentHttpTransportOptions) {
     this.authenticator = options.authenticator;
     this.replayGuard = options.replayGuard;
+    this.dispatcher = options.dispatcher;
     this.clock = options.clock ?? (() => Date.now());
     this.maxDriftMs = options.maxDriftMs ?? DEFAULT_MAX_TIMESTAMP_DRIFT_MS;
   }
@@ -199,7 +209,97 @@ export class ComputerAgentHttpTransportService {
       };
     }
 
-    // 7. Return safe protocol acknowledgement (no Gateway, OS, or action execution)
+    // 7. Dispatch action if envelope.type === "action_request"
+    if (envelope.type === "action_request") {
+      if (!this.dispatcher) {
+        return {
+          statusCode: 200,
+          envelope: createProtocolErrorResponse({
+            id: envelope.id,
+            timestamp: now,
+            error: {
+              code: ProtocolErrorCode.ACTION_FAILED,
+              message: "Action dispatcher is not configured.",
+            },
+          }),
+        };
+      }
+
+      const payloadObj =
+        typeof envelope.payload === "object" &&
+        envelope.payload !== null &&
+        !Array.isArray(envelope.payload)
+          ? (envelope.payload as Record<string, unknown>)
+          : null;
+
+      const correlationId =
+        payloadObj &&
+        typeof payloadObj.correlationId === "string" &&
+        payloadObj.correlationId.trim().length > 0
+          ? payloadObj.correlationId.trim()
+          : envelope.id;
+
+      const action =
+        payloadObj && typeof payloadObj.action === "string"
+          ? payloadObj.action.trim()
+          : "";
+
+      const actionRequest: ComputerActionRequest = {
+        correlationId,
+        action,
+        params: payloadObj ? payloadObj.params : undefined,
+        timestamp: envelope.timestamp,
+      };
+
+      const context: ComputerAgentActionContext = {
+        agentId: authContext.agentId,
+        userId: authContext.userId,
+      };
+
+      try {
+        const actionResponse = await this.dispatcher.dispatch(
+          actionRequest,
+          context,
+        );
+
+        if (!actionResponse.success) {
+          return {
+            statusCode: 200,
+            envelope: createProtocolErrorResponse({
+              id: envelope.id,
+              timestamp: now,
+              error: actionResponse.error ?? {
+                code: ProtocolErrorCode.ACTION_FAILED,
+                message: "Action execution failed.",
+              },
+            }),
+          };
+        }
+
+        return {
+          statusCode: 200,
+          envelope: createProtocolSuccessResponse({
+            id: envelope.id,
+            timestamp: now,
+            data: actionResponse.data,
+          }),
+        };
+      } catch {
+        return {
+          statusCode: 200,
+          envelope: createProtocolErrorResponse({
+            id: envelope.id,
+            timestamp: now,
+            error: {
+              code: ProtocolErrorCode.ACTION_FAILED,
+              message: "Action execution failed.",
+            },
+          }),
+        };
+      }
+    }
+
+    // 8. Return safe protocol acknowledgement for non-action messages (e.g. ping)
     // Uses incoming envelope.id as response envelope id; preserves protocol contract without adding requestId.
     return {
       statusCode: 200,

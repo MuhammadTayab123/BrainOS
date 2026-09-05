@@ -2,7 +2,15 @@ import { Request, Response } from "express";
 import { ComputerAgentStatus } from "@prisma/client";
 
 import { AppError } from "../../errors";
+import { ComputerAgentGateway } from "../../services/computer/agent/computer-agent.gateway";
+import { LocalComputerAgent } from "../../services/computer/agent/local-computer-agent";
 import { ComputerAgentService } from "../../services/computer/computer-agent.service";
+import {
+  ComputerAgentActionAuthorizer,
+  DefaultComputerAgentActionDispatcher,
+  GatewayComputerActionHandler,
+  PrismaComputerActionPermissionProvider,
+} from "../../services/computer/dispatch";
 import { ComputerAgentRepository } from "../../services/computer/repositories/computer-agent.repository";
 import {
   ComputerAgentHttpTransportService,
@@ -17,6 +25,19 @@ export function setComputerAgentService(service: ComputerAgentService): void {
 }
 
 const defaultReplayGuard = new InMemoryEnvelopeReplayGuard();
+const defaultPermissionProvider = new PrismaComputerActionPermissionProvider();
+const defaultAuthorizer = new ComputerAgentActionAuthorizer({
+  permissionProvider: defaultPermissionProvider,
+});
+const defaultGateway = new ComputerAgentGateway(new LocalComputerAgent());
+const defaultActionHandler = new GatewayComputerActionHandler({
+  gateway: defaultGateway,
+});
+const defaultDispatcher = new DefaultComputerAgentActionDispatcher({
+  authorizer: defaultAuthorizer,
+  handler: defaultActionHandler,
+});
+
 let computerAgentHttpTransportService = new ComputerAgentHttpTransportService({
   authenticator: {
     async authenticate(agentId: string, credential: string) {
@@ -43,6 +64,7 @@ let computerAgentHttpTransportService = new ComputerAgentHttpTransportService({
     },
   },
   replayGuard: defaultReplayGuard,
+  dispatcher: defaultDispatcher,
 });
 
 export function setComputerAgentHttpTransportService(
