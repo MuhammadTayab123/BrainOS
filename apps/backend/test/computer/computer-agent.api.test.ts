@@ -14,6 +14,9 @@ const fakes = vi.hoisted(() => ({
   updateLastAuthenticatedAt: vi.fn(),
   revokeByIdForUser: vi.fn(),
   softDeleteByIdForUser: vi.fn(),
+  grantPermission: vi.fn(),
+  revokePermission: vi.fn(),
+  listPermissions: vi.fn(),
 }));
 
 vi.mock("@clerk/express", () => ({
@@ -30,6 +33,25 @@ vi.mock("@clerk/express", () => ({
 vi.mock("../../src/services/auth/auth.service", () => ({
   getAuthenticatedUser: fakes.authenticatedUser,
 }));
+
+vi.mock(
+  "../../src/services/computer/repositories/computer-agent-permission.repository",
+  () => ({
+    ComputerAgentPermissionRepository: class {
+      grantPermission(data: Record<string, unknown>) {
+        return fakes.grantPermission(data);
+      }
+
+      revokePermission(data: Record<string, unknown>) {
+        return fakes.revokePermission(data);
+      }
+
+      listPermissions(data: Record<string, unknown>) {
+        return fakes.listPermissions(data);
+      }
+    },
+  }),
+);
 
 vi.mock(
   "../../src/services/computer/repositories/computer-agent.repository",
@@ -603,6 +625,249 @@ describe("Computer Agents API", () => {
 
       // Verify lastAuthenticatedAt updated
       expect(fakes.updateLastAuthenticatedAt).toHaveBeenCalledWith("agent-1");
+    });
+  });
+
+  describe("GET /api/v1/computer-agents/:id/permissions", () => {
+    it("returns 401 when unauthenticated", async () => {
+      fakes.authenticatedUser.mockResolvedValue(null);
+
+      const response = await request(app).get(
+        "/api/v1/computer-agents/agent-1/permissions",
+      );
+
+      expect(response.status).toBe(401);
+    });
+
+    it("returns 404 when agent is not found or not owned by user", async () => {
+      fakes.listPermissions.mockRejectedValue(
+        new NotFoundError(
+          "Computer agent not found for the authenticated user.",
+        ),
+      );
+
+      const response = await request(app).get(
+        "/api/v1/computer-agents/agent-1/permissions",
+      );
+
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe("NOT_FOUND");
+    });
+
+    it("returns active permissions list successfully", async () => {
+      const mockPerms = [
+        {
+          id: "perm-1",
+          agentId: "agent-1",
+          action: "computer_launch_application",
+          createdAt: new Date("2026-09-05T00:00:00.000Z"),
+          updatedAt: new Date("2026-09-05T00:00:00.000Z"),
+          deletedAt: null,
+        },
+        {
+          id: "perm-2",
+          agentId: "agent-1",
+          action: "computer_write_file",
+          createdAt: new Date("2026-09-05T00:00:00.000Z"),
+          updatedAt: new Date("2026-09-05T00:00:00.000Z"),
+          deletedAt: null,
+        },
+      ];
+      fakes.listPermissions.mockResolvedValue(mockPerms);
+
+      const response = await request(app).get(
+        "/api/v1/computer-agents/agent-1/permissions",
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toHaveLength(2);
+      expect(response.body.data[0].action).toBe("computer_launch_application");
+      expect(response.body.data[1].action).toBe("computer_write_file");
+      expect(fakes.listPermissions).toHaveBeenCalledWith({
+        agentId: "agent-1",
+        userId: "user-a",
+      });
+    });
+  });
+
+  describe("POST /api/v1/computer-agents/:id/permissions", () => {
+    it("returns 401 when unauthenticated", async () => {
+      fakes.authenticatedUser.mockResolvedValue(null);
+
+      const response = await request(app)
+        .post("/api/v1/computer-agents/agent-1/permissions")
+        .send({ action: "computer_write_file" });
+
+      expect(response.status).toBe(401);
+    });
+
+    it("returns 400 when action is missing or empty", async () => {
+      const response = await request(app)
+        .post("/api/v1/computer-agents/agent-1/permissions")
+        .send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe("INVALID_ACTION");
+    });
+
+    it("returns 400 when action is read-only", async () => {
+      const response = await request(app)
+        .post("/api/v1/computer-agents/agent-1/permissions")
+        .send({ action: "computer_read_file" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe("INVALID_ACTION");
+      expect(response.body.error.message).toContain("read-only");
+    });
+
+    it("returns 400 when action is unknown", async () => {
+      const response = await request(app)
+        .post("/api/v1/computer-agents/agent-1/permissions")
+        .send({ action: "unknown_action" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe("INVALID_ACTION");
+      expect(response.body.error.message).toContain("Unknown or unregistered");
+    });
+
+    it("returns 400 when agent is inactive or revoked", async () => {
+      fakes.grantPermission.mockRejectedValue(
+        new Error("Cannot grant permissions for an inactive or revoked agent."),
+      );
+
+      const response = await request(app)
+        .post("/api/v1/computer-agents/agent-1/permissions")
+        .send({ action: "computer_write_file" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe("AGENT_NOT_ACTIVE");
+    });
+
+    it("returns 404 when agent is not found or not owned by user", async () => {
+      fakes.grantPermission.mockRejectedValue(
+        new NotFoundError(
+          "Computer agent not found for the authenticated user.",
+        ),
+      );
+
+      const response = await request(app)
+        .post("/api/v1/computer-agents/agent-1/permissions")
+        .send({ action: "computer_write_file" });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe("NOT_FOUND");
+    });
+
+    it("grants privileged action successfully", async () => {
+      const mockCreated = {
+        id: "perm-123",
+        agentId: "agent-1",
+        action: "computer_write_file",
+        createdAt: new Date("2026-09-05T00:00:00.000Z"),
+        updatedAt: new Date("2026-09-05T00:00:00.000Z"),
+        deletedAt: null,
+      };
+      fakes.grantPermission.mockResolvedValue(mockCreated);
+
+      const response = await request(app)
+        .post("/api/v1/computer-agents/agent-1/permissions")
+        .send({ action: "computer_write_file" });
+
+      expect(response.status).toBe(201);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.id).toBe("perm-123");
+      expect(response.body.data.action).toBe("computer_write_file");
+      expect(fakes.grantPermission).toHaveBeenCalledWith({
+        agentId: "agent-1",
+        userId: "user-a",
+        action: "computer_write_file",
+      });
+    });
+  });
+
+  describe("DELETE /api/v1/computer-agents/:id/permissions/:action", () => {
+    it("returns 401 when unauthenticated", async () => {
+      fakes.authenticatedUser.mockResolvedValue(null);
+
+      const response = await request(app).delete(
+        "/api/v1/computer-agents/agent-1/permissions/computer_write_file",
+      );
+
+      expect(response.status).toBe(401);
+    });
+
+    it("returns 400 when action is read-only", async () => {
+      const response = await request(app).delete(
+        "/api/v1/computer-agents/agent-1/permissions/computer_read_file",
+      );
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe("INVALID_ACTION");
+      expect(response.body.error.message).toContain("read-only");
+    });
+
+    it("returns 400 when action is unknown", async () => {
+      const response = await request(app).delete(
+        "/api/v1/computer-agents/agent-1/permissions/unknown_action",
+      );
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe("INVALID_ACTION");
+      expect(response.body.error.message).toContain("Unknown or unregistered");
+    });
+
+    it("returns 404 when agent is not found or not owned by user", async () => {
+      fakes.revokePermission.mockRejectedValue(
+        new NotFoundError(
+          "Computer agent not found for the authenticated user.",
+        ),
+      );
+
+      const response = await request(app).delete(
+        "/api/v1/computer-agents/agent-1/permissions/computer_write_file",
+      );
+
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe("NOT_FOUND");
+    });
+
+    it("returns 404 when permission is not found or already revoked", async () => {
+      fakes.revokePermission.mockRejectedValue(
+        new NotFoundError(
+          "Computer agent permission not found or already revoked.",
+        ),
+      );
+
+      const response = await request(app).delete(
+        "/api/v1/computer-agents/agent-1/permissions/computer_write_file",
+      );
+
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe("NOT_FOUND");
+    });
+
+    it("revokes active permission successfully", async () => {
+      fakes.revokePermission.mockResolvedValue(undefined);
+
+      const response = await request(app).delete(
+        "/api/v1/computer-agents/agent-1/permissions/computer_write_file",
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        success: true,
+        data: {
+          agentId: "agent-1",
+          action: "computer_write_file",
+          revoked: true,
+        },
+      });
+      expect(fakes.revokePermission).toHaveBeenCalledWith({
+        agentId: "agent-1",
+        userId: "user-a",
+        action: "computer_write_file",
+      });
     });
   });
 });

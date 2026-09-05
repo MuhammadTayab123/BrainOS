@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { ComputerAgentStatus } from "@prisma/client";
 
+import { AppError } from "../../errors";
 import { ComputerAgentService } from "../../services/computer/computer-agent.service";
 import { ComputerAgentRepository } from "../../services/computer/repositories/computer-agent.repository";
 import {
@@ -9,7 +10,11 @@ import {
 } from "../../services/computer/transport";
 
 const computerAgentRepository = new ComputerAgentRepository();
-const computerAgentService = new ComputerAgentService(computerAgentRepository);
+let computerAgentService = new ComputerAgentService(computerAgentRepository);
+
+export function setComputerAgentService(service: ComputerAgentService): void {
+  computerAgentService = service;
+}
 
 const defaultReplayGuard = new InMemoryEnvelopeReplayGuard();
 let computerAgentHttpTransportService = new ComputerAgentHttpTransportService({
@@ -313,4 +318,168 @@ export async function handleComputerAgentProtocolMessage(
   );
 
   return res.status(result.statusCode).json(result.envelope);
+}
+
+export async function listComputerAgentPermissions(
+  req: Request,
+  res: Response,
+) {
+  if (!req.user) {
+    return unauthorized(res);
+  }
+
+  const agentId = getId(req);
+
+  if (!agentId) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: "INVALID_AGENT_ID",
+        message: "Agent ID is required.",
+      },
+    });
+  }
+
+  const permissions = await computerAgentService.listPermissions(
+    agentId,
+    req.user.id,
+  );
+
+  return res.status(200).json({
+    success: true,
+    data: permissions,
+  });
+}
+
+export async function grantComputerAgentPermission(
+  req: Request,
+  res: Response,
+) {
+  if (!req.user) {
+    return unauthorized(res);
+  }
+
+  const agentId = getId(req);
+
+  if (!agentId) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: "INVALID_AGENT_ID",
+        message: "Agent ID is required.",
+      },
+    });
+  }
+
+  const { action } = req.body ?? {};
+
+  if (typeof action !== "string" || action.trim().length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: "INVALID_ACTION",
+        message: "Action name is required.",
+      },
+    });
+  }
+
+  try {
+    const permission = await computerAgentService.grantPermission(
+      agentId,
+      req.user.id,
+      action.trim(),
+    );
+
+    return res.status(201).json({
+      success: true,
+      data: permission,
+    });
+  } catch (err: unknown) {
+    if (err instanceof AppError) {
+      throw err;
+    }
+
+    if (err instanceof Error) {
+      const code = err.message.includes("inactive or revoked")
+        ? "AGENT_NOT_ACTIVE"
+        : "INVALID_ACTION";
+
+      return res.status(400).json({
+        success: false,
+        error: {
+          code,
+          message: err.message,
+        },
+      });
+    }
+
+    throw err;
+  }
+}
+
+export async function revokeComputerAgentPermission(
+  req: Request,
+  res: Response,
+) {
+  if (!req.user) {
+    return unauthorized(res);
+  }
+
+  const agentId = getId(req);
+
+  if (!agentId) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: "INVALID_AGENT_ID",
+        message: "Agent ID is required.",
+      },
+    });
+  }
+
+  const rawAction = req.params.action;
+  const action = typeof rawAction === "string" ? rawAction.trim() : "";
+
+  if (action.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: "INVALID_ACTION",
+        message: "Action name is required.",
+      },
+    });
+  }
+
+  try {
+    await computerAgentService.revokePermission(
+      agentId,
+      req.user.id,
+      action,
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        agentId,
+        action,
+        revoked: true,
+      },
+    });
+  } catch (err: unknown) {
+    if (err instanceof AppError) {
+      throw err;
+    }
+
+    if (err instanceof Error) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "INVALID_ACTION",
+          message: err.message,
+        },
+      });
+    }
+
+    throw err;
+  }
 }
