@@ -2382,3 +2382,140 @@ Verified state:
 - HEAD: `6ae0a7e`
 - Remote: `origin/main` synchronized (`HEAD == origin/main`)
 - Working tree: clean (context update pending)
+
+---
+
+# 45. MISSION 45 — ASSISTANT MEMORY TOOLS INTEGRATION
+
+**Updated:** 2026-09-05
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 45 — Assistant Memory Tools Integration — COMPLETE
+
+Mission 45 adds explicit conversational memory operations to the BrainOS AI Assistant. Through standard tool definitions, the assistant can now explicitly store, search, list, retrieve, and delete personal memories and facts in the user's persistent Second Brain memory engine.
+
+### Architectural Flow
+
+```text
+User / Conversational Prompt ("Remember that my doctor is Dr. Smith at City Clinic")
+    ↓
+AssistantService Orchestration (ask)
+    ↓
+LLM Tool Call Selection (store_memory / search_memories / list_memories / get_memory / delete_memory)
+    ↓
+ToolExecutor
+    ├── Classification Check (isComputerTool === false, requiresComputerAuthorization === false)
+    ├── Parameter Validation (requireObject, requireString, optionalImportance [0.0–1.0], optionalIntegerInRange [1–50])
+    ├── Server-Derived User Context (context.userId from authenticated session)
+    ↓
+Memory Tools Execution Layer (memory.tools.ts)
+    ↓
+MemoryService (createMemory, searchMemories, listMemories, getMemoryById, deleteMemory)
+    ├── EmbeddingsService (768-dimensional nomic-embed-text via Ollama)
+    ↓
+MemoryRepository (PostgreSQL database operations & pgvector cosine similarity)
+    ↓
+Synchronous Audit Logging (ToolAuditService records outcome: SUCCEEDED / FAILED)
+    ↓
+Assistant Response Generation
+```
+
+### 1. Added Tools
+
+- **`store_memory`**: Stores a new personal fact, preference, note, or piece of knowledge in the user's Second Brain memory with required `content` string and optional float `importance` ($0.0 \le \text{importance} \le 1.0$, default $0.5$).
+- **`search_memories`**: Semantically searches stored memories using natural language query with required `query` string and optional integer `limit` ($1 \le \text{limit} \le 50$, default $5$).
+- **`list_memories`**: Lists recent stored memories and personal knowledge notes in reverse chronological order with optional integer `limit` ($1 \le \text{limit} \le 50$, default $20$).
+- **`get_memory`**: Retrieves details of a specific stored memory by required `memoryId` string.
+- **`delete_memory`**: Soft-deletes (forgets) a stored memory by required `memoryId` string, returning `{ success: true, memoryId }`.
+
+### 2. Implementation Files
+
+- `apps/backend/src/services/tools/memory.tools.ts`
+- `apps/backend/src/services/tools/tool.container.ts`
+- `apps/backend/test/tools/memory.tools.test.ts`
+
+### 3. Reused Domain Contracts (Without Modification)
+
+- `MemoryService.createMemory({ userId, content, importance? })`
+- `MemoryService.searchMemories({ userId, query, limit? })`
+- `MemoryService.listMemories({ userId, limit? })`
+- `MemoryService.getMemoryById({ userId, memoryId })`
+- `MemoryService.deleteMemory({ userId, memoryId })`
+
+### 4. Actual Validation Boundaries
+
+- `importance`: Float number between `0.0` and `1.0` inclusive ($0.0 \le \text{importance} \le 1.0$).
+- `default importance`: `0.5`, handled authoritatively by `MemoryService` and `DEFAULT_MEMORY_IMPORTANCE`.
+- `search limit`: Integer between `1` and `50` ($1 \le \text{limit} \le 50$), default `5`.
+- `list limit`: Integer between `1` and `50` ($1 \le \text{limit} \le 50$), default `20`.
+- Non-empty strings required for `content`, `query`, and `memoryId`.
+
+### 5. Security & Isolation
+
+- **Server-Derived Identity**: `userId` is derived exclusively from `ToolContext.userId` (`context.userId`).
+- **No Client Spoofing**: `userId` is never accepted as a tool argument in parameter schemas.
+- **Fail-Closed Context**: Missing or whitespace-only `context.userId` immediately throws an error before calling service logic.
+- **Tenant Isolation**: `MemoryService` and `MemoryRepository` enforce user ownership and `deletedAt: null` filtering on all operations.
+- **Cross-User Protection**: Attempting to fetch or delete another user's memory throws `NotFoundError`.
+- **Information Hiding**: 768-dimensional float embedding vectors and internal database identifiers are never exposed in tool output.
+- **Audit Logging**: `ToolExecutor` synchronously records `SUCCEEDED` / `FAILED` audit records to `ToolAuditService` with sanitized error messages.
+- **Tool Classification**: Memory tools evaluate to `isComputerTool === false` and `requiresComputerAuthorization === false`.
+
+### 6. Architecture & Composition
+
+- Follows the established `ToolDefinition` / `ToolContext` architecture.
+- `createToolRegistry(options)` in `tool.container.ts` accepts an optional `memoryService?: MemoryService` in `ToolContainerOptions` for dependency injection and testing.
+- Zero modifications to `MemoryService`, `MemoryRepository`, `EmbeddingsService`, `AssistantService`, Computer Agent, AI provider abstraction, Prisma schema, or migrations.
+- Standard JSON parameter schemas are provider-agnostic across Ollama, OmniRoute, and other LLM backends.
+
+### 7. Verification Completed
+
+```text
+Focused Memory Tool Tests:
+24/24 PASS (test/tools/memory.tools.test.ts)
+
+All Tool Subsystem Tests:
+86/86 PASS (8 test files in test/tools/)
+
+Full Backend Regression Suite:
+68/68 test files PASS, 770/770 tests PASS (100% PASS)
+
+TypeScript Compilation:
+npx tsc --noEmit (0 errors, CLEAN)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+
+Security Review:
+PASSED (Server-derived context, tenant isolation, information hiding, fail-closed validation)
+
+Architectural Review:
+PASSED (Clean tool container composition, zero database/domain drift)
+```
+
+### 8. Git Checkpoint
+
+```text
+feaaed3 feat(tools): add assistant memory tools
+99f9b43 docs(context): update assistant reminder tools milestone
+6ae0a7e feat(tools): add assistant reminder tools
+ccdb29b docs(context): update HTTP action dispatch milestone
+```
+
+Verified state:
+- Branch: `main`
+- HEAD: `feaaed3`
+- Remote: `origin/main` synchronized (`HEAD == origin/main`)
+- Working tree: context update uncommitted
+
+### 9. Mission Impact
+
+The BrainOS assistant can now explicitly store, search, list, retrieve, and forget user memories through the existing tool-calling architecture, completing the conversational memory tool surface without changing the underlying memory domain or database schema.
+
+### 10. Deferred / Unchanged
+
+- Assistant Automation Tools remain future work.
+- Frontend tool visualization in Next.js remains future work.
+- Native desktop daemon / OS drivers remain deferred.
+- No database schema or migration changes were required.
