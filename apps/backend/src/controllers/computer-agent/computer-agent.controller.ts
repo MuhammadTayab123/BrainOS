@@ -3,10 +3,48 @@ import { ComputerAgentStatus } from "@prisma/client";
 
 import { ComputerAgentService } from "../../services/computer/computer-agent.service";
 import { ComputerAgentRepository } from "../../services/computer/repositories/computer-agent.repository";
+import {
+  ComputerAgentHttpTransportService,
+  InMemoryEnvelopeReplayGuard,
+} from "../../services/computer/transport";
 
-const computerAgentService = new ComputerAgentService(
-  new ComputerAgentRepository(),
-);
+const computerAgentRepository = new ComputerAgentRepository();
+const computerAgentService = new ComputerAgentService(computerAgentRepository);
+
+const defaultReplayGuard = new InMemoryEnvelopeReplayGuard();
+let computerAgentHttpTransportService = new ComputerAgentHttpTransportService({
+  authenticator: {
+    async authenticate(agentId: string, credential: string) {
+      const authResult = await computerAgentService.authenticateAgent({
+        agentId,
+        credential,
+      });
+
+      if (!authResult.authenticated) {
+        return null;
+      }
+
+      const agent = await computerAgentRepository.findById(agentId.trim());
+      if (!agent) {
+        return null;
+      }
+
+      return {
+        authenticated: true,
+        agentId: agent.id,
+        userId: agent.userId,
+        authenticatedAt: new Date(),
+      };
+    },
+  },
+  replayGuard: defaultReplayGuard,
+});
+
+export function setComputerAgentHttpTransportService(
+  service: ComputerAgentHttpTransportService,
+): void {
+  computerAgentHttpTransportService = service;
+}
 
 function unauthorized(res: Response) {
   return res.status(401).json({
@@ -260,4 +298,19 @@ export async function authenticateComputerAgent(req: Request, res: Response) {
       agentId: result.agentId,
     },
   });
+}
+
+export async function handleComputerAgentProtocolMessage(
+  req: Request,
+  res: Response,
+) {
+  const result = await computerAgentHttpTransportService.handleIncomingMessage(
+    {
+      agentId: req.headers["x-agent-id"],
+      credential: req.headers["x-agent-credential"],
+    },
+    req.body,
+  );
+
+  return res.status(result.statusCode).json(result.envelope);
 }
