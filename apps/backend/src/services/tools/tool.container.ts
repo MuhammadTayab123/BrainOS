@@ -1,7 +1,16 @@
+import { AutomationService } from "../automation/automation.service";
 import { ComputerAgentGateway } from "../computer/agent/computer-agent.gateway";
 import { LocalComputerAgent } from "../computer/agent/local-computer-agent";
 import { MemoryService } from "../memory/memory.service";
 import { ReminderService } from "../reminders/reminder.service";
+import {
+  createAutomationTools,
+  createCreateAutomationTool,
+  createDeleteAutomationTool,
+  createGetAutomationTool,
+  createListAutomationsTool,
+  createUpdateAutomationTool,
+} from "./automation.tools";
 import { createComputerTools } from "./computer.tools";
 import { documentSearchTool } from "./document.tools";
 import {
@@ -33,6 +42,7 @@ import {
 } from "./task.tools";
 
 export interface ToolContainerOptions {
+  automationService?: AutomationService;
   computerAgentGateway?: ComputerAgentGateway;
   memoryService?: MemoryService;
   reminderService?: ReminderService;
@@ -87,6 +97,20 @@ export function createToolRegistry(
       ];
 
   for (const tool of memoryTools) {
+    registry.register(tool);
+  }
+
+  const automationTools = options.automationService
+    ? createAutomationTools(options.automationService)
+    : [
+        createCreateAutomationTool(),
+        createListAutomationsTool(),
+        createGetAutomationTool(),
+        createUpdateAutomationTool(),
+        createDeleteAutomationTool(),
+      ];
+
+  for (const tool of automationTools) {
     registry.register(tool);
   }
 
