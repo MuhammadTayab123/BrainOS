@@ -2657,3 +2657,143 @@ All five core BrainOS backend domains (**Tasks**, **Documents/RAG**, **Computer 
 - Frontend assistant UI tool visualization widgets in Next.js remain future work.
 - Native desktop daemon / OS drivers remain deferred.
 - No database schema or migration changes were required.
+
+---
+
+# 47. MISSION 47 — ASSISTANT DOCUMENT MANAGEMENT TOOLS
+
+**Updated:** 2026-09-06
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 47 — Assistant Document Management Tools — COMPLETE
+
+Mission 47 extends the Assistant tool subsystem by exposing document inspection and lifecycle management capabilities alongside the existing semantic RAG retrieval tool (`document_search`). The conversational AI assistant can now list uploaded knowledge base documents, inspect full document content and metadata by document ID, and soft-delete unneeded documents.
+
+### Architectural Flow
+
+```text
+User / Conversational Prompt ("List my uploaded documents" / "Show me document doc_123" / "Delete document doc_456")
+    ↓
+AssistantService Orchestration (ask)
+    ↓
+LLM Tool Call Selection (list_documents / get_document / delete_document / document_search)
+    ↓
+ToolExecutor
+    ├── Classification Check (isComputerTool === false, requiresComputerAuthorization === false)
+    ├── Parameter Validation (requireObject, requireString, optionalEnum, optionalPositiveIntegerInRange)
+    ├── Server-Derived User Context (context.userId from authenticated session)
+    ↓
+Document Tools Execution Layer (document.tools.ts)
+    ├── list_documents / get_document / delete_document → DocumentService (listDocuments, getDocument, deleteDocument)
+    │   ↓
+    │   DocumentRepository (PostgreSQL database operations, soft-delete via deletedAt)
+    └── document_search → DocumentRetrievalService (search)
+    ↓
+Synchronous Audit Logging (ToolAuditService records outcome: SUCCEEDED / FAILED)
+    ↓
+Assistant Response Generation
+```
+
+### 1. Tools Added & Preserved
+
+- **`list_documents` [NEW]**: Lists documents for the authenticated user, with optional `status` filter (`PENDING`, `READY`, `FAILED`, `DELETED`) and optional integer `limit` (1–50, default 20). Returns sanitized metadata array.
+- **`get_document` [NEW]**: Retrieves complete details, metadata, and full text content of a specific document for the authenticated user by required `documentId`.
+- **`delete_document` [NEW]**: Soft-deletes a document for the authenticated user by required `documentId`, returning `{ success: true, documentId }`.
+- **`document_search` [PRESERVED]**: Continues to perform hybrid semantic/keyword search over chunked document embeddings with required `query` and optional integer `limit` (1–20).
+
+### 2. Implementation Files
+
+- `apps/backend/src/services/tools/document.tools.ts`
+- `apps/backend/src/services/tools/tool.container.ts`
+- `apps/backend/test/tools/document.tools.test.ts`
+
+### 3. Reused Domain Contracts (Without Modification)
+
+- `DocumentService.listDocuments({ userId, status?, limit? })`
+- `DocumentService.getDocument({ documentId, userId })`
+- `DocumentService.deleteDocument({ documentId, userId })`
+- `DocumentRetrievalService.search({ userId, query, limit? })`
+
+### 4. Actual Validation Boundaries
+
+- `status` (`list_documents`): `PENDING`, `READY`, `FAILED`, `DELETED` (matches Prisma schema `DocumentStatus`).
+- `limit` (`list_documents`): Integer between 1 and 50 ($1 \le \text{limit} \le 50$, default 20).
+- `documentId` (`get_document`, `delete_document`): Required non-empty string.
+- `query` (`document_search`): Required non-empty string.
+- `limit` (`document_search`): Integer between 1 and 20 ($1 \le \text{limit} \le 20$).
+- Server-derived `userId` enforced across all operations.
+
+### 5. Security & Tenant Isolation
+
+- **Server-Derived Identity**: `userId` is obtained strictly from `ToolContext.userId` (`context.userId`).
+- **No Client Spoofing**: `userId` is omitted from tool schemas; user/client/prompt cannot provide or override `userId`.
+- **Fail-Closed Validation**: Missing, null, or whitespace-only `context.userId` immediately throws an error before reaching domain services.
+- **Tenant Isolation**: `DocumentService` and `DocumentRepository` enforce strict user ownership (`where: { id, userId, deletedAt: null }`).
+- **Cross-User Protection**: Accessing or deleting another user's document throws `NotFoundError` ("Document not found for the authenticated user.").
+- **Soft-Delete Behavior**: `delete_document` sets `deletedAt` timestamp without hard deleting underlying records.
+- **Audit Logging**: All document tool executions record `SUCCEEDED` / `FAILED` audit records with sanitized error messages in `ToolAuditService`.
+- **Tool Classification**: Document tools evaluate to `isComputerTool === false` and `requiresComputerAuthorization === false`.
+
+### 6. Sanitized Outputs
+
+- Returns only public document metadata and text content (`id`, `title`, `sourceType`, `source`, `mimeType`, `status`, `createdAt`, `updatedAt`, and `content` for `get_document`).
+- Completely omits raw vector embeddings, chunk vectors, and internal chunking metadata.
+
+### 7. Architecture & Tool Registration / DI
+
+- Follows standard `ToolDefinition` / `ToolContext` contracts.
+- Individual factory functions exported: `createListDocumentsTool`, `createGetDocumentTool`, `createDeleteDocumentTool`, `createDocumentSearchTool`.
+- `createDocumentTools` bundles all 4 tools and accepts `documentRetrievalService?: DocumentRetrievalService` and `documentService?: DocumentService`.
+- `createToolRegistry(options)` in `tool.container.ts` registers all 4 document tools and accepts optional `documentRetrievalService` and `documentService` in `ToolContainerOptions`.
+- Zero modifications to `DocumentService`, `DocumentRepository`, `DocumentRetrievalService`, Prisma schema/migrations, RAG search behavior, `AssistantService`, Computer Agent, or AI provider abstraction.
+
+### 8. Verification Completed
+
+```text
+Focused Document Tool Tests:
+25/25 PASS (test/tools/document.tools.test.ts)
+
+All Tool Subsystem Tests:
+127/127 PASS (9 test files in test/tools/)
+
+Full Backend Regression Suite:
+69/69 test files PASS, 811/811 tests PASS (100% PASS)
+
+TypeScript Compilation:
+npx tsc --noEmit / npm run build (0 errors, CLEAN)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+
+Security Review:
+PASSED (Server-derived context, tenant isolation, fail-closed validation, information hiding)
+
+Architectural Review:
+PASSED (Clean tool container composition, zero database/domain drift)
+```
+
+### 9. Git Checkpoint
+
+```text
+c4bf8e4 feat(tools): add assistant document management tools
+96c3da2 docs(context): update assistant automation tools milestone
+11c187d feat(tools): add assistant automation tools
+```
+
+Verified state:
+- Branch: `main`
+- HEAD: `c4bf8e4`
+- Status: 1 commit ahead of origin/main (push pending)
+- Working tree: context update uncommitted (`.agents/rules/` remains untracked user customization)
+
+### 10. Mission Impact
+
+The conversational AI Assistant now has full visibility and lifecycle control over the user's uploaded documents and Second Brain knowledge base without modifying any underlying ingestion, retrieval, or database models.
+
+### 11. Deferred / Unchanged
+
+- Assistant Streaming & Token Generation Protocol (SSE) remains future work.
+- Frontend assistant UI document management/preview widgets in Next.js remain future work.
+- Native desktop daemon / OS drivers remain deferred.
+- No database schema or migration changes were required.
