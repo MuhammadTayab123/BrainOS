@@ -9,9 +9,9 @@
 **OS:** Windows
 **Editor:** VS Code
 **Current date checkpoint:** 2026-09-04
-**Latest verified Git commit:** `49e7675 feat(ai): add OmniRoute provider routing`
-**Working tree at latest user verification:** modified (unrelated unstaged edit in `apps/backend/test/tools/tool.executor.audit.test.ts`)
-**Remote:** `origin/main` matched local `main` at `49e7675`
+**Latest verified Git commit:** `debd156 feat(computer): add agent persistence and lifecycle`
+**Working tree at latest user verification:** clean
+**Remote:** `origin/main` matched local `main` at `debd156`
 
 ---
 
@@ -1165,13 +1165,13 @@ Keep these concepts separate:
 
 ```text
 Source documents
-        �
+        �
 Extracted content
-        �
+        �
 Semantic chunks
-        �
+        �
 Personal memories
-        �
+        �
 Structured application data
 ```
 
@@ -1512,3 +1512,693 @@ Testable
 > Build a personal AI companion that feels like an intelligent second person working alongside the user: it understands context, remembers useful information, communicates naturally, can perform authorized tasks on the user's devices, shows what it is doing, helps manage work and life, and proactively assists when appropriate — while never taking control away from the user.
 
 # END OF BRAINOS MASTER PROJECT CONTEXT
+
+
+---
+
+# 37. ADDITIVE UPDATE — COMPUTER AGENT AUTHENTICATION & CURRENT CHECKPOINT
+
+**Updated:** 2026-09-04
+
+This section is an additive update to the original BrainOS context. It does **not** replace or remove the earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Computer Agent dependency injection — COMPLETE
+
+Computer tools were refactored so they no longer construct the concrete local agent directly.
+
+Composition now follows:
+
+```text
+ToolContainer
+    ↓
+ComputerAgentGateway
+    ↓
+ComputerAgent
+```
+
+`createToolRegistry()` accepts an optional `ComputerAgentGateway`.
+
+The default composition remains:
+
+```text
+ComputerAgentGateway(new LocalComputerAgent())
+```
+
+This keeps the tool layer testable and prevents concrete-agent coupling.
+
+Commit:
+
+```text
+775421a refactor(computer): inject agent gateway into tools
+```
+
+## Computer Agent Authentication Contract — COMPLETE
+
+A transport-independent authentication contract has now been implemented.
+
+Files:
+
+```text
+apps/backend/src/services/computer/security/computer-agent-auth.service.ts
+apps/backend/src/services/computer/security/computer-agent-auth.types.ts
+apps/backend/test/security/computer-agent-auth.test.ts
+```
+
+The contract provides:
+
+- cryptographically random credentials using Node `crypto`
+- 32-byte default credentials
+- minimum 16-byte generation guard
+- `scrypt` hashing
+- random salt
+- timing-safe comparison
+- fail-closed malformed input handling
+- injectable credential storage
+- in-memory storage for local/test execution
+- agent ID preservation
+- no raw credential persistence
+- no raw credential logging
+
+Core contracts:
+
+```text
+ComputerAgentCredentials
+StoredAgentCredential
+ComputerAgentAuthResult
+ComputerAgentCredentialStore
+```
+
+The authentication service currently supports:
+
+```text
+registerAgent(agentId)
+registerAgentHash(agentId, credentialHash)
+authenticate({ agentId, credential })
+authenticate(agentId, credential)
+```
+
+Raw credentials are generated/returned during registration but only the hash is stored.
+
+The implementation intentionally does **not** introduce:
+
+```text
+HTTP
+WebSocket
+JWT
+database persistence
+pairing protocol
+new computer capabilities
+```
+
+Those belong to later lifecycle/transport milestones.
+
+## Security review observations
+
+The implementation was reviewed and accepted for the current milestone.
+
+Known non-blocking observations:
+
+1. `scryptSync()` is synchronous and can block the Node event loop. This is acceptable for the current local/low-volume contract. Revisit if remote/high-frequency authentication is introduced.
+2. The current authentication result distinguishes `"Unknown agent ID"` from `"Invalid credentials"`. If a remote transport is later introduced, the externally visible failure response may need to become generic to reduce agent-ID enumeration while internal audit logging can remain specific.
+
+These observations do not require changes to the completed milestone.
+
+## Validation completed
+
+Computer Agent Authentication Contract:
+
+```text
+Focused authentication tests:
+11/11 PASS
+
+Existing computer tests:
+29/29 PASS
+
+Full backend regression:
+57/57 test files PASS
+514/514 tests PASS
+
+Backend TypeScript:
+PASS
+
+git diff --cached --check:
+PASS
+```
+
+The root repository `npm test` remains a placeholder and does not run the backend suite.
+
+Correct backend regression command:
+
+```powershell
+cd D:\Project\BrainOS\apps\backend
+npm test -- --run
+```
+
+## Latest Git checkpoint
+
+The authentication milestone was committed and pushed.
+
+```text
+e728986 feat(computer): add agent authentication contract
+775421a refactor(computer): inject agent gateway into tools
+3c6e70c feat(reminders): add reminders REST API
+```
+
+Latest verified state:
+
+```text
+Branch:
+main
+
+HEAD:
+e728986
+
+origin/main:
+e728986
+
+Working tree:
+clean
+```
+
+## Next milestone — Agent Registration & Trust Lifecycle
+
+The next milestone is **design first, implementation second**.
+
+Do not immediately add Prisma, HTTP, WebSocket, or pairing code.
+
+First define:
+
+### Registration authority
+
+Only an authenticated BrainOS user should be able to register an agent for that user.
+
+Never trust a client-supplied arbitrary `userId` for ownership.
+
+### Agent ownership
+
+The future trusted-agent model should associate a computer agent with exactly one BrainOS user.
+
+Conceptually:
+
+```text
+User
+  1
+  │
+  └──────< ComputerAgent
+```
+
+The exact Prisma model should be designed only after the lifecycle contract is clear.
+
+### Initial credential delivery
+
+Define how the first credential is securely delivered to the local agent.
+
+Do not place a permanent credential in:
+
+```text
+source code
+Git
+logs
+normal URLs
+LLM prompts
+unsafe browser storage
+```
+
+Prefer secure OS credential storage for long-lived local credentials, such as Windows Credential Manager or an equivalent secure mechanism.
+
+### Trust state
+
+Design the lifecycle states before implementation. The final names may differ, but the lifecycle needs to represent concepts such as:
+
+```text
+registered
+trusted / active
+revoked
+```
+
+### Revocation
+
+The owner must be able to revoke an agent.
+
+After revocation:
+
+```text
+future authentication → FAIL
+```
+
+Revocation must be owner-scoped and fail closed.
+
+### Identity separation
+
+Keep these three concepts separate:
+
+```text
+Clerk User Identity
+        ≠
+Computer Agent Identity
+        ≠
+Agent Credential
+```
+
+Clerk authenticates the BrainOS user.
+
+The agent credential authenticates the computer agent.
+
+Ownership connects the agent to the user but does not make the agent a Clerk session.
+
+## Target architecture after trust lifecycle
+
+```text
+Browser / Clerk
+      ↓
+BrainOS Backend
+      ↓
+Authenticated User
+      ↓
+Agent Registration / Ownership
+      ↓
+Credential Issuance
+      ↓
+Trusted Local Agent
+      ↓
+Agent Authentication
+      ↓
+ComputerAgentGateway
+      ↓
+Authorized Computer Actions
+```
+
+Revocation:
+
+```text
+User
+ ↓
+Revoke Agent
+ ↓
+Agent trust disabled
+ ↓
+Future authentication fails
+```
+
+Do not implement HTTP/WebSocket transport until this lifecycle is defined and accepted.
+
+---
+
+# 38. ADDITIVE UPDATE — COMPUTER AGENT PERSISTENCE & TRUST LIFECYCLE
+
+**Updated:** 2026-09-05
+
+This section is an additive update to the original BrainOS context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Computer Agent Persistence — COMPLETE
+
+Computer Agent identity and credential persistence have now been added to the BrainOS Prisma/PostgreSQL architecture.
+
+The persistence model is:
+
+```text
+User
+  └── ComputerAgent
+        └── ComputerAgentCredential
+        ---
+
+# 39. ADDITIVE UPDATE — COMPUTER AGENT HTTP TRANSPORT
+
+**Updated:** 2026-09-05
+
+This section is an additive update to the BrainOS context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Computer Agent HTTP Transport — COMPLETE
+
+A secure HTTP ingress layer for Computer Agents has now been implemented and verified.
+
+The transport is deliberately limited to:
+
+```text
+HTTP Ingress
+    ↓
+Agent Credential Authentication
+    ↓
+Protocol Envelope Validation
+    ↓
+Agent Identity Verification
+    ↓
+Timestamp Validation
+    ↓
+Replay Protection
+    ↓
+Safe Protocol Acknowledgement
+```
+
+---
+
+# 40. ADDITIVE UPDATE — COMPUTER AGENT ACTION AUTHORIZATION & DISPATCH CONTRACT
+
+**Updated:** 2026-09-05
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Computer Agent Action Authorization & Dispatch Contract — COMPLETE
+
+A transport-independent action authorization and dispatch contract has now been implemented and verified for the BrainOS Computer Agent subsystem.
+
+### Architectural flow
+
+```text
+Action Request (with Correlation ID)
+         ↓
+Input & Envelope Validation
+         ↓
+Action Name Resolution (Typed ComputerActionName)
+         ↓
+Server-Derived Context (agentId + persisted owner userId)
+         ↓
+Policy Check (Safe Read-only vs Privileged Action)
+         ↓
+Trusted Permission Provider Evaluation (Server-side grants only)
+         ├── If Unauthorized → Record Tool Audit Event & Return Error (Fail-Closed)
+         └── If Authorized →
+                   ↓
+         Injectable Action Handler Execution (Handler called ONLY after authorization)
+                   ↓
+         Action Response (Mirrors Correlation ID & Typed Data / Protocol Error)
+```
+
+### Core contracts & implementation files
+
+```text
+apps/backend/src/services/computer/dispatch/computer-agent-dispatch.types.ts
+apps/backend/src/services/computer/dispatch/computer-agent-action-authorizer.ts
+apps/backend/src/services/computer/dispatch/computer-agent-action-dispatcher.ts
+apps/backend/src/services/computer/dispatch/index.ts
+apps/backend/test/services/computer/dispatch/computer-agent-dispatch.test.ts
+```
+
+### Key architectural and security guarantees
+
+1. **Strongly-Typed Action Names**:
+   - Supported actions are codified in `ComputerActionName`:
+     - `computer_get_status`
+     - `computer_list_applications`
+     - `computer_list_files`
+     - `computer_read_file`
+     - `computer_launch_application`
+     - `computer_write_file`
+   - Validated via `ALL_COMPUTER_ACTION_NAMES` and `isComputerActionName()`.
+   - Directly maps to registered computer tools in `computer-action.policy.ts`.
+
+2. **Server-Derived Security Context (`ComputerAgentActionContext`)**:
+   - `agentId` is verified strictly via authenticated credentials.
+   - `userId` is strictly server-derived from the persisted agent owner record.
+   - The context strictly forbids client-supplied permissions or grant overrides.
+
+3. **Trusted Server-Side Permission Provider (`ComputerActionPermissionProvider`)**:
+   - Privileged permissions are evaluated exclusively via trusted server-side sources (`InMemoryComputerActionPermissionProvider` implementing `isActionPermitted(action, context)`).
+   - Grants support agent-scoped (`agentId`) and compound owner-agent (`userId:agentId`) granularity.
+   - Client requests cannot self-grant or elevate privileges.
+
+4. **Fail-Closed Privileged Authorization (`ComputerAgentActionAuthorizer`)**:
+   - Fails closed if `userId` or `agentId` is missing, blank, or malformed (`ProtocolErrorCode.UNAUTHORIZED`).
+   - Fails closed on unknown or unmapped action names (`ProtocolErrorCode.ACTION_FAILED`).
+   - Preserves established security policy:
+     - Safe read-only actions (`computer_get_status`, `computer_list_applications`, `computer_list_files`, `computer_read_file`) are automatically authorized for authenticated agents (`authorizationRequired: false`).
+     - State-modifying / high-risk actions (`computer_launch_application`, `computer_write_file`) require explicit server grants (`authorizationRequired: true`). Unauthorized attempts fail closed.
+
+5. **Audit Logging Integration**:
+   - Unauthorized privileged action attempts are recorded synchronously to `ToolAuditService` matching `ToolExecutor` invariants (`toolName`, `userId`, `outcome: "UNAUTHORIZED"`, `durationMs`, `computerTool: true`, `authorizationRequired: true`, error).
+
+6. **Transport-Independent Dispatch Contract (`DefaultComputerAgentActionDispatcher`)**:
+   - Structured request envelope (`ComputerActionRequest`) carrying required `correlationId`, `action`, optional `params`, and `timestamp`.
+   - Structured response envelope (`ComputerActionResponse`) mirroring `correlationId`, `action`, `success`, `timestamp`, `data` (on success), or `error` (`ComputerAgentProtocolError` on failure).
+   - Structured error handling via `ComputerAgentActionException` extending `AppError`.
+   - Helper constructors: `createActionRequest()`, `createActionSuccessResponse()`, `createActionErrorResponse()`, `generateCorrelationId()`.
+
+7. **Strict Authorization Order & Handler Boundary**:
+   - **Authorization ALWAYS executes before handler invocation**: Handlers are never called if authorization fails.
+   - Supports pluggable, injectable `ComputerActionHandler` for testing and future execution bindings.
+   - Default dispatcher fails closed when no handler is bound without executing OS actions.
+
+8. **Milestone Boundaries & Security Invariants**:
+   - **No OS / LocalComputerAgent / Gateway execution**: No live OS processes, shells, or filesystem side-effects are connected in this milestone.
+   - **No HTTP changes**: Existing HTTP routes and controllers remain untouched.
+   - Security tests specifically verify that client request bodies cannot self-grant permissions.
+
+### Verification completed
+
+```text
+Dispatch Contract Tests:
+test/services/computer/dispatch/computer-agent-dispatch.test.ts
+20/20 PASS
+
+Full Computer Agent Subsystem Suites:
+184/184 PASS (9 test files)
+- computer-agent-dispatch.test.ts (20/20 PASS)
+- computer-agent-http-transport.test.ts (28/28 PASS)
+- computer-agent-protocol.test.ts (20/20 PASS)
+- computer-agent.api.test.ts (26/26 PASS)
+- computer-agent.service.test.ts (29/29 PASS)
+- computer-agent.repository.test.ts (22/22 PASS)
+- computer-agent-auth.test.ts (11/11 PASS)
+- computer.tools.test.ts (21/21 PASS)
+- computer-agent.tool.test.ts (7/7 PASS)
+
+TypeScript Compilation:
+npm run build (0 errors, CLEAN)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+```
+
+### Latest Git checkpoint
+
+```text
+7131e03 feat(computer): add action authorization and dispatch contract
+5dbb858 feat(computer): add agent HTTP transport
+9ff1c18 feat(computer): add agent protocol contract
+debd156 feat(computer): add agent persistence and lifecycle
+e728986 feat(computer): add agent authentication contract
+```
+
+Verified state:
+
+```text
+Branch: main
+HEAD: 7131e03
+origin/main: 7131e03 (synchronized)
+Working tree: clean (context update pending)
+```
+
+### Explicitly deferred work
+
+The following items are intentionally deferred to future milestones:
+
+1. **Live Action Execution**: Implementing and binding concrete OS execution handlers (process spawning, window management, filesystem operations) to `ComputerActionHandler`.
+2. **Gateway Connection**: Connecting `ComputerAgentGateway` and `LocalComputerAgent` to the dispatch pipeline.
+3. **Persistent Permission Storage**: Moving beyond in-memory permission evaluation to database-backed persistent permission tables / RBAC in Prisma.
+4. **Remote Agent Authorization Policy**: Dynamic policy negotiation and authorization delegation for multi-device / remote-agent configurations.
+5. **HTTP / WebSocket Dispatch Ingress**: Exposing action dispatch over authenticated transport endpoints.
+
+---
+
+# 42. ADDITIVE UPDATE — COMPUTER AGENT PERSISTENT ACTION PERMISSIONS
+
+**Updated:** 2026-09-05
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Computer Agent Persistent Action Permissions — COMPLETE
+
+Persistent, database-backed action authorization has now been implemented and verified for the BrainOS Computer Agent subsystem.
+
+### Architectural flow & Permission Evaluation
+
+```text
+Action Request
+      ↓
+Server-Derived Context (agentId + verified owner userId)
+      ↓
+Action Policy Evaluation (computer-action.policy.ts)
+      ├── If Safe Read-Only Action (e.g. computer_get_status, computer_read_file, computer_list_files, computer_list_applications)
+      │     └── Policy-Authorized (No DB row required, authorizationRequired: false)
+      │           ↓
+      │     Proceed to Dispatch / Handler
+      │
+      └── If Privileged Action (computer_write_file, computer_launch_application)
+            └── Server-Side Database Evaluation (PrismaComputerActionPermissionProvider)
+                  ↓
+            Query Active Permission in PostgreSQL (ComputerAgentPermission where deletedAt IS NULL)
+                  ├── If Active Grant Exists → Authorized (authorizationRequired: true) → Handler Execution
+                  ├── If No Grant / Soft-Deleted → Unauthorized (Fail-Closed, Tool Audit Logged)
+                  └── If Invalid Identity / Action / DB Error → Unauthorized (Fail-Closed)
+```
+
+### Core models, contracts & implementation files
+
+```text
+apps/backend/prisma/schema.prisma (ComputerAgentPermission model & partial unique index)
+apps/backend/prisma/migrations/20260905115400_add_computer_agent_permissions/migration.sql
+apps/backend/src/services/computer/repositories/computer-agent-permission.repository.ts
+apps/backend/src/services/computer/dispatch/prisma-computer-action-permission-provider.ts
+apps/backend/src/services/computer/computer-agent.service.ts (grantPermission, revokePermission, listPermissions)
+apps/backend/src/services/computer/computer-agent.types.ts
+apps/backend/test/services/computer/repositories/computer-agent-permission.repository.test.ts
+apps/backend/test/services/computer/dispatch/prisma-computer-action-permission-provider.test.ts
+apps/backend/test/services/computer/computer-agent.service.test.ts
+```
+
+### Key architectural and security guarantees
+
+1. **Persistent PostgreSQL `ComputerAgentPermission` Model**:
+   - Stored in PostgreSQL with relational linkage to `ComputerAgent`:
+     - `id` (cuid primary key)
+     - `agentId` (foreign key to `ComputerAgent.id` with onDelete: Restrict)
+     - `action` (string representing privileged action name)
+     - `createdAt`, `updatedAt`, `deletedAt` (timestamp fields supporting soft-deletion)
+   - Prisma migration `20260905115400_add_computer_agent_permissions` generated and applied.
+
+2. **Active-Permission Partial Unique Index**:
+   - Backed by PostgreSQL partial unique index:
+     ```sql
+     CREATE UNIQUE INDEX "computer_agent_permissions_agent_id_action_key"
+       ON "ComputerAgentPermission"("agentId", "action")
+       WHERE "deletedAt" IS NULL;
+     ```
+   - Guarantees at most one active grant per `(agentId, action)` pair at the database engine level, while fully supporting historical soft-deleted records and subsequent re-granting.
+
+3. **Concurrency-Safe & Idempotent Grant Lifecycle**:
+   - `ComputerAgentPermissionRepository.grantPermission` handles the full permission lifecycle:
+     - **Active grant exists** → Idempotent no-op returning existing active permission record.
+     - **Soft-deleted grant exists** → Reactivate record by resetting `deletedAt: null` and updating `updatedAt`.
+     - **Missing grant** → Create new `ComputerAgentPermission` record.
+     - **Concurrent create collision (Prisma P2002)** → Safely catches unique constraint violation and recovers by querying and returning the active permission record.
+
+4. **Owner-Scoped Management Operations**:
+   - `grantPermission(agentId, userId, action)`: Validates owner scoping (`agent.userId === userId`) and active agent status (`status === 'ACTIVE'`) before granting.
+   - `revokePermission(agentId, userId, action)`: Soft-deletes the permission (`deletedAt: new Date()`) under owner scope.
+   - `listPermissions(agentId, userId)`: Returns only active permissions (`deletedAt: null`) for owner-verified active agents.
+
+5. **Privileged Actions Policy Boundary (Single Source of Truth)**:
+   - Only privileged Computer Agent actions that require authorization support persistent permissions:
+     - `computer_write_file`
+     - `computer_launch_application`
+   - Policy helper `requiresComputerAuthorization(action)` and `isComputerTool(action)` from `computer-action.policy.ts` serves as the sole source of truth.
+   - Read-only actions and unknown actions are rejected fail-closed during grant/revoke.
+
+6. **Read-Only Actions Remain Policy-Authorized**:
+   - Read-only actions (`computer_get_status`, `computer_list_applications`, `computer_list_files`, `computer_read_file`) do not require database permission rows and evaluate as authorized via policy check.
+
+7. **Fail-Closed Prisma Permission Provider (`PrismaComputerActionPermissionProvider`)**:
+   - Implements `ComputerActionPermissionProvider` interface for runtime authorization.
+   - Fails closed on missing or blank `agentId`/`userId`, non-privileged/invalid action names, missing active database grants, or database connection/query failures.
+   - Unauthorized privileged action attempts are audited by the authorization layer (`ComputerAgentActionAuthorizer`) via `ToolAuditService`.
+
+8. **Transactional Cascade on Agent Revocation / Deletion**:
+   - When an agent is revoked (`revokeAgent`) or deleted (`deleteAgent`), all active permissions for that agent are transactionally soft-deleted (`deletedAt: new Date()`) alongside credentials within the same Prisma `$transaction`.
+
+9. **Server-Side Authorization & Anti-Self-Granting**:
+   - Clients cannot self-grant or elevate permissions through request payloads or protocol envelopes.
+   - Action authorization is evaluated strictly server-side using server-derived security context before any execution handler is reached.
+
+10. **Preserved Security Boundary**:
+    ```text
+    Clerk User Identity
+            ≠
+    Computer Agent Identity
+            ≠
+    Agent Credential
+    ```
+    - Clerk authenticates the human user.
+    - Computer Agent identity represents the registered workstation owned by the user.
+    - Agent credentials authenticate transport envelopes.
+    - Persistent permissions govern specific privileged capabilities granted to the agent by its owner.
+
+11. **System Invariants Preserved**:
+    - Existing authentication, protocol envelope verification, HTTP transport replay protection, dispatch contract, execution handler boundary, `ComputerAgentGateway`, and `LocalComputerAgent` remain completely intact.
+
+### Current Computer Agent Subsystem Architecture
+
+```text
+HTTP Ingress (POST /api/v1/computer-agents/protocol/messages)
+      ↓
+Agent Credential Authentication (scrypt Hash Verification)
+      ↓
+Protocol Envelope & Replay Verification (Envelope ID + Timestamp Validation + Replay Guard)
+      ↓
+Safe Protocol Acknowledgement (Current HTTP transport ends here)
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+[FUTURE / DEFERRED: HTTP Action-Dispatch Execution Wiring connects ingress below]
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Transport-Independent Action Dispatch Pipeline (DefaultComputerAgentActionDispatcher)
+      ↓
+Action Authorization (ComputerAgentActionAuthorizer)
+      ├── Safe Read-Only Policy Check (Policy-authorized, 0 DB queries)
+      └── Privileged Persistent Permission Evaluation (PrismaComputerActionPermissionProvider)
+            ↓ (Only if authorized)
+Execution Boundary Handler (GatewayComputerActionHandler)
+      ├── Strict Parameter Validation
+      └── Explicit Switch Mapping to ComputerAgentGateway (getInfo, listApps, listFiles, readFile, launchApp, writeFile)
+            ↓
+ComputerAgentGateway / LocalComputerAgent Execution
+```
+
+### Verification completed
+
+```text
+Prisma Migration Status:
+npx prisma migrate status → "Database schema is up to date!"
+Migration: 20260905115400_add_computer_agent_permissions (APPLIED)
+
+Focused Permission Tests:
+- test/services/computer/repositories/computer-agent-permission.repository.test.ts (15/15 PASS)
+- test/services/computer/dispatch/prisma-computer-action-permission-provider.test.ts (7/7 PASS)
+- test/services/computer/computer-agent.service.test.ts (29/29 PASS)
+Total: 51/51 PASS
+
+Full Backend Regression Suite:
+66/66 test files passed, 695/695 tests passed (100% PASS)
+
+TypeScript Compilation:
+npx tsc --noEmit (0 errors, CLEAN)
+npm run build (0 errors, CLEAN)
+
+Diff Check:
+git diff --cached --check (0 warnings, CLEAN)
+```
+
+### Git checkpoints
+
+```text
+bb6cdf8 feat(computer): persist agent action permissions
+9727455 feat(computer): add execution boundary
+7131e03 feat(computer): add action authorization and dispatch contract
+5dbb858 feat(computer): add agent HTTP transport
+9ff1c18 feat(computer): add agent protocol contract
+debd156 feat(computer): add agent persistence and lifecycle
+e728986 feat(computer): add agent authentication contract
+```
+
+Verified state:
+
+```text
+Branch: main
+HEAD: bb6cdf8
+origin/main: bb6cdf8 (synchronized)
+Working tree: clean (context update pending)
+```
+
+### Explicitly deferred work (NOT implemented)
+
+The following items remain explicitly deferred to future milestones:
+
+1. **HTTP Action-Dispatch Execution Wiring**: Connecting incoming HTTP message transport payloads directly to the dispatch pipeline.
+2. **WebSocket Real-Time Ingress**: Bi-directional real-time communication channel for computer agent streaming.
+3. **Remote Pairing Protocol**: QR-code or PIN-based out-of-band agent registration and pairing flow.
+4. **JWT Session Tokens**: Short-lived scoped session tokens for agent interactions.
+5. **Distributed Replay Protection**: Redis-backed shared nonce/timestamp cache for multi-instance deployments.
+6. **Permission Admin UI / API**: Frontend interface and REST endpoints for managing agent permissions.
+7. **Expanded OS / Process Automation**: Additional OS capabilities beyond the core 6 registered actions.
+8. **Visual Execution / Screen Capture**: Screen streaming, canvas capture, and coordinate-based mouse/keyboard actions.
+9. **Heartbeat & Presence Monitoring**: Periodic health-checks and online status tracking.
+10. **Multi-Device Coordination**: Fleet routing and multi-agent task distribution.
