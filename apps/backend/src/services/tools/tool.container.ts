@@ -1,7 +1,15 @@
 import { ComputerAgentGateway } from "../computer/agent/computer-agent.gateway";
 import { LocalComputerAgent } from "../computer/agent/local-computer-agent";
+import { ReminderService } from "../reminders/reminder.service";
 import { createComputerTools } from "./computer.tools";
 import { documentSearchTool } from "./document.tools";
+import {
+  createCancelReminderTool,
+  createCreateReminderTool,
+  createGetReminderTool,
+  createListRemindersTool,
+  createReminderTools,
+} from "./reminder.tools";
 
 import { ToolRegistry } from "./tool.registry";
 import { testTool } from "./test.tool";
@@ -17,6 +25,7 @@ import {
 
 export interface ToolContainerOptions {
   computerAgentGateway?: ComputerAgentGateway;
+  reminderService?: ReminderService;
 }
 
 export function createToolRegistry(
@@ -41,6 +50,19 @@ export function createToolRegistry(
 
   const computerTools = createComputerTools(computerAgentGateway);
   for (const tool of computerTools) {
+    registry.register(tool);
+  }
+
+  const reminderTools = options.reminderService
+    ? createReminderTools(options.reminderService)
+    : [
+        createCreateReminderTool(),
+        createListRemindersTool(),
+        createGetReminderTool(),
+        createCancelReminderTool(),
+      ];
+
+  for (const tool of reminderTools) {
     registry.register(tool);
   }
 
