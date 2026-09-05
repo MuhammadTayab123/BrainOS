@@ -42,6 +42,26 @@ export function isComputerActionName(
 }
 
 /**
+ * Action parameter shapes for supported Computer Actions.
+ */
+export interface LaunchApplicationActionParams {
+  appId: string;
+}
+
+export interface ListFilesActionParams {
+  path?: string;
+}
+
+export interface ReadFileActionParams {
+  path: string;
+}
+
+export interface WriteFileActionParams {
+  path: string;
+  content: string;
+}
+
+/**
  * Security context for computer action authorization and dispatch.
  *
  * Security guarantees:
