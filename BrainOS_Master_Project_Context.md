@@ -2202,3 +2202,90 @@ The following items remain explicitly deferred to future milestones:
 8. **Visual Execution / Screen Capture**: Screen streaming, canvas capture, and coordinate-based mouse/keyboard actions.
 9. **Heartbeat & Presence Monitoring**: Periodic health-checks and online status tracking.
 10. **Multi-Device Coordination**: Fleet routing and multi-agent task distribution.
+
+---
+
+# 43. ADDITIVE UPDATE — COMPUTER AGENT HTTP ACTION DISPATCH
+
+**Updated:** 2026-09-05
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 43 — Computer Agent HTTP Action Dispatch — COMPLETE
+
+The Computer Agent HTTP transport (`POST /api/v1/computer-agents/protocol/messages`) has now been connected to the existing action-dispatch pipeline.
+
+### Architectural Flow
+
+```text
+HTTP Request
+    ↓
+Credential Authentication
+    ↓
+Envelope Validation
+    ↓
+Agent Identity Validation
+    ↓
+Timestamp Validation (±60s window)
+    ↓
+Replay Protection (Atomic check & record)
+    ↓
+Action Dispatcher (DefaultComputerAgentActionDispatcher)
+    ↓
+Action Authorization (ComputerAgentActionAuthorizer + PrismaComputerActionPermissionProvider)
+    ↓
+Execution Boundary (GatewayComputerActionHandler → ComputerAgentGateway → LocalComputerAgent)
+    ↓
+Protocol Response Envelope
+```
+
+### Completed
+
+- **HTTP Transport Action Ingress**: Connected `POST /api/v1/computer-agents/protocol/messages` to the action-dispatch pipeline for envelopes where `type === "action_request"`.
+- **Dispatcher Injection**: `ComputerAgentHttpTransportService` accepts an optional `ComputerAgentActionDispatcher` dependency.
+- **Server-Derived Context Security**: Derives `ComputerAgentActionContext` exclusively from authenticated server context `{ agentId, userId }`. Client request payloads cannot supply or override `userId` or authorization parameters.
+- **Preserved Authorization Boundary**: Existing `ComputerAgentActionAuthorizer` and `PrismaComputerActionPermissionProvider` remain the trusted authorization boundary. Safe read-only actions are policy-authorized without DB rows; privileged actions (`computer_write_file`, `computer_launch_application`) require active PostgreSQL permissions.
+- **Preserved Execution Boundary**: Existing `GatewayComputerActionHandler` remains the single execution boundary delegating strictly to `ComputerAgentGateway` with validated parameters.
+- **Fail-Closed Guarantees**: Missing or unconfigured dispatcher fails closed with `ACTION_FAILED` protocol error envelope without executing anything.
+- **Preserved Non-Action Ingress**: Ingress handling for non-action envelopes (e.g., `"ping"`) remains completely intact, returning safe protocol acknowledgement `{ status: "acknowledged", receivedAt: now }`.
+- **Preserved Tool Audit Invariants**: Unauthorized privileged action attempts continue to trigger synchronous security audit logging through `ToolAuditService`.
+- **Closed Action Surface**: Confined strictly to existing registered `ComputerActionName` values.
+- **No Unapproved Infrastructure**: No new database schema, capabilities, JWT, pairing protocol, or WebSocket transport was introduced.
+
+### Verification Completed
+
+```text
+HTTP Transport Tests:
+38/38 PASS (test/services/computer/transport/computer-agent-http-transport.test.ts)
+
+All Computer Agent Subsystem Tests:
+208/208 PASS (9 test files)
+
+Full Backend Regression Suite:
+66/66 test files PASS, 723/723 tests PASS (100% PASS)
+
+TypeScript Compilation:
+npx tsc --noEmit (0 errors, CLEAN)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+
+Security Review:
+PASSED
+
+Architectural Review:
+PASSED
+```
+
+### Git Checkpoint
+
+```text
+d0b60f3 feat(computer): connect HTTP action dispatch
+3496b04 feat(computer): add permissions REST API
+9de9f98 docs(context): update computer agent permissions milestone
+bb6cdf8 feat(computer): persist agent action permissions
+```
+
+### Important Roadmap Note
+
+The Computer Agent HTTP transport-to-dispatch execution path is now implemented. Do not claim future Computer Agent capabilities are complete unless they actually exist in the repository.
