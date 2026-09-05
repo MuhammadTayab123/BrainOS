@@ -2519,3 +2519,141 @@ The BrainOS assistant can now explicitly store, search, list, retrieve, and forg
 - Frontend tool visualization in Next.js remains future work.
 - Native desktop daemon / OS drivers remain deferred.
 - No database schema or migration changes were required.
+
+---
+
+# 46. MISSION 46 — ASSISTANT AUTOMATION TOOLS INTEGRATION
+
+**Updated:** 2026-09-06
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 46 — Assistant Automation Tools Integration — COMPLETE
+
+Mission 46 connects the existing Automations subsystem directly to the conversational AI Assistant. Through standard tool definitions, the assistant can now create, list, inspect, update (pause/resume/reconfigure), and delete automated workflows across schedules, task due triggers, and reminder due triggers.
+
+### Architectural Flow
+
+```text
+User / Conversational Prompt ("Create an automation to review weekly tasks every Friday at 5pm")
+    ↓
+AssistantService Orchestration (ask)
+    ↓
+LLM Tool Call Selection (create_automation / list_automations / get_automation / update_automation / delete_automation)
+    ↓
+ToolExecutor
+    ├── Classification Check (isComputerTool === false, requiresComputerAuthorization === false)
+    ├── Parameter Validation (requireObject, requireString, requireEnum, optionalDate, optionalPositiveIntegerInRange)
+    ├── Server-Derived User Context (context.userId from authenticated session)
+    ↓
+Automation Tools Execution Layer (automation.tools.ts)
+    ↓
+AutomationService (createAutomation, listAutomations, getAutomation, updateAutomation, deleteAutomation)
+    ├── AutomationRecurrence (calculateNextRunAt, daily/weekly rules)
+    ↓
+AutomationRepository (PostgreSQL database operations)
+    ↓
+Synchronous Audit Logging (ToolAuditService records outcome: SUCCEEDED / FAILED)
+    ↓
+Assistant Response Generation
+```
+
+### 1. Added Tools
+
+- **`create_automation`**: Creates an automated workflow for trigger types (`SCHEDULE`, `TASK_DUE`, `REMINDER_DUE`) and action types (`CREATE_TASK`, `CREATE_REMINDER`) with required `name`, `triggerType`, `actionType`, `config`, and optional `nextRunAt` ISO date.
+- **`list_automations`**: Lists automations for the authenticated user, with optional `status` filter (`ACTIVE`, `PAUSED`, `COMPLETED`, `FAILED`) and integer `limit` (1–50, default 50).
+- **`get_automation`**: Retrieves full details of a specific automation by required `automationId` string.
+- **`update_automation`**: Updates an existing automation's `name`, `status` (`ACTIVE` / `PAUSED`), `config`, or `nextRunAt` ISO date by `automationId`.
+- **`delete_automation`**: Soft-deletes an automation rule by required `automationId` string, returning `{ success: true, automationId }`.
+
+### 2. Implementation Files
+
+- `apps/backend/src/services/tools/automation.tools.ts`
+- `apps/backend/src/services/tools/tool.container.ts`
+- `apps/backend/test/tools/automation.tools.test.ts`
+
+### 3. Reused Domain Contracts (Without Modification)
+
+- `AutomationService.createAutomation({ userId, name, triggerType, actionType, config, nextRunAt? })`
+- `AutomationService.listAutomations({ userId, status?, limit? })`
+- `AutomationService.getAutomation(automationId, userId)`
+- `AutomationService.updateAutomation(automationId, userId, { name?, status?, config?, nextRunAt? })`
+- `AutomationService.deleteAutomation(automationId, userId)`
+
+### 4. Actual Validation Boundaries
+
+- `triggerType`: `SCHEDULE`, `TASK_DUE`, `REMINDER_DUE`.
+- `actionType`: `CREATE_TASK`, `CREATE_REMINDER`.
+- `status`: `ACTIVE`, `PAUSED`, `COMPLETED`, `FAILED`.
+- `limit`: Integer between 1 and 50 ($1 \le \text{limit} \le 50$), default 50.
+- `config`: Object containing action parameters (`title`/`description`/`dueAt` or `message`/`scheduledFor`/`taskId`) and recurrence rules (`DAILY`/`WEEKLY`).
+- Server-derived `userId` enforced on all operations.
+
+### 5. Security & Isolation
+
+- **Server-Derived Identity**: `userId` is derived exclusively from `ToolContext.userId` (`context.userId`).
+- **No Client Spoofing**: `userId` is omitted from tool parameter schemas; prompt/client attempts to supply `userId` are ignored.
+- **Fail-Closed Context**: Missing or whitespace-only `context.userId` immediately throws an error before calling service logic.
+- **Tenant Isolation**: `AutomationService` and `AutomationRepository` enforce multi-tenant isolation (`where: { id, userId, deletedAt: null }`).
+- **Cross-User Protection**: Attempting to fetch, update, or delete another user's automation throws `NotFoundError`.
+- **No External Egress**: Automations trigger internal task/reminder creations only; no arbitrary outbound HTTP requests or webhook calls.
+- **Audit Logging**: `ToolExecutor` synchronously records `SUCCEEDED` / `FAILED` audit records with sanitized error messages to `ToolAuditService`.
+- **Tool Classification**: Automation tools evaluate to `isComputerTool === false` and `requiresComputerAuthorization === false`.
+
+### 6. Architecture & Composition
+
+- Follows the established `ToolDefinition` / `ToolContext` architecture.
+- `createToolRegistry(options)` in `tool.container.ts` accepts an optional `automationService?: AutomationService` in `ToolContainerOptions` for dependency injection and testing.
+- Zero modifications to `AutomationService`, `AutomationRepository`, `AutomationScheduler`, `AssistantService`, Computer Agent, AI provider abstraction, Prisma schema, or migrations.
+- Provider-independent standard JSON parameter schemas compatible with Ollama, OmniRoute, and other LLM backends.
+
+### 7. Verification Completed
+
+```text
+Focused Automation Tool Tests:
+27/27 PASS (test/tools/automation.tools.test.ts)
+
+All Tool Subsystem Tests:
+113/113 PASS (9 test files in test/tools/)
+
+Full Backend Regression Suite:
+69/69 test files PASS, 797/797 tests PASS (100% PASS)
+
+TypeScript Compilation:
+npx tsc --noEmit (0 errors, CLEAN)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+
+Security Review:
+PASSED (Server-derived context, tenant isolation, fail-closed validation, information hiding)
+
+Architectural Review:
+PASSED (Clean tool container composition, zero database/domain drift)
+```
+
+### 8. Git Checkpoint
+
+```text
+11c187d feat(tools): add assistant automation tools
+24034fa docs(context): update assistant memory tools milestone
+feaaed3 feat(tools): add assistant memory tools
+99f9b43 docs(context): update assistant reminder tools milestone
+```
+
+Verified state:
+- Branch: `main`
+- HEAD: `11c187d`
+- Status: synchronized with origin/main at 11c187d
+- Working tree: context update uncommitted (`.agents/rules/` remains untracked user customization)
+
+### 9. Mission Impact
+
+All five core BrainOS backend domains (**Tasks**, **Documents/RAG**, **Computer Actions**, **Reminders**, and **Automations**) are now fully wired into the AI Assistant runtime via standardized, secure, audited tool definitions.
+
+### 10. Deferred / Unchanged
+
+- Assistant Streaming & Token Generation Protocol (SSE) remains future work.
+- Frontend assistant UI tool visualization widgets in Next.js remain future work.
+- Native desktop daemon / OS drivers remain deferred.
+- No database schema or migration changes were required.
