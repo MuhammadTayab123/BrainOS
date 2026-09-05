@@ -1,8 +1,17 @@
 import { ComputerAgentGateway } from "../computer/agent/computer-agent.gateway";
 import { LocalComputerAgent } from "../computer/agent/local-computer-agent";
+import { MemoryService } from "../memory/memory.service";
 import { ReminderService } from "../reminders/reminder.service";
 import { createComputerTools } from "./computer.tools";
 import { documentSearchTool } from "./document.tools";
+import {
+  createDeleteMemoryTool,
+  createGetMemoryTool,
+  createListMemoriesTool,
+  createMemoryTools,
+  createSearchMemoriesTool,
+  createStoreMemoryTool,
+} from "./memory.tools";
 import {
   createCancelReminderTool,
   createCreateReminderTool,
@@ -25,6 +34,7 @@ import {
 
 export interface ToolContainerOptions {
   computerAgentGateway?: ComputerAgentGateway;
+  memoryService?: MemoryService;
   reminderService?: ReminderService;
 }
 
@@ -63,6 +73,20 @@ export function createToolRegistry(
       ];
 
   for (const tool of reminderTools) {
+    registry.register(tool);
+  }
+
+  const memoryTools = options.memoryService
+    ? createMemoryTools(options.memoryService)
+    : [
+        createStoreMemoryTool(),
+        createSearchMemoriesTool(),
+        createListMemoriesTool(),
+        createGetMemoryTool(),
+        createDeleteMemoryTool(),
+      ];
+
+  for (const tool of memoryTools) {
     registry.register(tool);
   }
 
