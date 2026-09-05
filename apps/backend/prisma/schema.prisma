@@ -69,6 +69,11 @@ enum AutomationExecutionStatus {
   FAILED
 }
 
+enum ComputerAgentStatus {
+  ACTIVE
+  REVOKED
+}
+
 model User {
   id        String  @id @default(cuid())
   clerkId   String  @unique
@@ -82,11 +87,12 @@ model User {
   memories      Memory[]
   tasks         Task[]
   reminders     Reminder[]
-  documents     Document[]
-  automations   Automation[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  deletedAt     DateTime?
+  documents      Document[]
+  automations    Automation[]
+  computerAgents ComputerAgent[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
 }
 
 model Conversation {
@@ -287,4 +293,41 @@ model AutomationExecution {
   @@index([automationId])
   @@index([automationId, status])
   @@index([startedAt])
+}
+
+model ComputerAgent {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name   String
+  status ComputerAgentStatus @default(ACTIVE)
+
+  lastAuthenticatedAt DateTime?
+  revokedAt           DateTime?
+
+  credentials ComputerAgentCredential[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId])
+  @@index([userId, status])
+}
+
+model ComputerAgentCredential {
+  id String @id @default(cuid())
+
+  agentId String
+  agent   ComputerAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  credentialHash String @unique
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([agentId])
 }

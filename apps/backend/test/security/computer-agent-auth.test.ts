@@ -256,5 +256,17 @@ describe("ComputerAgent Authentication Contract", () => {
       expect(stored?.credentialHash).not.toContain(newlyRegistered.credential);
       expect((stored as any).credential).toBeUndefined();
     });
+
+    it("fails closed when credential store returns empty hash", async () => {
+      const mockStore = {
+        get: vi.fn().mockResolvedValue({ agentId: "agent-broken", credentialHash: "" }),
+        save: vi.fn(),
+      };
+
+      const authService = new ComputerAgentAuthService(mockStore as any, mockLogger as any);
+
+      const result = await authService.authenticate("agent-broken", "some-credential");
+      expect(result.authenticated).toBe(false);
+    });
   });
 });

@@ -18,6 +18,7 @@ import documentRoutes from "./routes/document.routes";
 import automationRoutes from "./routes/automation.routes";
 import taskRoutes from "./routes/task.routes";
 import reminderRoutes from "./routes/reminder.routes";
+import computerAgentRoutes from "./routes/computer-agent.routes";
 
 // Clerk webhooks
 const app = express();
@@ -75,6 +76,9 @@ app.use("/api/v1/tasks", taskRoutes);
 
 // Reminder routes
 app.use("/api/v1/reminders", reminderRoutes);
+
+// Computer agent routes
+app.use("/api/v1/computer-agents", computerAgentRoutes);
 
 // Development routes
 app.use("/api/v1/dev", devRoutes);
