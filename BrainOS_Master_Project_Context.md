@@ -2289,3 +2289,96 @@ bb6cdf8 feat(computer): persist agent action permissions
 ### Important Roadmap Note
 
 The Computer Agent HTTP transport-to-dispatch execution path is now implemented. Do not claim future Computer Agent capabilities are complete unless they actually exist in the repository.
+
+---
+
+# 44. ADDITIVE UPDATE — ASSISTANT REMINDER TOOLS INTEGRATION
+
+**Updated:** 2026-09-05
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 44 — Assistant Reminder Tools Integration — COMPLETE
+
+The four Assistant Reminder tools (`create_reminder`, `list_reminders`, `get_reminder`, and `cancel_reminder`) have now been implemented and registered in the `ToolRegistry` via `ToolContainer`, connecting the existing Reminders subsystem directly to the conversational AI Assistant.
+
+### Architectural Flow
+
+```text
+User / Conversational Prompt ("Remind me to review budget tomorrow at 9am")
+    ↓
+AssistantService Orchestration (ask)
+    ↓
+LLM Tool Call Selection (create_reminder / list_reminders / get_reminder / cancel_reminder)
+    ↓
+ToolExecutor
+    ├── Authorization & Classification Check (isComputerTool === false)
+    ├── Parameter Validation (requireObject, requireString, requireDate, optionalDate, optionalEnum, optionalPositiveInteger)
+    ├── Server-Derived User Context (context.userId from authenticated session)
+    ↓
+Reminder Tools Execution Layer (reminder.tools.ts)
+    ↓
+ReminderService (createReminder, listReminders, getReminder, cancelReminder)
+    ↓
+ReminderRepository (PostgreSQL database operations)
+    ↓
+Synchronous Audit Logging (ToolAuditService records outcome: SUCCEEDED / FAILED)
+    ↓
+Assistant Response Generation
+```
+
+### Completed
+
+- **Four Assistant Reminder Tools**:
+  - `create_reminder`: Creates a scheduled notification with required `message` and ISO 8601 `scheduledFor`, plus optional `taskId`.
+  - `list_reminders`: Lists active user reminders with optional `status` enum filter (`PENDING`, `PROCESSING`, `DELIVERED`, `FAILED`, `CANCELLED`), optional ISO `dueBefore` date, and optional integer `limit` (1–50, default 50).
+  - `get_reminder`: Retrieves details of a specific reminder owned by the user via `reminderId`.
+  - `cancel_reminder`: Cancels a pending scheduled reminder owned by the user via `reminderId`, returning `{ success: true, reminderId, status: "CANCELLED" }`.
+- **ReminderService Reused As-Is**: Reused existing `ReminderService` methods without modifying domain business logic, validation rules, or worker execution semantics.
+- **ToolContainer Registration**: `createToolRegistry()` in `tool.container.ts` registers all four reminder tools; accepts optional `reminderService` override in `ToolContainerOptions`.
+- **Server-Derived User Identity**: `userId` is extracted strictly from `ToolContext.userId` (`context.userId`). Tool argument JSON schemas omit `userId`, preventing any client-side or prompt-injected ownership spoofing.
+- **Strict Multi-Tenant Isolation**: Ownership queries and soft-deletion/cancellation operations remain scoped to `context.userId` via repository `where: { userId, deletedAt: null }` filters.
+- **Audit Invariants Preserved**: `ToolExecutor` synchronously records `SUCCEEDED` / `FAILED` audit events with execution durations and sanitized error messages to `ToolAuditService`.
+- **No Computer Authorization Overhead**: Reminder tools evaluate to `isComputerTool === false` and `requiresComputerAuthorization === false`.
+- **No AI Provider Coupling**: Standard `ToolDefinition` schemas are provider-agnostic and work seamlessly across Ollama, OpenRouter, DeepSeek, and Gemini providers.
+- **Zero Database Schema Changes**: No Prisma schema modifications or migrations were introduced; the existing PostgreSQL `Reminder` model was reused completely.
+
+### Verification Completed
+
+```text
+Focused Reminder Tool Tests:
+23/23 PASS (test/tools/reminder.tools.test.ts)
+
+All Tool Subsystem Tests:
+62/62 PASS (7 test files in test/tools/)
+
+Full Backend Regression Suite:
+67/67 test files PASS, 746/746 tests PASS (100% PASS)
+
+TypeScript Compilation:
+npx tsc --noEmit (0 errors, CLEAN)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+
+Security Review:
+PASSED (Server-derived context, tenant isolation, information hiding, fail-closed validation)
+
+Architectural Review:
+PASSED (Clean tool container composition, zero database/domain drift)
+```
+
+### Git Checkpoint
+
+```text
+6ae0a7e feat(tools): add assistant reminder tools
+ccdb29b docs(context): update HTTP action dispatch milestone
+d0b60f3 feat(computer): connect HTTP action dispatch
+3496b04 feat(computer): add permissions REST API
+```
+
+Verified state:
+- Branch: `main`
+- HEAD: `6ae0a7e`
+- Remote: `origin/main` synchronized (`HEAD == origin/main`)
+- Working tree: clean (context update pending)
