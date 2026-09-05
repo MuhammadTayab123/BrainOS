@@ -12,7 +12,16 @@ import {
   createUpdateAutomationTool,
 } from "./automation.tools";
 import { createComputerTools } from "./computer.tools";
-import { documentSearchTool } from "./document.tools";
+import { DocumentRetrievalService } from "../documents/retrieval/document-retrieval.service";
+import { DocumentService } from "../documents/document.service";
+import {
+  createDeleteDocumentTool,
+  createDocumentSearchTool,
+  createDocumentTools,
+  createGetDocumentTool,
+  createListDocumentsTool,
+  documentSearchTool,
+} from "./document.tools";
 import {
   createDeleteMemoryTool,
   createGetMemoryTool,
@@ -44,6 +53,8 @@ import {
 export interface ToolContainerOptions {
   automationService?: AutomationService;
   computerAgentGateway?: ComputerAgentGateway;
+  documentRetrievalService?: DocumentRetrievalService;
+  documentService?: DocumentService;
   memoryService?: MemoryService;
   reminderService?: ReminderService;
 }
@@ -62,7 +73,23 @@ export function createToolRegistry(
   registry.register(completeTaskTool);
   registry.register(deleteTaskTool);
 
-  registry.register(documentSearchTool);
+  const documentTools =
+    options.documentRetrievalService || options.documentService
+      ? createDocumentTools(
+          options.documentRetrievalService,
+          options.documentService,
+        )
+      : [
+          documentSearchTool,
+          createListDocumentsTool(),
+          createGetDocumentTool(),
+          createDeleteDocumentTool(),
+        ];
+
+  for (const tool of documentTools) {
+    registry.register(tool);
+  }
+
 
   const computerAgentGateway =
     options.computerAgentGateway ??
