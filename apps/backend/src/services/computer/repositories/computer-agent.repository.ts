@@ -134,6 +134,16 @@ export class ComputerAgentRepository {
           deletedAt: revokedAt,
         },
       });
+
+      await client.computerAgentPermission.updateMany({
+        where: {
+          agentId,
+          deletedAt: null,
+        },
+        data: {
+          deletedAt: revokedAt,
+        },
+      });
     };
 
     if ("$transaction" in this.db && typeof this.db.$transaction === "function") {
@@ -291,6 +301,16 @@ export class ComputerAgentRepository {
       }
 
       await client.computerAgentCredential.updateMany({
+        where: {
+          agentId,
+          deletedAt: null,
+        },
+        data: {
+          deletedAt,
+        },
+      });
+
+      await client.computerAgentPermission.updateMany({
         where: {
           agentId,
           deletedAt: null,

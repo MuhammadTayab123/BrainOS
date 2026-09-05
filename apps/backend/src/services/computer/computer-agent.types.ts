@@ -52,3 +52,35 @@ export interface ComputerAgentCredentialRecord {
   updatedAt: Date;
   deletedAt?: Date | null;
 }
+
+export interface GrantComputerAgentPermissionInput {
+  agentId: string;
+  userId: string;
+  action: string;
+}
+
+export interface RevokeComputerAgentPermissionInput {
+  agentId: string;
+  userId: string;
+  action: string;
+}
+
+export interface ListComputerAgentPermissionsInput {
+  agentId: string;
+  userId: string;
+}
+
+export interface HasActivePermissionInput {
+  agentId: string;
+  userId: string;
+  action: string;
+}
+
+export interface ComputerAgentPermissionRecord {
+  id: string;
+  agentId: string;
+  action: string;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt?: Date | null;
+}

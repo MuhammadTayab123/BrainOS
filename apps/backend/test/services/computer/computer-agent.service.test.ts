@@ -624,4 +624,246 @@ describe("ComputerAgentService", () => {
       });
     });
   });
+
+  describe("Permissions Management (grantPermission, revokePermission, listPermissions)", () => {
+    const createMockPermRepo = () => ({
+      grantPermission: vi.fn(),
+      revokePermission: vi.fn(),
+      listPermissions: vi.fn(),
+      hasActivePermission: vi.fn(),
+      revokeAllByAgentId: vi.fn(),
+    });
+
+    it("grants permission to an agent", async () => {
+      const repository = createMockRepository();
+      const permRepo = createMockPermRepo();
+      const logger = createMockLogger();
+
+      const permRecord = {
+        id: "perm-1",
+        agentId: "agent-1",
+        action: "computer_write_file",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      };
+      permRepo.grantPermission.mockResolvedValue(permRecord);
+
+      const service = new ComputerAgentService(
+        repository,
+        undefined as any,
+        logger,
+        permRepo as any,
+      );
+
+      const result = await service.grantPermission(
+        "agent-1",
+        "user-1",
+        "computer_write_file",
+      );
+
+      expect(permRepo.grantPermission).toHaveBeenCalledWith({
+        agentId: "agent-1",
+        userId: "user-1",
+        action: "computer_write_file",
+      });
+      expect(result).toEqual(permRecord);
+      expect(logger.info).toHaveBeenCalledWith(
+        "Granted computer agent permission",
+        {
+          agentId: "agent-1",
+          userId: "user-1",
+          action: "computer_write_file",
+        },
+      );
+    });
+
+    it("revokes permission from an agent", async () => {
+      const repository = createMockRepository();
+      const permRepo = createMockPermRepo();
+      const logger = createMockLogger();
+      permRepo.revokePermission.mockResolvedValue(undefined);
+
+      const service = new ComputerAgentService(
+        repository,
+        undefined as any,
+        logger,
+        permRepo as any,
+      );
+
+      await service.revokePermission(
+        "agent-1",
+        "user-1",
+        "computer_write_file",
+      );
+
+      expect(permRepo.revokePermission).toHaveBeenCalledWith({
+        agentId: "agent-1",
+        userId: "user-1",
+        action: "computer_write_file",
+      });
+      expect(logger.info).toHaveBeenCalledWith(
+        "Revoked computer agent permission",
+        {
+          agentId: "agent-1",
+          userId: "user-1",
+          action: "computer_write_file",
+        },
+      );
+    });
+
+    it("lists active permissions for an agent", async () => {
+      const repository = createMockRepository();
+      const permRepo = createMockPermRepo();
+      const permissions = [
+        { id: "p-1", agentId: "agent-1", action: "computer_launch_application" },
+      ];
+      permRepo.listPermissions.mockResolvedValue(permissions);
+
+      const service = new ComputerAgentService(
+        repository,
+        undefined as any,
+        undefined as any,
+        permRepo as any,
+      );
+
+      const result = await service.listPermissions("agent-1", "user-1");
+
+      expect(permRepo.listPermissions).toHaveBeenCalledWith({
+        agentId: "agent-1",
+        userId: "user-1",
+      });
+      expect(result).toEqual(permissions);
+    });
+
+    it("rejects permission grant with read-only actions (read-only grant rejected)", async () => {
+      const repository = createMockRepository();
+      const permRepo = createMockPermRepo();
+      const service = new ComputerAgentService(
+        repository,
+        undefined as any,
+        undefined as any,
+        permRepo as any,
+      );
+
+      await expect(
+        service.grantPermission("agent-1", "user-1", "computer_read_file"),
+      ).rejects.toThrow(
+        'Action "computer_read_file" is read-only and does not require or support persistent permissions.',
+      );
+
+      await expect(
+        service.grantPermission("agent-1", "user-1", "computer_get_status"),
+      ).rejects.toThrow(
+        'Action "computer_get_status" is read-only and does not require or support persistent permissions.',
+      );
+
+      await expect(
+        service.grantPermission("agent-1", "user-1", "computer_list_files"),
+      ).rejects.toThrow(
+        'Action "computer_list_files" is read-only and does not require or support persistent permissions.',
+      );
+
+      await expect(
+        service.grantPermission("agent-1", "user-1", "computer_list_applications"),
+      ).rejects.toThrow(
+        'Action "computer_list_applications" is read-only and does not require or support persistent permissions.',
+      );
+
+      expect(permRepo.grantPermission).not.toHaveBeenCalled();
+    });
+
+    it("rejects permission revoke with read-only actions", async () => {
+      const repository = createMockRepository();
+      const permRepo = createMockPermRepo();
+      const service = new ComputerAgentService(
+        repository,
+        undefined as any,
+        undefined as any,
+        permRepo as any,
+      );
+
+      await expect(
+        service.revokePermission("agent-1", "user-1", "computer_read_file"),
+      ).rejects.toThrow(
+        'Action "computer_read_file" is read-only and does not require or support persistent permissions.',
+      );
+
+      expect(permRepo.revokePermission).not.toHaveBeenCalled();
+    });
+
+    it("rejects permission grant and revoke with unknown action name", async () => {
+      const repository = createMockRepository();
+      const permRepo = createMockPermRepo();
+      const service = new ComputerAgentService(
+        repository,
+        undefined as any,
+        undefined as any,
+        permRepo as any,
+      );
+
+      await expect(
+        service.grantPermission("agent-1", "user-1", "unknown_action"),
+      ).rejects.toThrow('Unknown or unregistered computer action "unknown_action".');
+
+      await expect(
+        service.revokePermission("agent-1", "user-1", "unknown_action"),
+      ).rejects.toThrow('Unknown or unregistered computer action "unknown_action".');
+
+      expect(permRepo.grantPermission).not.toHaveBeenCalled();
+      expect(permRepo.revokePermission).not.toHaveBeenCalled();
+    });
+
+    it("successfully grants privileged actions (computer_write_file and computer_launch_application)", async () => {
+      const repository = createMockRepository();
+      const permRepo = createMockPermRepo();
+      permRepo.grantPermission.mockResolvedValue({
+        id: "perm-launch",
+        agentId: "agent-1",
+        action: "computer_launch_application",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      });
+
+      const service = new ComputerAgentService(
+        repository,
+        undefined as any,
+        undefined as any,
+        permRepo as any,
+      );
+
+      const result = await service.grantPermission(
+        "agent-1",
+        "user-1",
+        "computer_launch_application",
+      );
+
+      expect(permRepo.grantPermission).toHaveBeenCalledWith({
+        agentId: "agent-1",
+        userId: "user-1",
+        action: "computer_launch_application",
+      });
+      expect(result.action).toBe("computer_launch_application");
+    });
+
+    it("rejects permission grant with empty userId or agentId", async () => {
+      const repository = createMockRepository();
+      const permRepo = createMockPermRepo();
+      const service = new ComputerAgentService(
+        repository,
+        undefined as any,
+        undefined as any,
+        permRepo as any,
+      );
+
+      await expect(
+        service.grantPermission("agent-1", "", "computer_write_file"),
+      ).rejects.toThrow("User ID is required.");
+
+      await expect(
+        service.grantPermission("", "user-1", "computer_write_file"),
+      ).rejects.toThrow("Agent ID is required.");
+    });
+  });
 });

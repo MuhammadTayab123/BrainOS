@@ -7,8 +7,14 @@ import {
   ComputerAgentAuthService,
 } from "./security/computer-agent-auth.service";
 import { ComputerAgentAuthResult } from "./security/computer-agent-auth.types";
-import { ComputerAgentRepository } from "./repositories/computer-agent.repository";
 import {
+  isComputerTool,
+  requiresComputerAuthorization,
+} from "../security/computer-action.policy";
+import { ComputerAgentRepository } from "./repositories/computer-agent.repository";
+import { ComputerAgentPermissionRepository } from "./repositories/computer-agent-permission.repository";
+import {
+  ComputerAgentPermissionRecord,
   ComputerAgentRecord,
   ListComputerAgentsOptions,
   RegisterComputerAgentInput,
@@ -23,6 +29,7 @@ export class ComputerAgentService {
     private readonly computerAgentRepository: ComputerAgentRepository,
     private readonly authService: ComputerAgentAuthService = new ComputerAgentAuthService(),
     private readonly log = logger,
+    private readonly permissionRepository: ComputerAgentPermissionRepository = new ComputerAgentPermissionRepository(),
   ) {}
 
   /**
@@ -366,6 +373,101 @@ export class ComputerAgentService {
       agentId: agent.id,
     };
   }
+
+  /**
+   * Grants an action permission to an active Computer Agent owned by the user.
+   * Only privileged actions requiring authorization (e.g. computer_write_file, computer_launch_application)
+   * support persistent permissions; read-only and unknown actions are rejected fail-closed.
+   */
+  async grantPermission(
+    agentId: string,
+    userId: string,
+    action: string,
+  ): Promise<ComputerAgentPermissionRecord> {
+    this.validateUserId(userId);
+    this.validateId(agentId, "Agent ID");
+    this.validatePrivilegedAction(action);
+
+    const cleanUserId = userId.trim();
+    const cleanAgentId = agentId.trim();
+    const cleanAction = action.trim();
+
+    const permission = await this.permissionRepository.grantPermission({
+      agentId: cleanAgentId,
+      userId: cleanUserId,
+      action: cleanAction,
+    });
+
+    this.log.info("Granted computer agent permission", {
+      agentId: cleanAgentId,
+      userId: cleanUserId,
+      action: cleanAction,
+    });
+
+    return permission;
+  }
+
+  /**
+   * Revokes an action permission from an owned Computer Agent.
+   * Only privileged actions requiring authorization support persistent permissions.
+   */
+  async revokePermission(
+    agentId: string,
+    userId: string,
+    action: string,
+  ): Promise<void> {
+    this.validateUserId(userId);
+    this.validateId(agentId, "Agent ID");
+    this.validatePrivilegedAction(action);
+
+    const cleanUserId = userId.trim();
+    const cleanAgentId = agentId.trim();
+    const cleanAction = action.trim();
+
+    await this.permissionRepository.revokePermission({
+      agentId: cleanAgentId,
+      userId: cleanUserId,
+      action: cleanAction,
+    });
+
+    this.log.info("Revoked computer agent permission", {
+      agentId: cleanAgentId,
+      userId: cleanUserId,
+      action: cleanAction,
+    });
+  }
+
+  /**
+   * Lists all active action permissions granted to an owned Computer Agent.
+   */
+  async listPermissions(
+    agentId: string,
+    userId: string,
+  ): Promise<ComputerAgentPermissionRecord[]> {
+    this.validateUserId(userId);
+    this.validateId(agentId, "Agent ID");
+
+    return this.permissionRepository.listPermissions({
+      agentId: agentId.trim(),
+      userId: userId.trim(),
+    });
+  }
+
+  private validatePrivilegedAction(action: string): void {
+    if (!action || typeof action !== "string" || action.trim().length === 0) {
+      throw new Error("Action name is required.");
+    }
+    const cleanAction = action.trim();
+    if (!isComputerTool(cleanAction)) {
+      throw new Error(`Unknown or unregistered computer action "${cleanAction}".`);
+    }
+    if (!requiresComputerAuthorization(cleanAction)) {
+      throw new Error(
+        `Action "${cleanAction}" is read-only and does not require or support persistent permissions.`,
+      );
+    }
+  }
+
 
   private validateUserId(userId: string): void {
     if (!userId || typeof userId !== "string" || userId.trim().length === 0) {

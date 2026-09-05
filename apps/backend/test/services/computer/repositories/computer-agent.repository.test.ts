@@ -210,6 +210,9 @@ describe("ComputerAgentRepository", () => {
     const updateCredMany = vi.fn().mockResolvedValue({
       count: 1,
     });
+    const updatePermMany = vi.fn().mockResolvedValue({
+      count: 1,
+    });
 
     const db = {
       computerAgent: {
@@ -217,6 +220,9 @@ describe("ComputerAgentRepository", () => {
       },
       computerAgentCredential: {
         updateMany: updateCredMany,
+      },
+      computerAgentPermission: {
+        updateMany: updatePermMany,
       },
     } as any;
 
@@ -238,6 +244,16 @@ describe("ComputerAgentRepository", () => {
     });
 
     expect(updateCredMany).toHaveBeenCalledWith({
+      where: {
+        agentId: "agent-1",
+        deletedAt: null,
+      },
+      data: {
+        deletedAt: revokedAt,
+      },
+    });
+
+    expect(updatePermMany).toHaveBeenCalledWith({
       where: {
         agentId: "agent-1",
         deletedAt: null,
@@ -557,6 +573,9 @@ describe("ComputerAgentRepository", () => {
     const updateManyCred = vi.fn().mockResolvedValue({
       count: 1,
     });
+    const updateManyPerm = vi.fn().mockResolvedValue({
+      count: 1,
+    });
 
     const db = {
       computerAgent: {
@@ -564,6 +583,9 @@ describe("ComputerAgentRepository", () => {
       },
       computerAgentCredential: {
         updateMany: updateManyCred,
+      },
+      computerAgentPermission: {
+        updateMany: updateManyPerm,
       },
     } as any;
 
@@ -585,6 +607,18 @@ describe("ComputerAgentRepository", () => {
     );
 
     expect(updateManyCred).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          agentId: "agent-1",
+          deletedAt: null,
+        },
+        data: expect.objectContaining({
+          deletedAt: expect.any(Date),
+        }),
+      }),
+    );
+
+    expect(updateManyPerm).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
           agentId: "agent-1",

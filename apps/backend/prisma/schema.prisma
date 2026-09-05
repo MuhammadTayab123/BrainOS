@@ -308,6 +308,7 @@ model ComputerAgent {
   revokedAt           DateTime?
 
   credentials ComputerAgentCredential[]
+  permissions ComputerAgentPermission[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -330,4 +331,21 @@ model ComputerAgentCredential {
   deletedAt DateTime?
 
   @@index([agentId])
+}
+
+model ComputerAgentPermission {
+  id String @id @default(cuid())
+
+  agentId String
+  agent   ComputerAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  action String
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([agentId])
+  @@index([agentId, action])
+  @@index([agentId, deletedAt])
 }
