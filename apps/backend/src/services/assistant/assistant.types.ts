@@ -20,6 +20,7 @@ export interface AssistantMessageInput {
   now?: Date;
   timezone?: string;
   runtime?: AssistantRuntime;
+  signal?: AbortSignal;
 }
 
 export interface AssistantResponse {

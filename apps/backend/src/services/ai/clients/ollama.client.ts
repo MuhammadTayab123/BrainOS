@@ -7,7 +7,8 @@ export class OllamaClient {
 
   async post<T>(
     endpoint: string,
-    body: unknown
+    body: unknown,
+    signal?: AbortSignal
   ): Promise<T> {
     const response = await fetch(
       `${this.baseUrl}${endpoint}`,
@@ -17,6 +18,7 @@ export class OllamaClient {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
+        signal,
       }
     );
 
@@ -27,5 +29,35 @@ export class OllamaClient {
     }
 
     return response.json() as Promise<T>;
+  }
+
+  async postStream(
+    endpoint: string,
+    body: unknown,
+    signal?: AbortSignal
+  ): Promise<Response> {
+    const response = await fetch(
+      `${this.baseUrl}${endpoint}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal,
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Ollama request failed (${response.status})`
+      );
+    }
+
+    if (!response.body) {
+      throw new Error("Ollama streaming response body is empty.");
+    }
+
+    return response;
   }
 }

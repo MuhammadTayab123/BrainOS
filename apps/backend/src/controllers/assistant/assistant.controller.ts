@@ -1,4 +1,3 @@
-
 import { ConversationRepository } from "../../services/conversation/repositories/conversation.repository";
 import { MessageRepository } from "../../services/conversation/repositories/message.repository";
 import { Request, Response } from "express";
@@ -344,6 +343,7 @@ export async function streamAssistant(
   res.flushHeaders?.();
 
   const runtime = new AssistantRuntime();
+  const abortController = new AbortController();
   let isClosed = false;
 
   const unsubscribe = runtime.subscribe((event) => {
@@ -355,12 +355,15 @@ export async function streamAssistant(
       res.write(formatSseEvent("state_changed", event.snapshot));
     } else if (event.type === "TASK_EVENT") {
       res.write(formatSseEvent("task_event", event.event));
+    } else if (event.type === "TEXT_DELTA") {
+      res.write(formatSseEvent("text_delta", { delta: event.delta }));
     }
   });
 
   const cleanup = () => {
     if (!isClosed) {
       isClosed = true;
+      abortController.abort();
       unsubscribe();
     }
   };
@@ -382,6 +385,7 @@ export async function streamAssistant(
       authorizedComputerActions: validation.data.authorizedComputerActions,
       timezone: validation.data.timezone,
       runtime,
+      signal: abortController.signal,
     });
 
     if (!isClosed && !res.writableEnded) {

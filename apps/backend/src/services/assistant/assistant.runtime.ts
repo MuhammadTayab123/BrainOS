@@ -142,6 +142,17 @@ export class AssistantRuntime {
     return event;
   }
 
+  emitTextDelta(delta: string): void {
+    if (!delta) {
+      return;
+    }
+
+    this.emit({
+      type: "TEXT_DELTA",
+      delta,
+    });
+  }
+
   private createEvent(
     type: AssistantTaskEvent["type"],
     taskId: string,

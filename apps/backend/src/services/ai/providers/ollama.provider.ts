@@ -107,6 +107,89 @@ export class OllamaLLMProvider implements LLMProvider {
           }))
         : undefined;
 
+    if (input.onToken) {
+      const payload: OllamaChatRequest = {
+        model,
+        messages,
+        tools,
+        stream: true,
+      };
+
+      const response = await this.client.postStream(
+        "/api/chat",
+        payload,
+        ...(input.signal ? [input.signal] : []),
+      );
+
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulatedText = "";
+      let responseModel = model;
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split(/\r?\n/);
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) {
+              continue;
+            }
+
+            try {
+              const chunk = JSON.parse(trimmed) as OllamaChatResponse;
+              if (chunk.model) {
+                responseModel = chunk.model;
+              }
+              const content = chunk.message?.content;
+              if (content) {
+                accumulatedText += content;
+                input.onToken(content);
+              }
+            } catch {
+              // Ignore malformed chunk lines safely
+            }
+          }
+        }
+
+        buffer += decoder.decode();
+        const trimmed = buffer.trim();
+        if (trimmed) {
+          try {
+            const chunk = JSON.parse(trimmed) as OllamaChatResponse;
+            if (chunk.model) {
+              responseModel = chunk.model;
+            }
+            const content = chunk.message?.content;
+            if (content) {
+              accumulatedText += content;
+              input.onToken(content);
+            }
+          } catch {
+            // Ignore malformed chunk safely
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      return {
+        text: accumulatedText,
+        model: responseModel,
+        provider: "ollama",
+        toolCalls: undefined,
+      };
+    }
+
     const payload: OllamaChatRequest = {
       model,
       messages,
@@ -116,6 +199,7 @@ export class OllamaLLMProvider implements LLMProvider {
     const response = await this.client.post<OllamaChatResponse>(
       "/api/chat",
       payload,
+      ...(input.signal ? [input.signal] : []),
     );
 
     const toolCalls: LLMToolCall[] | undefined =

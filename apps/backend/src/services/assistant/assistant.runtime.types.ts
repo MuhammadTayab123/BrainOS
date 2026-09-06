@@ -32,4 +32,8 @@ export type AssistantRuntimeEvent =
   | {
       type: "TASK_EVENT";
       event: AssistantTaskEvent;
+    }
+  | {
+      type: "TEXT_DELTA";
+      delta: string;
     };

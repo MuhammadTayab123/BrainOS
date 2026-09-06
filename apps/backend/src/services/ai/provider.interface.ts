@@ -36,6 +36,8 @@ export interface GenerateTextInput {
   messages?: LLMMessage[];
   model?: string;
   tools?: LLMToolDefinition[];
+  onToken?: (token: string) => void;
+  signal?: AbortSignal;
 }
 
 export interface LLMResponse {

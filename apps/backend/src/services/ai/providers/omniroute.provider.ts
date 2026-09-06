@@ -59,6 +59,17 @@ interface OmniRouteChatResponse {
   }>;
 }
 
+interface OmniRouteStreamChunk {
+  model?: string;
+  choices?: Array<{
+    delta?: {
+      role?: string;
+      content?: string;
+    };
+    finish_reason?: string | null;
+  }>;
+}
+
 export class OmniRouteLLMProvider implements LLMProvider {
   constructor(
     private readonly client = new OmniRouteClient(),
@@ -121,6 +132,97 @@ export class OmniRouteLLMProvider implements LLMProvider {
           }))
         : undefined;
 
+    if (input.onToken) {
+      const payload: OmniRouteChatRequest = {
+        model,
+        messages,
+        tools,
+        stream: true,
+      };
+
+      const response = await this.client.postStream(
+        "/v1/chat/completions",
+        payload,
+        ...(input.signal ? [input.signal] : []),
+      );
+
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulatedText = "";
+      let responseModel = model;
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split(/\r?\n/);
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith("data:")) {
+              continue;
+            }
+
+            const dataStr = trimmed.slice(5).trim();
+            if (dataStr === "[DONE]") {
+              break;
+            }
+
+            try {
+              const chunk = JSON.parse(dataStr) as OmniRouteStreamChunk;
+              if (chunk.model) {
+                responseModel = chunk.model;
+              }
+              const content = chunk.choices?.[0]?.delta?.content;
+              if (content) {
+                accumulatedText += content;
+                input.onToken(content);
+              }
+            } catch {
+              // Ignore malformed SSE data lines safely
+            }
+          }
+        }
+
+        buffer += decoder.decode();
+        const trimmed = buffer.trim();
+        if (trimmed && trimmed.startsWith("data:")) {
+          const dataStr = trimmed.slice(5).trim();
+          if (dataStr !== "[DONE]") {
+            try {
+              const chunk = JSON.parse(dataStr) as OmniRouteStreamChunk;
+              if (chunk.model) {
+                responseModel = chunk.model;
+              }
+              const content = chunk.choices?.[0]?.delta?.content;
+              if (content) {
+                accumulatedText += content;
+                input.onToken(content);
+              }
+            } catch {
+              // Ignore malformed SSE chunk safely
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      return {
+        text: accumulatedText,
+        model: responseModel,
+        provider: "omniroute",
+        toolCalls: undefined,
+      };
+    }
+
     const payload: OmniRouteChatRequest = {
       model,
       messages,
@@ -132,6 +234,7 @@ export class OmniRouteLLMProvider implements LLMProvider {
       await this.client.post<OmniRouteChatResponse>(
         "/v1/chat/completions",
         payload,
+        ...(input.signal ? [input.signal] : []),
       );
 
     const responseMessage = response.choices?.[0]?.message;

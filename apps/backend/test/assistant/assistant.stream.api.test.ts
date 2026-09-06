@@ -80,13 +80,16 @@ describe("Assistant SSE Streaming API (POST /api/v1/assistant/stream)", () => {
     vi.clearAllMocks();
     fakes.authenticatedUser.mockResolvedValue(testUser);
 
-    fakes.ask.mockImplementation(async (input: { runtime?: AssistantRuntime }) => {
+    fakes.ask.mockImplementation(async (input: { runtime?: AssistantRuntime; signal?: AbortSignal }) => {
       if (input.runtime) {
         input.runtime.setState("THINKING");
         input.runtime.startTask("task-123");
         input.runtime.progressTask("task-123", "Executing test tool.");
         input.runtime.completeTask("task-123", "Test tool completed.");
         input.runtime.setState("SPEAKING");
+        input.runtime.emitTextDelta("This is ");
+        input.runtime.emitTextDelta("the final ");
+        input.runtime.emitTextDelta("assistant streaming response.");
         input.runtime.setState("IDLE");
       }
 
@@ -214,11 +217,22 @@ describe("Assistant SSE Streaming API (POST /api/v1/assistant/stream)", () => {
       );
       expect(taskCompleted).toBeDefined();
 
-      // 4. Response event must appear before done
+      // 4. Text delta events must be emitted in sequence before response and done
+      const textDeltaEvents = events.filter((e) => e.event === "text_delta");
+      expect(textDeltaEvents).toHaveLength(3);
+      expect(textDeltaEvents.map((e) => e.data.delta)).toEqual([
+        "This is ",
+        "the final ",
+        "assistant streaming response.",
+      ]);
+
+      const firstTextDeltaIndex = events.findIndex((e) => e.event === "text_delta");
+      const lastTextDeltaIndex = events.map((e) => e.event).lastIndexOf("text_delta");
       const responseIndex = events.findIndex((e) => e.event === "response");
       const doneIndex = events.findIndex((e) => e.event === "done");
 
-      expect(responseIndex).toBeGreaterThan(-1);
+      expect(firstTextDeltaIndex).toBeGreaterThan(-1);
+      expect(responseIndex).toBeGreaterThan(lastTextDeltaIndex);
       expect(doneIndex).toBeGreaterThan(responseIndex);
 
       expect(events[responseIndex].data).toEqual({
@@ -295,9 +309,11 @@ describe("Assistant SSE Streaming API (POST /api/v1/assistant/stream)", () => {
       } as any;
 
       let capturedRuntime: AssistantRuntime | undefined;
+      let capturedSignal: AbortSignal | undefined;
       fakes.ask.mockImplementationOnce(
-        async (input: { runtime?: AssistantRuntime }) => {
+        async (input: { runtime?: AssistantRuntime; signal?: AbortSignal }) => {
           capturedRuntime = input.runtime;
+          capturedSignal = input.signal;
 
           // Simulate client disconnect mid-stream
           mockReq.emit("close");
@@ -318,6 +334,10 @@ describe("Assistant SSE Streaming API (POST /api/v1/assistant/stream)", () => {
       );
 
       await streamAssistant(mockReq, mockRes);
+
+      // Verify abort signal was received and triggered
+      expect(capturedSignal).toBeDefined();
+      expect(capturedSignal?.aborted).toBe(true);
 
       // Writes after disconnect should not be sent
       const postDisconnectWrites = written.filter((w) =>

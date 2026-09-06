@@ -192,6 +192,10 @@ export class AssistantService {
     const tools =
       this.toolExecutor.getToolDefinitions();
 
+    if (input.signal?.aborted) {
+      throw new Error("Assistant request was aborted.");
+    }
+
     let llmResponse =
       await this.llmService.generate({
         systemPrompt:
@@ -200,7 +204,10 @@ export class AssistantService {
         prompt,
         model: input.model,
         tools,
+        signal: input.signal,
       });
+
+    let hadToolCalls = false;
 
     for (
       let round = 0;
@@ -214,11 +221,14 @@ export class AssistantService {
         break;
       }
 
+      hadToolCalls = true;
+
       if (prompt !== undefined) {
         messages.push({
           role: "user",
           content: prompt,
         });
+        prompt = undefined;
       }
 
       messages.push({
@@ -229,6 +239,10 @@ export class AssistantService {
       });
 
       for (const toolCall of toolCalls) {
+        if (input.signal?.aborted) {
+          throw new Error("Assistant request was aborted.");
+        }
+
         const taskId =
           `task-${toolCall.id}`;
 
@@ -245,10 +259,10 @@ export class AssistantService {
               toolCall.name,
               toolCall.arguments,
               {
-  userId,
-  authorizedComputerActions:
-    input.authorizedComputerActions,
-},
+                userId,
+                authorizedComputerActions:
+                  input.authorizedComputerActions,
+              },
             );
 
           runtime.completeTask(
@@ -285,6 +299,10 @@ export class AssistantService {
         }
       }
 
+      if (input.signal?.aborted) {
+        throw new Error("Assistant request was aborted.");
+      }
+
       llmResponse =
         await this.llmService.generate({
           systemPrompt:
@@ -292,9 +310,24 @@ export class AssistantService {
           messages,
           model: input.model,
           tools,
+          signal: input.signal,
         });
 
       prompt = undefined;
+    }
+
+    if (input.signal?.aborted) {
+      throw new Error("Assistant request was aborted.");
+    }
+
+    runtime.setState("SPEAKING");
+
+    if (llmResponse.text) {
+      runtime.emitTextDelta(llmResponse.text);
+    }
+
+    if (input.signal?.aborted) {
+      throw new Error("Assistant request was aborted.");
     }
 
     if (
@@ -308,8 +341,6 @@ export class AssistantService {
         content: llmResponse.text,
       });
     }
-
-    runtime.setState("SPEAKING");
 
     const response: AssistantResponse = {
       text: llmResponse.text,

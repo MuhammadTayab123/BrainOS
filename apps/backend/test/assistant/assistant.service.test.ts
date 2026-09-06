@@ -1163,4 +1163,92 @@ describe("AssistantService", () => {
       "Interpret all relative dates and times (such as \"today\", \"tomorrow\", \"next Monday\", \"at 7 PM\") in the user's local timezone (Asia/Karachi).",
     );
   });
+
+  it("aborts before LLM generation and does NOT persist assistant response if signal is already aborted", async () => {
+    const abortController = new AbortController();
+    abortController.abort();
+
+    const llmService = createLlmServiceMock();
+    const memoryService = createMemoryServiceMock();
+    const toolExecutor = createToolExecutorMock();
+    const conversationRepository = createConversationRepositoryMock();
+    const messageRepository = createMessageRepositoryMock();
+
+    conversationRepository.findByIdForUser.mockResolvedValue({ id: "conv-1", title: "Existing" });
+    messageRepository.listByConversation.mockResolvedValue([]);
+    memoryService.searchMemories.mockResolvedValue([]);
+
+    const service = new AssistantService(
+      llmService as unknown as LLMService,
+      memoryService as unknown as MemoryService,
+      toolExecutor as unknown as ToolExecutor,
+      conversationRepository as unknown as any,
+      messageRepository as unknown as any,
+    );
+
+    await expect(
+      service.ask({
+        userId: "user-1",
+        message: "Hello after abort",
+        conversationId: "conv-1",
+        enableMemoryRetrieval: false,
+        signal: abortController.signal,
+      }),
+    ).rejects.toThrow("Assistant request was aborted.");
+
+    // llmService should not have been called
+    expect(llmService.generate).not.toHaveBeenCalled();
+
+    // User message may have been logged upon entering conversation, but assistant response must NEVER be created
+    const assistantCreates = messageRepository.create.mock.calls.filter(
+      (call: any[]) => call[0]?.role === "ASSISTANT",
+    );
+    expect(assistantCreates).toHaveLength(0);
+  });
+
+  it("aborts after LLM generation if signal is aborted and does NOT persist assistant response", async () => {
+    const abortController = new AbortController();
+
+    const llmService = createLlmServiceMock();
+    const memoryService = createMemoryServiceMock();
+    const toolExecutor = createToolExecutorMock();
+    const conversationRepository = createConversationRepositoryMock();
+    const messageRepository = createMessageRepositoryMock();
+
+    conversationRepository.findByIdForUser.mockResolvedValue({ id: "conv-1", title: "Existing" });
+    messageRepository.listByConversation.mockResolvedValue([]);
+    memoryService.searchMemories.mockResolvedValue([]);
+
+    llmService.generate.mockImplementationOnce(async () => {
+      abortController.abort();
+      return {
+        text: "Response that should not be saved",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [],
+      };
+    });
+
+    const service = new AssistantService(
+      llmService as unknown as LLMService,
+      memoryService as unknown as MemoryService,
+      toolExecutor as unknown as ToolExecutor,
+      conversationRepository as unknown as any,
+      messageRepository as unknown as any,
+    );
+
+    await expect(
+      service.ask({
+        userId: "user-1",
+        message: "Hello mid abort",
+        conversationId: "conv-1",
+        signal: abortController.signal,
+      }),
+    ).rejects.toThrow("Assistant request was aborted.");
+
+    const assistantCreates = messageRepository.create.mock.calls.filter(
+      (call: any[]) => call[0]?.role === "ASSISTANT",
+    );
+    expect(assistantCreates).toHaveLength(0);
+  });
 });
