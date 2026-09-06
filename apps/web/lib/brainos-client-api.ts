@@ -340,7 +340,7 @@ export async function getConversation(
   conversationId: string,
 ): Promise<Conversation> {
   const response = await fetch(
-    `${API_URL}/api/v1/conversations/${conversationId}`,
+    `${API_URL}/api/v1/conversations/${encodeURIComponent(conversationId)}`,
     {
       method: "GET",
       headers: {
@@ -359,7 +359,7 @@ export async function deleteConversation(
   conversationId: string,
 ): Promise<{ id: string }> {
   const response = await fetch(
-    `${API_URL}/api/v1/conversations/${conversationId}`,
+    `${API_URL}/api/v1/conversations/${encodeURIComponent(conversationId)}`,
     {
       method: "DELETE",
       headers: {
@@ -377,7 +377,7 @@ export async function listMessages(
   conversationId: string,
 ): Promise<Message[]> {
   const response = await fetch(
-    `${API_URL}/api/v1/conversations/${conversationId}/messages`,
+    `${API_URL}/api/v1/conversations/${encodeURIComponent(conversationId)}/messages`,
     {
       method: "GET",
       headers: {

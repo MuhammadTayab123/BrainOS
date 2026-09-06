@@ -1,6 +1,11 @@
 import { describe, expect, it, vi, beforeEach, afterEach, beforeAll } from "vitest";
 
 let streamAssistant: typeof import("./brainos-client-api").streamAssistant;
+let createConversation: typeof import("./brainos-client-api").createConversation;
+let listConversations: typeof import("./brainos-client-api").listConversations;
+let getConversation: typeof import("./brainos-client-api").getConversation;
+let deleteConversation: typeof import("./brainos-client-api").deleteConversation;
+let listMessages: typeof import("./brainos-client-api").listMessages;
 let listReminders: typeof import("./brainos-client-api").listReminders;
 let createReminder: typeof import("./brainos-client-api").createReminder;
 let getReminder: typeof import("./brainos-client-api").getReminder;
@@ -31,6 +36,11 @@ beforeAll(async () => {
   process.env.NEXT_PUBLIC_BRAINOS_API_URL = "http://localhost:3001";
   const mod = await import("./brainos-client-api");
   streamAssistant = mod.streamAssistant;
+  createConversation = mod.createConversation;
+  listConversations = mod.listConversations;
+  getConversation = mod.getConversation;
+  deleteConversation = mod.deleteConversation;
+  listMessages = mod.listMessages;
   listReminders = mod.listReminders;
   createReminder = mod.createReminder;
   getReminder = mod.getReminder;
@@ -1456,5 +1466,230 @@ describe("Automation API Client", () => {
         config: {},
       }),
     ).rejects.toThrow("Automation name is required.");
+  });
+});
+
+describe("Conversations API Client", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("1. createConversation: sends POST request with Bearer auth and optional title", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+    let capturedBody: any = null;
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      capturedBody = init?.body ? JSON.parse(init.body as string) : null;
+      return Promise.resolve({
+        ok: true,
+        status: 201,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "conv-1",
+              userId: "user-1",
+              title: "Test Conversation",
+              createdAt: "2026-09-06T08:00:00.000Z",
+              updatedAt: "2026-09-06T08:00:00.000Z",
+            },
+          }),
+      });
+    });
+
+    const result = await createConversation("mock-token", "  Test Conversation  ");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/conversations");
+    expect(capturedMethod).toBe("POST");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(capturedHeaders["Content-Type"]).toBe("application/json");
+    expect(capturedBody).toEqual({ title: "Test Conversation" });
+    expect(result.id).toBe("conv-1");
+    expect(result.title).toBe("Test Conversation");
+  });
+
+  it("2. createConversation: sends empty object body when title is omitted", async () => {
+    let capturedBody: any = null;
+
+    globalThis.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      capturedBody = init?.body ? JSON.parse(init.body as string) : null;
+      return Promise.resolve({
+        ok: true,
+        status: 201,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "conv-2",
+              userId: "user-1",
+              title: null,
+              createdAt: "2026-09-06T08:00:00.000Z",
+              updatedAt: "2026-09-06T08:00:00.000Z",
+            },
+          }),
+      });
+    });
+
+    const result = await createConversation("mock-token");
+    expect(capturedBody).toEqual({});
+    expect(result.id).toBe("conv-2");
+    expect(result.title).toBeNull();
+  });
+
+  it("3. listConversations: sends GET request with cache no-store and handles query limit", async () => {
+    let capturedUrl = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: [
+              {
+                id: "conv-1",
+                userId: "user-1",
+                title: "Chat 1",
+                createdAt: "2026-09-06T08:00:00.000Z",
+                updatedAt: "2026-09-06T08:00:00.000Z",
+              },
+            ],
+          }),
+      });
+    });
+
+    const result = await listConversations("mock-token", 20);
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/conversations?limit=20");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("conv-1");
+  });
+
+  it("4. getConversation: sends GET request with URI-encoded conversationId", async () => {
+    let capturedUrl = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "conv/special#1",
+              userId: "user-1",
+              title: "Special Chat",
+              createdAt: "2026-09-06T08:00:00.000Z",
+              updatedAt: "2026-09-06T08:00:00.000Z",
+            },
+          }),
+      });
+    });
+
+    const result = await getConversation("mock-token", "conv/special#1");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/conversations/conv%2Fspecial%231");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result.id).toBe("conv/special#1");
+    expect(result.title).toBe("Special Chat");
+  });
+
+  it("5. deleteConversation: sends DELETE request with URI-encoded conversationId", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "conv/special#1",
+            },
+          }),
+      });
+    });
+
+    const result = await deleteConversation("mock-token", "conv/special#1");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/conversations/conv%2Fspecial%231");
+    expect(capturedMethod).toBe("DELETE");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result.id).toBe("conv/special#1");
+  });
+
+  it("6. listMessages: sends GET request with URI-encoded conversationId", async () => {
+    let capturedUrl = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: [
+              {
+                id: "msg-1",
+                conversationId: "conv/special#1",
+                role: "USER",
+                content: "Hello",
+                createdAt: "2026-09-06T08:00:00.000Z",
+                updatedAt: "2026-09-06T08:00:00.000Z",
+              },
+            ],
+          }),
+      });
+    });
+
+    const result = await listMessages("mock-token", "conv/special#1");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/conversations/conv%2Fspecial%231/messages");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("msg-1");
+  });
+
+  it("7. Error handling: throws parsed error on conversation failure", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      statusText: "Not Found",
+      json: () =>
+        Promise.resolve({
+          success: false,
+          error: {
+            code: "CONVERSATION_NOT_FOUND",
+            message: "Conversation not found.",
+          },
+        }),
+    });
+
+    await expect(getConversation("mock-token", "non-existent")).rejects.toThrow(
+      "Conversation not found.",
+    );
   });
 });

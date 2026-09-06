@@ -12,6 +12,8 @@ import {
   streamAssistant,
   createConversation,
   listConversations,
+  getConversation,
+  deleteConversation,
   listMessages,
   type Conversation,
   type Message,
@@ -28,6 +30,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(false);
   const [switching, setSwitching] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [currentStatus, setCurrentStatus] = useState("BrainOS is thinking...");
   const [activeTaskMessage, setActiveTaskMessage] = useState<string | null>(null);
@@ -126,7 +130,7 @@ export default function Home() {
   }, [getToken, isSignedIn]);
 
   async function handleNewConversation() {
-    if (loading || switching) {
+    if (loading || switching || deletingId) {
       return;
     }
 
@@ -167,7 +171,8 @@ export default function Home() {
     if (
       selectedConversation.id === conversation?.id ||
       loading ||
-      switching
+      switching ||
+      deletingId
     ) {
       return;
     }
@@ -202,6 +207,57 @@ export default function Home() {
     }
   }
 
+  async function handleDeleteConversation(conversationId: string) {
+    if (loading || switching || deletingId) {
+      return;
+    }
+
+    setDeletingId(conversationId);
+    setError("");
+
+    try {
+      const token = await getToken();
+
+      if (!token) {
+        throw new Error("Authentication token unavailable.");
+      }
+
+      await deleteConversation(token, conversationId);
+
+      const remaining = conversations.filter((c) => c.id !== conversationId);
+      setConversations(remaining);
+      setConfirmDeleteId(null);
+
+      if (conversation?.id === conversationId) {
+        if (remaining.length > 0) {
+          const nextConversation = remaining[0];
+          setConversation(nextConversation);
+          const conversationMessages = await listMessages(
+            token,
+            nextConversation.id,
+          );
+          setMessages(conversationMessages);
+          setMessage("");
+        } else {
+          const newConversation = await createConversation(token);
+          setConversations([newConversation]);
+          setConversation(newConversation);
+          setMessages([]);
+          setMessage("");
+        }
+        isNearBottomRef.current = true;
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to delete conversation.",
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   function handleCancelStream() {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -210,7 +266,7 @@ export default function Home() {
   }
 
   async function handleAskAssistant() {
-    if (!message.trim() || !conversation || loading) {
+    if (!message.trim() || !conversation || loading || deletingId) {
       return;
     }
 
@@ -284,6 +340,26 @@ export default function Home() {
       setMessages(updatedMessages);
       setStreamingMessage(null);
 
+      // Refresh conversation metadata/title (e.g. auto-generated title after first message)
+      try {
+        const updatedConversation = await getConversation(
+          token,
+          conversation.id,
+        );
+        if (updatedConversation) {
+          setConversation((current) =>
+            current?.id === conversation.id ? updatedConversation : current,
+          );
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === conversation.id ? updatedConversation : c,
+            ),
+          );
+        }
+      } catch {
+        // Non-blocking conversation metadata refresh
+      }
+
       if (!result.text && updatedMessages.length === 0) {
         setError("BrainOS returned an empty response.");
       }
@@ -351,7 +427,7 @@ export default function Home() {
             <aside className="hidden w-64 shrink-0 flex-col rounded-xl border border-zinc-800 bg-zinc-900 p-3 md:flex">
               <button
                 onClick={() => void handleNewConversation()}
-                disabled={loading || switching}
+                disabled={loading || switching || deletingId !== null}
                 className="mb-3 rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {switching
@@ -361,28 +437,85 @@ export default function Home() {
 
               <div className="flex-1 space-y-1 overflow-y-auto">
                 {conversations.map((item) => (
-                  <button
+                  <div
                     key={item.id}
-                    onClick={() =>
-                      void handleSelectConversation(item)
-                    }
-                    disabled={loading || switching}
-                    className={`w-full rounded-lg px-3 py-3 text-left text-sm transition ${
+                    className={`group relative flex items-center justify-between rounded-lg transition ${
                       item.id === conversation?.id
                         ? "bg-zinc-800 text-white"
                         : "text-zinc-400 hover:bg-zinc-800/70 hover:text-white"
                     }`}
                   >
-                    <p className="truncate font-medium">
-                      {item.title ?? "New conversation"}
-                    </p>
+                    {confirmDeleteId === item.id ? (
+                      <div className="flex w-full items-center justify-between px-3 py-3 text-xs">
+                        <span className="font-medium text-zinc-300">Delete chat?</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteConversation(item.id)}
+                            disabled={deletingId === item.id}
+                            className="font-medium text-red-400 hover:text-red-300 disabled:opacity-50"
+                          >
+                            {deletingId === item.id ? "Deleting..." : "Delete"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(null)}
+                            disabled={deletingId === item.id}
+                            className="text-zinc-400 hover:text-white"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleSelectConversation(item)
+                          }
+                          disabled={loading || switching || deletingId !== null}
+                          className="min-w-0 flex-1 px-3 py-3 text-left text-sm"
+                        >
+                          <p className="truncate font-medium">
+                            {item.title ?? "New conversation"}
+                          </p>
 
-                    <p className="mt-1 text-xs text-zinc-600">
-                      {new Date(
-                        item.updatedAt,
-                      ).toLocaleDateString()}
-                    </p>
-                  </button>
+                          <p className="mt-1 text-xs text-zinc-600">
+                            {new Date(
+                              item.updatedAt,
+                            ).toLocaleDateString()}
+                          </p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDeleteId(item.id);
+                          }}
+                          disabled={loading || switching || deletingId !== null}
+                          title="Delete conversation"
+                          aria-label={`Delete conversation ${item.title ?? "New conversation"}`}
+                          className="mr-2 rounded p-1 text-zinc-500 opacity-0 transition hover:bg-zinc-700 hover:text-red-400 group-hover:opacity-100 focus:opacity-100 disabled:cursor-not-allowed disabled:opacity-0"
+                        >
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={1.5}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
+                          </svg>
+                        </button>
+                      </>
+                    )}
+                  </div>
                 ))}
               </div>
             </aside>
