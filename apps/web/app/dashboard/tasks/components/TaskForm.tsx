@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-
 import { type TaskPriority } from "../../../../lib/brainos-client-api";
 
 interface TaskFormProps {
@@ -48,46 +47,49 @@ export function TaskForm({ creating, actionError, onSubmit }: TaskFormProps) {
   const displayedError = localError || actionError;
 
   return (
-    <section style={{ border: "1px solid #e5e7eb", borderRadius: "8px", padding: "1.5rem", marginBottom: "2rem", backgroundColor: "#f9fafb" }}>
-      <h2 style={{ fontSize: "1.25rem", fontWeight: "600", marginBottom: "1rem" }}>Create New Task</h2>
+    <section className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+      <h2 className="text-lg font-medium text-white">Create New Task</h2>
 
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <form onSubmit={handleSubmit} className="mt-4 space-y-4">
         <div>
-          <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "500", marginBottom: "0.25rem" }}>
-            Title *
+          <label className="block text-xs font-medium text-zinc-400">
+            Task Title *
           </label>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="What needs to be done?"
+            placeholder="e.g. Implement user authentication audit"
+            disabled={creating}
             required
-            style={{ width: "100%", padding: "0.5rem", border: "1px solid #d1d5db", borderRadius: "4px" }}
+            className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-zinc-500 focus:outline-none"
           />
         </div>
 
         <div>
-          <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "500", marginBottom: "0.25rem" }}>
+          <label className="block text-xs font-medium text-zinc-400">
             Description
           </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Additional details (optional)"
+            placeholder="Additional details or instructions (optional)"
+            disabled={creating}
             rows={2}
-            style={{ width: "100%", padding: "0.5rem", border: "1px solid #d1d5db", borderRadius: "4px" }}
+            className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-zinc-500 focus:outline-none"
           />
         </div>
 
-        <div style={{ display: "flex", gap: "1rem" }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "500", marginBottom: "0.25rem" }}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="block text-xs font-medium text-zinc-400">
               Priority
             </label>
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value as TaskPriority)}
-              style={{ width: "100%", padding: "0.5rem", border: "1px solid #d1d5db", borderRadius: "4px" }}
+              disabled={creating}
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-sm text-white focus:border-zinc-500 focus:outline-none"
             >
               <option value="LOW">Low</option>
               <option value="MEDIUM">Medium</option>
@@ -95,41 +97,37 @@ export function TaskForm({ creating, actionError, onSubmit }: TaskFormProps) {
             </select>
           </div>
 
-          <div style={{ flex: 1 }}>
-            <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "500", marginBottom: "0.25rem" }}>
-              Due Date
+          <div>
+            <label className="block text-xs font-medium text-zinc-400">
+              Due Date & Time (Local)
             </label>
             <input
               type="datetime-local"
               value={dueAt}
               onChange={(e) => setDueAt(e.target.value)}
-              style={{ width: "100%", padding: "0.5rem", border: "1px solid #d1d5db", borderRadius: "4px" }}
+              onClick={(e) => {
+                try {
+                  e.currentTarget.showPicker?.();
+                } catch {
+                  // Fallback to default browser behavior
+                }
+              }}
+              disabled={creating}
+              className="mt-1 w-full cursor-pointer rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-sm text-white [color-scheme:dark] focus:border-zinc-500 focus:outline-none disabled:cursor-not-allowed"
             />
           </div>
         </div>
 
         {displayedError && (
-          <div style={{ color: "#dc2626", fontSize: "0.875rem", padding: "0.5rem", backgroundColor: "#fee2e2", borderRadius: "4px" }}>
-            {displayedError}
-          </div>
+          <p className="text-xs text-red-400">{displayedError}</p>
         )}
 
         <button
           type="submit"
-          disabled={creating}
-          style={{
-            alignSelf: "flex-start",
-            padding: "0.5rem 1.25rem",
-            backgroundColor: "#2563eb",
-            color: "#ffffff",
-            border: "none",
-            borderRadius: "4px",
-            cursor: creating ? "not-allowed" : "pointer",
-            fontWeight: "500",
-            opacity: creating ? 0.7 : 1,
-          }}
+          disabled={creating || !title.trim()}
+          className="rounded-lg bg-white px-5 py-2.5 text-sm font-medium text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {creating ? "Creating..." : "Create Task"}
+          {creating ? "Creating..." : "+ Create Task"}
         </button>
       </form>
     </section>

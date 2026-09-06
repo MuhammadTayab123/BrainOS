@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { Show, SignInButton, useAuth } from "@clerk/nextjs";
 import { DashboardNav } from "../../../components/dashboard-nav";
 
 import {
@@ -13,7 +13,11 @@ import {
   type TaskPriority,
 } from "../../../lib/brainos-client-api";
 import { TaskForm } from "./components/TaskForm";
-import { TaskList } from "./components/TaskList";
+import {
+  TaskList,
+  type PriorityFilter,
+  type StatusFilter,
+} from "./components/TaskList";
 
 export default function TasksPage() {
   const { getToken, isSignedIn, isLoaded } = useAuth();
@@ -24,6 +28,8 @@ export default function TasksPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [operatingId, setOperatingId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("ALL");
 
   const fetchTasks = useCallback(async () => {
     setError(null);
@@ -35,7 +41,10 @@ export default function TasksPage() {
         throw new Error("Authentication token is unavailable.");
       }
 
-      const data = await listTasks(token);
+      const data = await listTasks(token, {
+        status: statusFilter !== "ALL" ? statusFilter : undefined,
+        priority: priorityFilter !== "ALL" ? priorityFilter : undefined,
+      });
       setTasks(data);
     } catch (err) {
       setError(
@@ -46,11 +55,11 @@ export default function TasksPage() {
     } finally {
       setLoading(false);
     }
-  }, [getToken]);
+  }, [getToken, statusFilter, priorityFilter]);
 
   useEffect(() => {
     if (isLoaded && isSignedIn) {
-      fetchTasks();
+      void fetchTasks();
     } else if (isLoaded && !isSignedIn) {
       setLoading(false);
     }
@@ -142,7 +151,7 @@ export default function TasksPage() {
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
       <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10">
-        <header className="mb-8 flex items-center justify-between border-b border-zinc-800 pb-6">
+        <header className="flex items-center justify-between border-b border-zinc-800 pb-6">
           <div>
             <h1 className="text-2xl font-semibold">BrainOS Tasks</h1>
             <p className="mt-1 text-sm text-zinc-400">
@@ -153,23 +162,49 @@ export default function TasksPage() {
           <DashboardNav current="tasks" />
         </header>
 
-        <div className="text-zinc-900">
-          <TaskForm
-            creating={creating}
-            actionError={actionError}
-            onSubmit={handleCreateTask}
-          />
+        <Show when="signed-out">
+          <div className="flex flex-1 flex-col items-center justify-center text-center">
+            <h2 className="text-3xl font-semibold">Sign In Required</h2>
+            <p className="mt-3 max-w-md text-zinc-400">
+              Sign in to manage and track your BrainOS tasks.
+            </p>
+            <SignInButton mode="modal">
+              <button className="mt-6 rounded-lg bg-white px-6 py-3 font-medium text-black hover:bg-zinc-200">
+                Sign in
+              </button>
+            </SignInButton>
+          </div>
+        </Show>
 
-          <TaskList
-            tasks={tasks}
-            loading={loading}
-            error={error}
-            operatingId={operatingId}
-            onRefresh={fetchTasks}
-            onComplete={handleCompleteTask}
-            onDelete={handleDeleteTask}
-          />
-        </div>
+        <Show when="signed-in">
+          <div className="flex-1 space-y-8 pt-8">
+            {actionError && (
+              <div className="rounded-lg border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">
+                {actionError}
+              </div>
+            )}
+
+            <TaskForm
+              creating={creating}
+              actionError={actionError}
+              onSubmit={handleCreateTask}
+            />
+
+            <TaskList
+              tasks={tasks}
+              loading={loading}
+              error={error}
+              operatingId={operatingId}
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+              priorityFilter={priorityFilter}
+              onPriorityFilterChange={setPriorityFilter}
+              onRefresh={() => void fetchTasks()}
+              onComplete={handleCompleteTask}
+              onDelete={handleDeleteTask}
+            />
+          </div>
+        </Show>
       </div>
     </main>
   );

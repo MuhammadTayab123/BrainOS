@@ -6,6 +6,12 @@ let listConversations: typeof import("./brainos-client-api").listConversations;
 let getConversation: typeof import("./brainos-client-api").getConversation;
 let deleteConversation: typeof import("./brainos-client-api").deleteConversation;
 let listMessages: typeof import("./brainos-client-api").listMessages;
+let listTasks: typeof import("./brainos-client-api").listTasks;
+let createTask: typeof import("./brainos-client-api").createTask;
+let getTask: typeof import("./brainos-client-api").getTask;
+let updateTask: typeof import("./brainos-client-api").updateTask;
+let completeTask: typeof import("./brainos-client-api").completeTask;
+let deleteTask: typeof import("./brainos-client-api").deleteTask;
 let listReminders: typeof import("./brainos-client-api").listReminders;
 let createReminder: typeof import("./brainos-client-api").createReminder;
 let getReminder: typeof import("./brainos-client-api").getReminder;
@@ -41,6 +47,12 @@ beforeAll(async () => {
   getConversation = mod.getConversation;
   deleteConversation = mod.deleteConversation;
   listMessages = mod.listMessages;
+  listTasks = mod.listTasks;
+  createTask = mod.createTask;
+  getTask = mod.getTask;
+  updateTask = mod.updateTask;
+  completeTask = mod.completeTask;
+  deleteTask = mod.deleteTask;
   listReminders = mod.listReminders;
   createReminder = mod.createReminder;
   getReminder = mod.getReminder;
@@ -1691,5 +1703,280 @@ describe("Conversations API Client", () => {
     await expect(getConversation("mock-token", "non-existent")).rejects.toThrow(
       "Conversation not found.",
     );
+  });
+});
+
+describe("Tasks API Client", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("1. listTasks: sends GET request with cache no-store, Bearer auth, and query filters", async () => {
+    let capturedUrl = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: [
+              {
+                id: "task-1",
+                userId: "user-1",
+                title: "Test Task",
+                description: "Test Description",
+                status: "TODO",
+                priority: "HIGH",
+                dueAt: "2026-09-10T12:00:00.000Z",
+                completedAt: null,
+                createdAt: "2026-09-06T08:00:00.000Z",
+                updatedAt: "2026-09-06T08:00:00.000Z",
+              },
+            ],
+          }),
+      });
+    });
+
+    const dueDate = new Date("2026-09-10T00:00:00.000Z");
+    const result = await listTasks("mock-token", {
+      status: "TODO",
+      priority: "HIGH",
+      limit: 10,
+      dueBefore: dueDate,
+      dueAfter: "2026-09-01T00:00:00.000Z",
+    });
+
+    expect(capturedUrl).toBe(
+      `http://localhost:3001/api/v1/tasks?limit=10&status=TODO&priority=HIGH&dueBefore=${encodeURIComponent("2026-09-10T00:00:00.000Z")}&dueAfter=${encodeURIComponent("2026-09-01T00:00:00.000Z")}`,
+    );
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("task-1");
+    expect(result[0].status).toBe("TODO");
+    expect(result[0].priority).toBe("HIGH");
+  });
+
+  it("2. createTask: sends POST request with trimmed payload and Bearer auth", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+    let capturedBody: any = null;
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      capturedBody = init?.body ? JSON.parse(init.body as string) : null;
+      return Promise.resolve({
+        ok: true,
+        status: 201,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "task-2",
+              userId: "user-1",
+              title: "Deploy BrainOS",
+              description: "Production deploy",
+              status: "TODO",
+              priority: "HIGH",
+              dueAt: "2026-09-15T18:00:00.000Z",
+              completedAt: null,
+              createdAt: "2026-09-06T08:00:00.000Z",
+              updatedAt: "2026-09-06T08:00:00.000Z",
+            },
+          }),
+      });
+    });
+
+    const result = await createTask("mock-token", {
+      title: "  Deploy BrainOS  ",
+      description: "  Production deploy  ",
+      priority: "HIGH",
+      dueAt: new Date("2026-09-15T18:00:00.000Z"),
+    });
+
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/tasks");
+    expect(capturedMethod).toBe("POST");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(capturedHeaders["Content-Type"]).toBe("application/json");
+    expect(capturedBody).toEqual({
+      title: "Deploy BrainOS",
+      description: "Production deploy",
+      priority: "HIGH",
+      dueAt: "2026-09-15T18:00:00.000Z",
+    });
+    expect(result.id).toBe("task-2");
+    expect(result.title).toBe("Deploy BrainOS");
+  });
+
+  it("3. getTask: sends GET request with URI-encoded taskId and Bearer auth", async () => {
+    let capturedUrl = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "task/special#3",
+              userId: "user-1",
+              title: "Special Task",
+              description: null,
+              status: "TODO",
+              priority: "MEDIUM",
+              dueAt: null,
+              completedAt: null,
+              createdAt: "2026-09-06T08:00:00.000Z",
+              updatedAt: "2026-09-06T08:00:00.000Z",
+            },
+          }),
+      });
+    });
+
+    const result = await getTask("mock-token", "task/special#3");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/tasks/task%2Fspecial%233");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result.id).toBe("task/special#3");
+    expect(result.title).toBe("Special Task");
+  });
+
+  it("4. updateTask: sends PATCH request with partial payload and URI-encoded taskId", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+    let capturedBody: any = null;
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      capturedBody = init?.body ? JSON.parse(init.body as string) : null;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "task/special#3",
+            },
+          }),
+      });
+    });
+
+    const result = await updateTask("mock-token", "task/special#3", {
+      title: "  Updated Task Title  ",
+      description: null,
+      priority: "LOW",
+      dueAt: new Date("2026-09-20T00:00:00.000Z"),
+    });
+
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/tasks/task%2Fspecial%233");
+    expect(capturedMethod).toBe("PATCH");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(capturedBody).toEqual({
+      title: "Updated Task Title",
+      description: null,
+      priority: "LOW",
+      dueAt: "2026-09-20T00:00:00.000Z",
+    });
+    expect(result.id).toBe("task/special#3");
+  });
+
+  it("5. completeTask: sends POST request to complete endpoint with URI-encoded taskId", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "task-4",
+              status: "COMPLETED",
+            },
+          }),
+      });
+    });
+
+    const result = await completeTask("mock-token", "task-4");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/tasks/task-4/complete");
+    expect(capturedMethod).toBe("POST");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result.id).toBe("task-4");
+    expect(result.status).toBe("COMPLETED");
+  });
+
+  it("6. deleteTask: sends DELETE request with URI-encoded taskId", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "task-5",
+            },
+          }),
+      });
+    });
+
+    const result = await deleteTask("mock-token", "task-5");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/tasks/task-5");
+    expect(capturedMethod).toBe("DELETE");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result.id).toBe("task-5");
+  });
+
+  it("7. Error handling: throws parsed error message on task API failure", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: "Bad Request",
+      json: () =>
+        Promise.resolve({
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Task title is required.",
+          },
+        }),
+    });
+
+    await expect(
+      createTask("mock-token", { title: "" }),
+    ).rejects.toThrow("Task title is required.");
   });
 });
