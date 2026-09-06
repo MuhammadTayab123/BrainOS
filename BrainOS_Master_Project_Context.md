@@ -3074,3 +3074,274 @@ The BrainOS web application now delivers a real-time, responsive assistant exper
 - WebSocket bidirectional real-time channels remain deferred.
 - Computer Agent native OS desktop drivers remain deferred.
 - No database schema or migration changes were required.
+
+---
+
+# 50. MISSION 50 — PROVIDER-INDEPENDENT LLM TOKEN STREAMING & CANCELLATION PROPAGATION
+
+### Objective & Architectural Rationale
+
+Following the establishment of the backend SSE transport (Mission 48) and the frontend SSE consumer (Mission 49), Mission 50 implements provider-independent LLM token streaming and end-to-end backend cancellation propagation across the BrainOS Assistant pipeline.
+
+Rather than coupling streaming to a single proprietary provider, Mission 50 extends BrainOS's provider-independent `LLMProvider` abstraction. Both Ollama (local/private/offline fallback) and OmniRoute (cloud gateway) stream tokens through a unified interface. Non-streaming callers remain 100% backwards-compatible, and intermediate tool execution rounds remain non-streaming to prevent leaking tool arguments into conversational text.
+
+```text
+Browser User (Cancel / Disconnect)
+    │
+    ▼
+POST /api/v1/assistant/stream (Assistant Controller)
+    ├── Request-scoped AbortController
+    ├── req.on("close") -> abortController.abort() + runtime.unsubscribe()
+    ├── AssistantRuntime.subscribe -> Emits "text_delta" SSE frames
+    │
+    ▼
+AssistantService.ask(input: { runtime, signal })
+    ├── Checks signal.aborted before/during/after steps
+    ├── Intermediate Tool Rounds -> Non-streaming (tools passed, onToken omitted)
+    ├── Final Synthesis -> Streams tokens via onToken: (t) => runtime.emitTextDelta(t)
+    ├── Fail-Closed Persistence -> If aborted, skips messageRepository.create()
+    │
+    ▼
+LLMService.generate(input: { onToken, signal })
+    │
+    ▼
+LLMProvider (Generic Abstraction)
+    ├── OllamaProvider (stream: true)    ├── OmniRouteProvider (stream: true)
+    │     ├── /api/chat                        ├── /v1/chat/completions
+    │     ├── NDJSON line parsing              ├── SSE data: delta.content parsing
+    │     ├── UTF-8 stream decoder             ├── [DONE] termination handling
+    │     └── fetch(url, { signal })           └── fetch(url, { signal })
+```
+
+### 1. Generic AI Provider Abstraction (`LLMProvider`)
+
+- **Location**: `apps/backend/src/services/ai/provider.interface.ts`
+- **Interface Extension**:
+  ```typescript
+  export interface GenerateTextInput {
+    prompt?: string;
+    messages?: LLMMessage[];
+    systemPrompt?: string;
+    model?: string;
+    tools?: LLMToolDefinition[];
+    onToken?: (token: string) => void;
+    signal?: AbortSignal;
+  }
+  ```
+- **Backwards Compatibility**: Both `onToken` and `signal` are optional. When `onToken` is omitted, providers execute their standard non-streaming `post()` path without architectural or behavioral changes.
+
+### 2. HTTP Clients with Streaming & Abort Signals
+
+- **Ollama Client (`apps/backend/src/services/ai/clients/ollama.client.ts`)**:
+  - `post<T>(endpoint, body, signal?: AbortSignal)`: Forwards optional `AbortSignal` to native `fetch`.
+  - `postStream(endpoint, body, signal?: AbortSignal): Promise<Response>`: Returns raw readable stream response with signal propagation.
+- **OmniRoute Client (`apps/backend/src/services/ai/clients/omniroute.client.ts`)**:
+  - `post<T>(endpoint, body, signal?: AbortSignal)`: Forwards optional `AbortSignal` to native `fetch`.
+  - `postStream(endpoint, body, signal?: AbortSignal): Promise<Response>`: Returns raw readable stream response with sanitized error reporting and signal propagation.
+
+### 3. Provider-Independent Streaming Implementations
+
+- **Ollama Provider (`apps/backend/src/services/ai/providers/ollama.provider.ts`)**:
+  - Sends `stream: true` to `/api/chat` when `onToken` is provided.
+  - Incrementally parses newline-delimited JSON (`NDJSON`) chunks.
+  - Preserves multi-byte UTF-8 character boundaries across network packets using `TextDecoder({ stream: true })`.
+  - Emits incremental text deltas via `input.onToken(chunk.message.content)`.
+  - Forwards `input.signal` directly to native `fetch`.
+- **OmniRoute Provider (`apps/backend/src/services/ai/providers/omniroute.provider.ts`)**:
+  - Sends `stream: true` to `/v1/chat/completions` when `onToken` is provided.
+  - Incrementally buffers and parses SSE `data:` frames, extracting `delta.content` only.
+  - Halts stream processing cleanly upon encountering `data: [DONE]`.
+  - Preserves multi-byte UTF-8 characters across chunk boundaries.
+  - Forwards `input.signal` directly to native `fetch`.
+- **Provider Selection**: Both providers remain fully supported. Ollama continues as the local/private/offline fallback, and OmniRoute continues as the primary cloud gateway.
+
+### 4. Assistant Runtime & Orchestration Token Flow
+
+- **Runtime Event Protocol (`apps/backend/src/services/assistant/assistant.runtime.types.ts`)**:
+  - Added `TEXT_DELTA` event type: `{ type: "TEXT_DELTA"; delta: string }`.
+  - Added `emitTextDelta(delta: string): void` to `AssistantRuntime`.
+- **Assistant Service Orchestration (`apps/backend/src/services/assistant/assistant.service.ts`)**:
+  - **Tool Calling Isolation**: Intermediate tool selection/calling rounds remain non-streaming. Raw tool call arguments and JSON objects are never streamed to `TEXT_DELTA` or leaked into conversational output.
+  - **Final Synthesis Token Flow**: When tool execution completes (or when no tools are invoked), text deltas are emitted to runtime under `SPEAKING` state.
+  - **Fail-Closed Cancellation**: Checks `signal.aborted` at entry, in the tool loop, after tool execution, and after LLM generation. If aborted, throws `Error("Assistant request was aborted.")` immediately.
+  - **No Partial Persistence**: Aborted requests fail closed and bypass `messageRepository.create({ role: "ASSISTANT", ... })`, ensuring partial or corrupted responses are never stored in the database.
+
+### 5. Controller SSE Transport & Teardown
+
+- **Location**: `apps/backend/src/controllers/assistant/assistant.controller.ts`
+- **Request-Scoped Teardown**: Instantiates an isolated `const abortController = new AbortController()` per stream request.
+- **Client Disconnect**: `req.on("close")` and the `finally` block execute `abortController.abort()` and unsubscribe from the runtime.
+- **SSE Emission**: `runtime.subscribe` writes `event: text_delta\ndata: {"delta":"..."}\n\n` frames before `response` and `done`.
+
+### 6. Implementation Files
+
+- `apps/backend/src/services/ai/provider.interface.ts`: Extended `GenerateTextInput` with `onToken` and `signal`.
+- `apps/backend/src/services/ai/clients/ollama.client.ts`: Added `postStream` and `signal` forwarding.
+- `apps/backend/src/services/ai/clients/omniroute.client.ts`: Added `postStream` and `signal` forwarding.
+- `apps/backend/src/services/ai/providers/ollama.provider.ts`: Added NDJSON stream parser, UTF-8 safety, and token emission.
+- `apps/backend/src/services/ai/providers/omniroute.provider.ts`: Added SSE stream parser, `[DONE]` termination, and token emission.
+- `apps/backend/src/services/assistant/assistant.runtime.types.ts`: Added `TEXT_DELTA` event type.
+- `apps/backend/src/services/assistant/assistant.runtime.ts`: Added `emitTextDelta()` method.
+- `apps/backend/src/services/assistant/assistant.types.ts`: Added `signal?: AbortSignal` to `AssistantMessageInput`.
+- `apps/backend/src/services/assistant/assistant.service.ts`: Added cancellation checks, non-streaming tool rounds, and non-persistence on abort.
+- `apps/backend/src/controllers/assistant/assistant.controller.ts`: Added request-scoped `AbortController`, `text_delta` SSE frames, and disconnect cleanup.
+- `apps/backend/test/ai/ollama.stream.test.ts` [NEW]: Unit tests for Ollama NDJSON streaming, split chunks, UTF-8 safety, and abort signal.
+- `apps/backend/test/ai/omniroute.stream.test.ts` [NEW]: Unit tests for OmniRoute SSE streaming, split chunks, UTF-8 safety, `[DONE]`, and abort signal.
+- `apps/backend/test/assistant/assistant.stream.api.test.ts`: Verified `text_delta` event ordering and abort on client disconnect.
+- `apps/backend/test/assistant/assistant.service.test.ts`: Verified cancellation before/after generation and non-persistence of aborted responses.
+
+### 7. Verification Completed
+
+```text
+Ollama Streaming Unit Tests:
+5/5 PASS (apps/backend/test/ai/ollama.stream.test.ts)
+
+OmniRoute Streaming Unit Tests:
+5/5 PASS (apps/backend/test/ai/omniroute.stream.test.ts)
+
+Assistant SSE Stream Integration Tests:
+9/9 PASS (apps/backend/test/assistant/assistant.stream.api.test.ts)
+
+Assistant Service Unit Tests:
+17/17 PASS (apps/backend/test/assistant/assistant.service.test.ts)
+
+Full Backend Regression Test Suite:
+72/72 test files passed, 832/832 tests passed (0 failures)
+
+TypeScript Typecheck & Build:
+npm run typecheck (0 errors)
+npm run build (0 errors)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+```
+
+### 8. Git Checkpoint
+
+```text
+793367b feat(ai): add provider-independent token streaming and cancellation
+```
+
+---
+
+# 51. MISSION 51 — FRONTEND LIVE TOKEN STREAMING & TYPEWRITER UI INTEGRATION
+
+### Objective & Architectural Rationale
+
+With the backend SSE stream emitting incremental `text_delta` frames (Mission 50), Mission 51 connects the frontend consumer (`streamAssistant`) to the live token stream and integrates real-time typewriter message rendering into the dashboard.
+
+Prior to Mission 51, the frontend dashboard only displayed high-level status messages and waited for full stream completion before re-fetching the entire message history. Mission 51 enables immediate, incremental token rendering inside an in-progress assistant bubble while maintaining full cancellation control, zero message duplicates, and robust information hiding.
+
+```text
+Backend SSE Stream (event: text_delta \n data: {"delta":"..."})
+    │
+    ▼
+streamAssistant (apps/web/lib/brainos-client-api.ts)
+    ├── Decodes incoming chunks with TextDecoder({ stream: true })
+    ├── Splits across double-newline boundaries
+    ├── Identifies eventType === "text_delta"
+    └── Dispatches { type: "text_delta", data: { delta } } to onEvent
+    │
+    ▼
+Dashboard UI (apps/web/app/dashboard/page.tsx)
+    ├── Maintains streamingMessage state (string | null)
+    ├── On text_delta -> Appends delta in real time
+    ├── While streaming -> Renders assistant bubble with pulsing cursor
+    ├── Preserves live state & task progress indicators
+    ├── On stream completion -> Fetches canonical messages & resets streamingMessage
+    └── On error / Cancel -> Resets streamingMessage & displays cancellation notice
+```
+
+### 1. Frontend Stream Client Protocol (`brainos-client-api.ts`)
+
+- **Event Union Extension**:
+  ```typescript
+  export type AssistantStreamEvent =
+    | { type: "state_changed"; data: AssistantStateSnapshot }
+    | { type: "task_event"; data: AssistantTaskEvent }
+    | { type: "text_delta"; data: { delta: string } }
+    | { type: "response"; data: AssistantResponse }
+    | { type: "error"; data: { message: string } }
+    | { type: "done"; data: Record<string, unknown> };
+  ```
+- **SSE Parser**: Updated `processBlock()` to discriminate `eventType === "text_delta"`, extracting string `delta` and dispatching `{ type: "text_delta", data: { delta } }`.
+- **Chunk-Boundary Safety**: Reconstructs split `text_delta` frames seamlessly across arbitrary network packet boundaries.
+
+### 2. Dashboard Real-Time Accumulation & Live UI (`page.tsx`)
+
+- **State Management**:
+  - `const [streamingMessage, setStreamingMessage] = useState<string | null>(null);`
+  - Reset to `null` on new message submission.
+  - On `event.type === "text_delta"`, accumulates `event.data.delta` into `streamingMessage`.
+- **Live Assistant Message Bubble**:
+  - Renders an optimistic assistant message bubble displaying `{streamingMessage}` accompanied by an animated typing cursor:
+    ```tsx
+    {loading && streamingMessage !== null && (
+      <div className="mr-auto max-w-2xl rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+        <p className="mb-2 text-sm font-medium text-zinc-400">BrainOS</p>
+        <p className="whitespace-pre-wrap leading-7">
+          {streamingMessage}
+          <span className="inline-block h-4 w-1.5 animate-pulse bg-blue-400 ml-1 align-middle" />
+        </p>
+      </div>
+    )}
+    ```
+- **XSS & Injection Safety**: Renders pure React text nodes; zero `dangerouslySetInnerHTML`.
+- **Preserved Status UI**: The animated runtime status indicator (`currentStatus`) and active tool indicator (`activeTaskMessage`) continue to render normally alongside the streaming bubble.
+- **Canonical Reconciliation & Zero Duplicates**:
+  - On stream completion, `listMessages(token, conversation.id)` reloads canonical database messages.
+  - `setMessages(updatedMessages)` and `setStreamingMessage(null)` execute in the same update cycle, achieving an atomic, flicker-free transition with zero duplicate messages.
+- **Cancellation & Error Cleanup**:
+  - Triggering "Cancel" invokes `abortController.abort()`.
+  - The `finally` block unconditionally resets `streamingMessage` to `null` and resets status strings, preventing orphaned partial messages.
+
+### 3. Implementation Files
+
+- `apps/web/lib/brainos-client-api.ts`: Added `text_delta` to `AssistantStreamEvent` union and SSE parser.
+- `apps/web/app/dashboard/page.tsx`: Added `streamingMessage` state, live token accumulation, and optimistic assistant bubble with typing cursor.
+- `apps/web/lib/brainos-client-api.test.ts`: Added dedicated unit tests for `text_delta` streaming, split chunk boundaries, and sequential token delivery.
+
+### 4. Verification Completed
+
+```text
+Frontend Unit Tests:
+9/9 PASS (apps/web/lib/brainos-client-api.test.ts)
+- Test 7: Token Streaming (processes text_delta events before response and done)
+- Test 8: Split text_delta Chunks (reconstructs frames split across network packets)
+- Test 9: Multiple sequential deltas (accurately delivers tokens in exact arrival order)
+
+Next.js Production Build & TypeScript Check:
+npm run build (0 errors, CLEAN static and dynamic routes compiled)
+
+Full Backend Regression Suite:
+72/72 test files passed, 832/832 tests passed (0 failures)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+
+Security & Information Hiding Review:
+PASSED (Single gateway, sanitized token streams, zero raw tool args/DB data, safe React rendering, clean AbortController teardown)
+```
+
+### 5. Git Checkpoint
+
+```text
+b25e13a feat(web): add live assistant token streaming UI
+793367b feat(ai): add provider-independent token streaming and cancellation
+0abddd2 docs(context): update frontend SSE milestone
+```
+
+Verified state:
+- Branch: `main`
+- HEAD: `b25e13a` (matches `origin/main`)
+- Working tree: context documentation update uncommitted (`.agents/rules/` remains untracked user customization)
+
+### 6. Mission Impact
+
+The BrainOS assistant now provides an end-to-end real-time generative streaming experience: tokens generated incrementally by local Ollama or cloud OmniRoute flow through the backend SSE pipeline directly into the dashboard UI with live typewriter rendering, interactive cancellation, and guaranteed database consistency.
+
+### 7. Deferred / Unchanged
+
+- Bidirectional WebSockets remain deferred (HTTP SSE fulfills all real-time requirements).
+- Computer Agent native OS desktop drivers remain deferred.
+- No database schema or migration changes were required.
