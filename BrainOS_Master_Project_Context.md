@@ -2797,3 +2797,140 @@ The conversational AI Assistant now has full visibility and lifecycle control ov
 - Frontend assistant UI document management/preview widgets in Next.js remain future work.
 - Native desktop daemon / OS drivers remain deferred.
 - No database schema or migration changes were required.
+
+---
+
+# 48. MISSION 48 — ASSISTANT SSE STREAMING TRANSPORT
+
+**Updated:** 2026-09-06
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 48 — Assistant Server-Sent Events (SSE) Streaming Transport — COMPLETE
+
+Mission 48 introduces real-time streaming transport for the BrainOS AI Assistant using standard Server-Sent Events (SSE) over HTTP (`POST /api/v1/assistant/stream`). Instead of blocking the client until full RAG retrieval, multi-round tool cycles, and final response synthesis complete, the assistant now streams live runtime state transitions and tool execution progress events directly to the client as they occur, concluding with the synthesized final response and stream termination.
+
+### Architectural Flow
+
+```text
+Client / Frontend (POST /api/v1/assistant/stream with Bearer Token)
+    ↓
+Express requireAuth Middleware (Validates Clerk token, sets req.user)
+    ↓
+AssistantController (streamAssistant)
+    ├── Shared Request Validation (validateAssistantRequest)
+    ├── SSE Response Headers (Content-Type: text/event-stream, Cache-Control: no-cache, Connection: keep-alive)
+    ├── Request-Scoped AssistantRuntime Allocation (isolated new AssistantRuntime() per request)
+    ├── Event Listener Subscription (runtime.subscribe)
+    ├── Socket Disconnect Handler (req.on("close", cleanup) -> unsubscribe())
+    ↓
+AssistantService Orchestration (ask with input.runtime)
+    ├── runtime.setState("THINKING") -> SSE event: state_changed
+    ├── Tool Execution Cycle
+    │   ├── runtime.startTask(taskId) -> SSE event: state_changed (EXECUTING) & event: task_event (TASK_STARTED)
+    │   ├── runtime.progressTask(taskId) -> SSE event: task_event (TASK_PROGRESS)
+    │   ├── ToolExecutor.execute(...) (runs domain tools: task, reminder, memory, automation, document, computer)
+    │   └── runtime.completeTask(taskId) / failTask -> SSE event: task_event (TASK_COMPLETED / TASK_FAILED)
+    ├── runtime.setState("SPEAKING") -> SSE event: state_changed
+    ├── Final AssistantResponse Generation
+    └── runtime.setState("IDLE") -> SSE event: state_changed
+    ↓
+Stream Completion
+    ├── SSE event: response (data: final AssistantResponse payload)
+    ├── SSE event: done (data: {})
+    └── res.end() & unsubscribe()
+```
+
+### 1. Why Server-Sent Events (SSE) Was Selected
+
+- **Standard HTTP Compatibility**: Operates seamlessly over standard HTTP/1.1 and HTTP/2 without requiring WebSocket handshake negotiation, separate protocols, or custom connection state machines.
+- **Unidirectional Fit**: Assistant orchestration streaming is strictly server-to-client after the initial client message request.
+- **Simplicity & Resilience**: Standard text streaming format (`text/event-stream`) works out of the box with browser fetch streams, `EventSource`, and server-side proxies without additional dependencies.
+
+### 2. Request-Scoped AssistantRuntime Design & Tenant Isolation
+
+- **Request Scoping**: Each `/stream` request allocates a dedicated `new AssistantRuntime()` instance rather than binding to a shared global singleton.
+- **Zero Cross-User Leakage**: Subscriptions are bound strictly to the specific HTTP response stream. Concurrent requests from different users or sessions execute on completely isolated runtime instances with zero event crosstalk.
+- **Fail-Closed Cleanup**: Both graceful stream completion and early client socket disconnection (`req.on("close")`) invoke `unsubscribe()` to prevent lingering listeners or memory leaks.
+
+### 3. SSE Event Protocol
+
+The streaming endpoint emits five structured SSE event types:
+
+1. **`event: state_changed`**:
+   - Emits runtime lifecycle state snapshots (`{ state: "IDLE" | "THINKING" | "EXECUTING" | "SPEAKING" | "ERROR", activeTaskId: string | null }`).
+   - Emitted upon initial connection and on every internal runtime transition.
+2. **`event: task_event`**:
+   - Emits tool execution progress updates (`{ type: "TASK_STARTED" | "TASK_PROGRESS" | "TASK_COMPLETED" | "TASK_FAILED", taskId: string, message: string, timestamp: string }`).
+3. **`event: response`**:
+   - Emits the complete, synthesized `AssistantResponse` (`{ text, model, provider, retrievedMemories, retrievedDocuments }`) prior to closing.
+4. **`event: error`**:
+   - Emits a sanitized error payload (`{ message: string }`) if orchestration fails during the stream, stripping sensitive connection strings, Prisma internal tokens, or stack traces.
+5. **`event: done`**:
+   - Emits `{}` to signal stream completion, followed immediately by `res.end()`.
+
+### 4. Shared Validation & Existing /ask Preservation
+
+- Extracted a unified, fail-closed `validateAssistantRequest(body)` helper verifying all parameters (`message`, `conversationId`, `systemPrompt`, `memorySearchLimit`, `documentSearchLimit`, `model`, `authorizedComputerActions`, `timezone`).
+- Unauthenticated requests fail closed with `401 Unauthorized` JSON before stream initialization.
+- Invalid payloads fail closed with `400 Bad Request` JSON before stream initialization.
+- Existing `POST /api/v1/assistant/ask` endpoint is 100% preserved and functionally identical, continuing to return synchronous `200 OK` JSON responses.
+
+### 5. Implementation Files
+
+- `apps/backend/src/services/assistant/assistant.types.ts`: Added optional `runtime?: AssistantRuntime` to `AssistantMessageInput`.
+- `apps/backend/src/services/assistant/assistant.service.ts`: Scoped runtime resolution (`const runtime = input.runtime ?? this.runtime;`) and added `getRuntime()`.
+- `apps/backend/src/controllers/assistant/assistant.controller.ts`: Extracted shared validation, implemented `streamAssistant`, SSE formatting, and error sanitization.
+- `apps/backend/src/routes/assistant.routes.ts`: Registered `POST /api/v1/assistant/stream` with `requireAuth`.
+- `apps/backend/test/assistant/assistant.stream.api.test.ts` [NEW]: Focused 9-scenario integration test suite.
+
+### 6. Verification Completed
+
+```text
+Focused Assistant SSE Streaming Tests:
+9/9 PASS (test/assistant/assistant.stream.api.test.ts)
+
+All Assistant Subsystem Tests:
+83/83 PASS (13 test files in test/assistant/)
+
+Full Backend Regression Suite:
+70/70 test files PASS, 820/820 tests PASS (100% PASS)
+
+TypeScript Compilation:
+npx tsc --noEmit / npm run build (0 errors, CLEAN)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+
+Security & Tenant Isolation Review:
+PASSED (Request-scoped runtime, zero cross-user leakage, fail-closed auth/validation, sanitized error payloads)
+
+Architectural Review:
+PASSED (Zero database/schema changes, zero provider interface changes, clean SSE transport composition)
+```
+
+### 7. Git Checkpoint
+
+```text
+726aa1c feat(assistant): add SSE streaming transport
+3ab3d81 docs(context): update assistant document management milestone
+c4bf8e4 feat(tools): add assistant document management tools
+```
+
+Verified state:
+- Branch: `main`
+- HEAD: `726aa1c`
+- Status: 1 commit ahead of origin/main (push pending)
+- Working tree: context update uncommitted (`.agents/rules/` remains untracked user customization)
+
+### 8. Mission Impact
+
+The BrainOS assistant now provides real-time event streaming and live progress visibility across all tool cycles (tasks, reminders, memories, automations, documents, and computer actions) over standard Server-Sent Events, establishing the foundational streaming transport for real-time frontend user experiences.
+
+### 9. Deferred / Unchanged
+
+- Token-by-token LLM generation streaming remains deferred (requires AI provider streaming abstraction).
+- WebSocket bidirectional real-time channels remain deferred.
+- Frontend assistant streaming UI widgets in Next.js remain future work.
+- Computer Agent and native desktop drivers remain deferred.
+- No database schema or migration changes were required.
