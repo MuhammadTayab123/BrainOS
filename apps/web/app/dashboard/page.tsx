@@ -31,6 +31,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [currentStatus, setCurrentStatus] = useState("BrainOS is thinking...");
   const [activeTaskMessage, setActiveTaskMessage] = useState<string | null>(null);
+  const [streamingMessage, setStreamingMessage] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -189,6 +190,7 @@ export default function Home() {
     setError("");
     setCurrentStatus("BrainOS is thinking...");
     setActiveTaskMessage(null);
+    setStreamingMessage(null);
 
     const userMessage = message.trim();
     setMessage("");
@@ -236,6 +238,10 @@ export default function Home() {
               if (taskEvent.message) {
                 setActiveTaskMessage(taskEvent.message);
               }
+            } else if (event.type === "text_delta") {
+              if (event.data.delta) {
+                setStreamingMessage((prev) => (prev ? prev + event.data.delta : event.data.delta));
+              }
             }
           },
         },
@@ -247,6 +253,7 @@ export default function Home() {
       );
 
       setMessages(updatedMessages);
+      setStreamingMessage(null);
 
       if (!result.text && updatedMessages.length === 0) {
         setError("BrainOS returned an empty response.");
@@ -268,6 +275,7 @@ export default function Home() {
     } finally {
       abortControllerRef.current = null;
       setLoading(false);
+      setStreamingMessage(null);
       setCurrentStatus("BrainOS is thinking...");
       setActiveTaskMessage(null);
     }
@@ -414,6 +422,18 @@ export default function Home() {
                         </p>
                       </div>
                     ))}
+
+                    {loading && streamingMessage !== null && (
+                      <div className="mr-auto max-w-2xl rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+                        <p className="mb-2 text-sm font-medium text-zinc-400">
+                          BrainOS
+                        </p>
+                        <p className="whitespace-pre-wrap leading-7">
+                          {streamingMessage}
+                          <span className="inline-block h-4 w-1.5 animate-pulse bg-blue-400 ml-1 align-middle" />
+                        </p>
+                      </div>
+                    )}
 
                     {loading && (
                       <div className="mr-auto max-w-2xl rounded-xl border border-zinc-800 bg-zinc-900 p-4">

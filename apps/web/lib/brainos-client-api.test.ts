@@ -209,4 +209,100 @@ describe("streamAssistant (Frontend SSE Client)", () => {
       streamAssistant("mock-token", "Incomplete stream"),
     ).rejects.toThrow("Stream terminated without delivering a response.");
   });
+
+  it("7. Token Streaming: processes text_delta events and delivers incremental deltas before final response", async () => {
+    const ssePayload = [
+      'event: state_changed\ndata: {"state":"THINKING","activeTaskId":null}\n\n',
+      'event: state_changed\ndata: {"state":"SPEAKING","activeTaskId":null}\n\n',
+      'event: text_delta\ndata: {"delta":"Hello "}\n\n',
+      'event: text_delta\ndata: {"delta":"world"}\n\n',
+      'event: text_delta\ndata: {"delta":"!"}\n\n',
+      'event: response\ndata: {"text":"Hello world!","model":"m","provider":"p","retrievedMemories":[]}\n\n',
+      'event: done\ndata: {}\n\n',
+    ];
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: createMockReadableStream(ssePayload),
+    });
+
+    const receivedEvents: AssistantStreamEvent[] = [];
+    const receivedDeltas: string[] = [];
+
+    const result = await streamAssistant("mock-token", "Stream tokens test", {
+      onEvent: (event) => {
+        receivedEvents.push(event);
+        if (event.type === "text_delta") {
+          receivedDeltas.push(event.data.delta);
+        }
+      },
+    });
+
+    expect(result.text).toBe("Hello world!");
+    expect(receivedDeltas).toEqual(["Hello ", "world", "!"]);
+
+    const textDeltaIndices = receivedEvents
+      .map((e, idx) => (e.type === "text_delta" ? idx : -1))
+      .filter((idx) => idx !== -1);
+    const responseIndex = receivedEvents.findIndex((e) => e.type === "response");
+    const doneIndex = receivedEvents.findIndex((e) => e.type === "done");
+
+    expect(textDeltaIndices).toHaveLength(3);
+    expect(responseIndex).toBeGreaterThan(textDeltaIndices[2]);
+    expect(doneIndex).toBeGreaterThan(responseIndex);
+  });
+
+  it("8. Split text_delta Chunks: safely reconstructs text_delta frames split across network packets", async () => {
+    const fragmentedChunks = [
+      "event: text_",
+      'delta\ndata: {"del',
+      'ta":"Frag',
+      'mented token"}\n\nevent: response\ndata: {"text":"Fragmented token","model":"m","provider":"p","retrievedMemories":[]}\n\nevent: done\ndata: {}\n\n',
+    ];
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: createMockReadableStream(fragmentedChunks),
+    });
+
+    const deltas: string[] = [];
+    const result = await streamAssistant("mock-token", "Split delta test", {
+      onEvent: (event) => {
+        if (event.type === "text_delta") {
+          deltas.push(event.data.delta);
+        }
+      },
+    });
+
+    expect(result.text).toBe("Fragmented token");
+    expect(deltas).toEqual(["Fragmented token"]);
+  });
+
+  it("9. Multiple sequential deltas: accurately delivers individual tokens in exact arrival order", async () => {
+    const tokens = ["The ", "quick ", "brown ", "fox ", "jumps."];
+    const sseChunks = [
+      ...tokens.map((t) => `event: text_delta\ndata: ${JSON.stringify({ delta: t })}\n\n`),
+      'event: response\ndata: {"text":"The quick brown fox jumps.","model":"m","provider":"p","retrievedMemories":[]}\n\n',
+      'event: done\ndata: {}\n\n',
+    ];
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: createMockReadableStream(sseChunks),
+    });
+
+    let accumulated = "";
+    await streamAssistant("mock-token", "Quick fox", {
+      onEvent: (event) => {
+        if (event.type === "text_delta") {
+          accumulated += event.data.delta;
+        }
+      },
+    });
+
+    expect(accumulated).toBe("The quick brown fox jumps.");
+  });
 });

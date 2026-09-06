@@ -44,6 +44,7 @@ export interface AssistantTaskEvent {
 export type AssistantStreamEvent =
   | { type: "state_changed"; data: AssistantStateSnapshot }
   | { type: "task_event"; data: AssistantTaskEvent }
+  | { type: "text_delta"; data: { delta: string } }
   | { type: "response"; data: AssistantResponse }
   | { type: "error"; data: { message: string } }
   | { type: "done"; data: Record<string, unknown> };
@@ -189,6 +190,14 @@ export async function streamAssistant(
       const typedEvent: AssistantStreamEvent = {
         type: "task_event",
         data: parsedData as AssistantTaskEvent,
+      };
+      onEvent?.(typedEvent);
+    } else if (eventType === "text_delta") {
+      const deltaData = (parsedData as { delta?: string }) ?? {};
+      const delta = typeof deltaData.delta === "string" ? deltaData.delta : "";
+      const typedEvent: AssistantStreamEvent = {
+        type: "text_delta",
+        data: { delta },
       };
       onEvent?.(typedEvent);
     } else if (eventType === "response") {
