@@ -4093,3 +4093,77 @@ Verified state:
 - Branch: `main`
 - HEAD: `65b0702` (matches `origin/main`)
 - Untracked files: `.agents/rules/` preserved untouched.
+
+---
+
+# 60. ADDITIVE UPDATE — DOCUMENTS KNOWLEDGE BASE SERVER-SIDE FILTERING & SAFE INLINE DELETION
+
+**Updated:** 2026-09-06
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 60 — Documents Knowledge Base Server-Side Filtering & Safe Inline Deletion — COMPLETE
+
+Mission 60 upgraded the Documents Knowledge Base dashboard page with safe inline deletion confirmation and true server-side status filtering through `listDocuments()`.
+
+### 1. Goal and Scope
+
+- Add safe inline document deletion confirmation before executing `deleteDocument` to prevent accidental removal of RAG knowledge items.
+- Migrate document status filtering from client-side array filtering to server-side query filtering (`listDocuments(token, { status })`).
+- Ensure filter changes reload documents with proper loading and error state management.
+- Preserve existing file drag/drop upload, text note creation, document listing UI, `DashboardNav`, Clerk authentication, and security boundaries.
+- Only `apps/web/app/dashboard/documents/page.tsx` modified.
+- No backend, database, Prisma schema, AI provider, SSE streaming, or dependency changes.
+
+### 2. Safe Inline Delete Confirmation
+
+- Added `confirmDeleteId` state guard to track delete confirmation per document.
+- Replaced immediate deletion with an inline prompt (`"Delete document?"`, `"Delete"`, `"Cancel"`), matching the Tasks and Reminders UX pattern.
+- Confirmation automatically resets when cancelling, switching filter tabs, or completing a deletion.
+
+### 3. Server-Side Document Status Filtering
+
+- Updated `fetchDocuments` to pass `{ status: selectedFilter !== "ALL" ? selectedFilter : undefined }` to `listDocuments()`.
+- Added `selectedFilter` to `useCallback` dependency array to trigger server re-fetch on tab selection.
+- Maintained loading skeleton and error display during filter transitions.
+- Removed in-memory client-side array filtering in favor of direct server response binding.
+
+### 4. Security Review
+
+- **Bearer Authentication**: All requests attach authenticated Clerk Bearer tokens via `getToken()`.
+- **Zero Client Identity**: No client-supplied `userId`; identity and multi-tenant isolation remain strictly derived by backend from the Clerk JWT.
+- **Fail-Closed Confirmation**: Safe inline delete guard prevents accidental destructive operations on knowledge base embeddings.
+- **Security Boundaries Preserved**: Frontend remains thin; backend domain logic, validation, and tenant isolation are untouched.
+
+### 5. Implementation Files
+
+- `apps/web/app/dashboard/documents/page.tsx`: Added inline delete confirmation and converted status filtering to server-side.
+
+### 6. Verification Completed
+
+```text
+Frontend Unit Tests:
+52/52 PASS (apps/web/lib/brainos-client-api.test.ts)
+
+Next.js Production Build & TypeScript Check:
+npm run build (0 errors, 11/11 routes compiled successfully)
+
+Full Backend Regression Suite:
+72/72 test files passed, 832/832 tests passed (0 failures)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+```
+
+### 7. Git Checkpoint
+
+```text
+6133168 feat(web): improve documents dashboard UX and server-side filtering
+0032eb8 docs(context): update mission 59
+65b0702 feat(web): improve reminders dashboard UX and server-side filtering
+```
+
+Verified state:
+- Branch: `main`
+- HEAD: `6133168` (matches `origin/main`)
+- Untracked files: `.agents/rules/` preserved untouched.
