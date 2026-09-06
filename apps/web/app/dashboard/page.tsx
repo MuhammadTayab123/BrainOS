@@ -33,6 +33,31 @@ export default function Home() {
   const [activeTaskMessage, setActiveTaskMessage] = useState<string | null>(null);
   const [streamingMessage, setStreamingMessage] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const isNearBottomRef = useRef(true);
+
+  function scrollToBottom(behavior: ScrollBehavior = "auto") {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior });
+    }
+  }
+
+  function handleScroll() {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const threshold = 100;
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    isNearBottomRef.current = distanceFromBottom <= threshold;
+  }
+
+  useEffect(() => {
+    if (isNearBottomRef.current && messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop =
+        messagesContainerRef.current.scrollHeight;
+    }
+  }, [messages, streamingMessage, currentStatus, activeTaskMessage]);
 
   useEffect(() => {
     if (!isSignedIn) {
@@ -76,6 +101,7 @@ export default function Home() {
 
         if (!cancelled) {
           setMessages(conversationMessages);
+          isNearBottomRef.current = true;
         }
       } catch (err) {
         if (!cancelled) {
@@ -123,6 +149,7 @@ export default function Home() {
       setConversation(newConversation);
       setMessages([]);
       setMessage("");
+      isNearBottomRef.current = true;
     } catch (err) {
       setError(
         err instanceof Error
@@ -163,6 +190,7 @@ export default function Home() {
       setConversation(selectedConversation);
       setMessages(conversationMessages);
       setMessage("");
+      isNearBottomRef.current = true;
     } catch (err) {
       setError(
         err instanceof Error
@@ -207,6 +235,8 @@ export default function Home() {
       updatedAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, tempUserMessage]);
+    isNearBottomRef.current = true;
+    scrollToBottom("smooth");
 
     try {
       const token = await getToken();
@@ -220,7 +250,6 @@ export default function Home() {
         userMessage,
         {
           conversationId: conversation.id,
-          enableMemoryRetrieval: false,
           signal: abortController.signal,
           onEvent: (event) => {
             if (event.type === "state_changed") {
@@ -297,6 +326,13 @@ export default function Home() {
 
           <div className="flex items-center gap-3">
             <Show when="signed-in">
+              <Link
+                href="/dashboard/tasks"
+                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-900 hover:text-white"
+              >
+                Tasks
+              </Link>
+
               <Link
                 href="/dashboard/automations"
                 className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-900 hover:text-white"
@@ -387,7 +423,11 @@ export default function Home() {
                 </div>
               ) : (
                 <>
-                  <div className="flex-1 space-y-4 overflow-y-auto pb-6">
+                  <div
+                    ref={messagesContainerRef}
+                    onScroll={handleScroll}
+                    className="flex-1 space-y-4 overflow-y-auto pb-6"
+                  >
                     {messages.length === 0 && (
                       <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-center text-zinc-500">
                         Start a conversation with BrainOS.
@@ -450,6 +490,8 @@ export default function Home() {
                         )}
                       </div>
                     )}
+
+                    <div ref={messagesEndRef} />
                   </div>
 
                   {error && (

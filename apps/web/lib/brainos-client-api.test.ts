@@ -305,4 +305,40 @@ describe("streamAssistant (Frontend SSE Client)", () => {
 
     expect(accumulated).toBe("The quick brown fox jumps.");
   });
+
+  it("10. Memory & Retrieval Options: omits enableMemoryRetrieval by default so backend policy applies, while forwarding explicit options", async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+
+    globalThis.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.body && typeof init.body === "string") {
+        capturedBody = JSON.parse(init.body) as Record<string, unknown>;
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        body: createMockReadableStream([
+          'event: response\ndata: {"text":"ok","model":"m","provider":"p","retrievedMemories":[]}\n\n',
+          'event: done\ndata: {}\n\n',
+        ]),
+      });
+    });
+
+    // Default call: without enableMemoryRetrieval option
+    await streamAssistant("mock-token", "Remember this", {
+      conversationId: "conv-test",
+    });
+
+    expect(capturedBody).not.toBeNull();
+    expect(capturedBody?.conversationId).toBe("conv-test");
+    expect(capturedBody?.enableMemoryRetrieval).toBeUndefined();
+
+    // Explicit override call: with enableMemoryRetrieval: false
+    await streamAssistant("mock-token", "Do not remember", {
+      conversationId: "conv-test-2",
+      enableMemoryRetrieval: false,
+    });
+
+    expect(capturedBody?.conversationId).toBe("conv-test-2");
+    expect(capturedBody?.enableMemoryRetrieval).toBe(false);
+  });
 });
