@@ -27,6 +27,7 @@ export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [operatingId, setOperatingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<FilterTab>("ALL");
 
   // Creation form state
@@ -39,6 +40,7 @@ export default function DocumentsPage() {
   const [isDragging, setIsDragging] = useState(false);
 
   const fetchDocuments = useCallback(async () => {
+    setLoading(true);
     setError(null);
 
     try {
@@ -48,7 +50,9 @@ export default function DocumentsPage() {
         throw new Error("Authentication token is unavailable.");
       }
 
-      const data = await listDocuments(token);
+      const data = await listDocuments(token, {
+        status: selectedFilter !== "ALL" ? selectedFilter : undefined,
+      });
       setDocuments(data);
     } catch (err) {
       setError(
@@ -59,7 +63,7 @@ export default function DocumentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [getToken]);
+  }, [getToken, selectedFilter]);
 
   useEffect(() => {
     if (isLoaded && isSignedIn) {
@@ -190,6 +194,7 @@ export default function DocumentsPage() {
       }
 
       await deleteDocument(token, documentId);
+      setConfirmDeleteId(null);
       await fetchDocuments();
     } catch (err) {
       setActionError(
@@ -230,11 +235,6 @@ export default function DocumentsPage() {
         return "border-zinc-800 bg-zinc-900 text-zinc-400";
     }
   }
-
-  const filteredDocuments = documents.filter((item) => {
-    if (selectedFilter === "ALL") return true;
-    return item.status === selectedFilter;
-  });
 
   const readyCount = documents.filter((d) => d.status === "READY").length;
 
@@ -436,7 +436,10 @@ export default function DocumentsPage() {
                       <button
                         key={tab}
                         type="button"
-                        onClick={() => setSelectedFilter(tab)}
+                        onClick={() => {
+                          setConfirmDeleteId(null);
+                          setSelectedFilter(tab);
+                        }}
                         className={`rounded-md px-2.5 py-1 font-medium transition ${
                           selectedFilter === tab
                             ? "bg-zinc-800 text-white"
@@ -470,7 +473,7 @@ export default function DocumentsPage() {
                       />
                     ))}
                   </div>
-                ) : filteredDocuments.length === 0 ? (
+                ) : documents.length === 0 ? (
                   <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-800 py-12 text-center">
                     <p className="text-sm font-medium text-zinc-300">No documents found</p>
                     <p className="mt-1 text-xs text-zinc-500">
@@ -481,7 +484,7 @@ export default function DocumentsPage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {filteredDocuments.map((doc) => (
+                    {documents.map((doc) => (
                       <div
                         key={doc.id}
                         className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 transition hover:border-zinc-700"
@@ -514,14 +517,36 @@ export default function DocumentsPage() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteDocument(doc.id)}
-                            disabled={operatingId === doc.id}
-                            className="rounded-lg border border-red-900/40 bg-red-950/20 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-950/60 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {operatingId === doc.id ? "Deleting..." : "Delete"}
-                          </button>
+                          {confirmDeleteId === doc.id ? (
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="font-medium text-zinc-300">Delete document?</span>
+                              <button
+                                type="button"
+                                onClick={() => void handleDeleteDocument(doc.id)}
+                                disabled={operatingId === doc.id}
+                                className="font-medium text-red-400 hover:text-red-300 disabled:opacity-50"
+                              >
+                                {operatingId === doc.id ? "Deleting..." : "Delete"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(null)}
+                                disabled={operatingId === doc.id}
+                                className="text-zinc-400 hover:text-white disabled:opacity-50"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(doc.id)}
+                              disabled={operatingId === doc.id}
+                              className="rounded-lg border border-red-900/40 bg-red-950/20 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-950/60 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
