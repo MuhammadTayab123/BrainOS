@@ -3733,8 +3733,8 @@ Mission 56 standardized the frontend Automations subsystem onto the centralized 
 
 - **Types & Interfaces**:
   - `AutomationStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "FAILED"`
-  - `AutomationTriggerType = "SCHEDULED" | "EVENT" | "MANUAL"`
-  - `AutomationActionType = "CREATE_TASK" | "SEND_REMINDER" | "WEBHOOK"`
+  - `AutomationTriggerType = "SCHEDULE" | "TASK_DUE" | "REMINDER_DUE"`
+  - `AutomationActionType = "CREATE_TASK" | "CREATE_REMINDER"`
   - `Automation`: Typed model matching the backend entity (`id`, `name`, `description`, `triggerType`, `triggerConfig`, `actionType`, `actionConfig`, `status`, `lastRunAt`, `nextRunAt`, `executionCount`, `maxExecutions`, `createdAt`, `updatedAt`).
   - `CreateAutomationInput`, `UpdateAutomationInput`: Input contracts for create/update operations.
   - `ListAutomationsOptions`: `{ status?: AutomationStatus; triggerType?: AutomationTriggerType; limit?: number }`
@@ -3789,6 +3789,7 @@ git diff --check (0 warnings, CLEAN)
 ### 7. Git Checkpoint
 
 ```text
+65fdc5f docs(context): update mission 56
 fc85aa3 refactor(web): standardize automation API client
 8ca1b12 feat(web): add memory management and unified dashboard navigation
 ```
