@@ -4013,3 +4013,83 @@ Verified state:
 - Branch: `main`
 - HEAD: `712230e` (matches `origin/main`)
 - Untracked files: `.agents/rules/` preserved untouched.
+
+---
+
+# 59. ADDITIVE UPDATE — REMINDERS DASHBOARD UX, SERVER-SIDE FILTERING & SAFE DELETION
+
+**Updated:** 2026-09-06
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 59 — Reminders Dashboard UX, Server-Side Filtering & Safe Deletion — COMPLETE
+
+Mission 59 improved the Reminders dashboard with native dark `datetime-local` input handling matching the Tasks UX, safe inline deletion confirmation, and server-side status filtering.
+
+### 1. Goal and Scope
+
+- Standardize the `datetime-local` scheduling input on `/dashboard/reminders` with `[color-scheme:dark]`, `cursor-pointer`, and click-to-open `showPicker()`.
+- Add safe inline delete confirmation before executing `deleteReminder` to prevent accidental deletions.
+- Migrate reminder status filtering from client-side array filtering to server-side query filtering (`listReminders(token, { status })`).
+- Ensure filter changes reload reminders with full loading and error state management.
+- Preserve existing `DashboardNav`, authentication, client API methods, UI styling, and security boundaries.
+- No backend, database, Prisma schema, AI provider, SSE streaming, or dependency changes.
+
+### 2. Datetime-Local UX Improvements
+
+- Added `[color-scheme:dark]` and `cursor-pointer` (with `disabled:cursor-not-allowed`) styling to the `datetime-local` input in `RemindersPage`.
+- Added native `showPicker()` fallback invocation on input click to allow opening the browser calendar/time picker from anywhere on the field.
+- Preserved keyboard accessibility and existing ISO 8601 date serialization (`scheduledDate.toISOString()`).
+
+### 3. Safe Inline Delete Confirmation
+
+- Added `confirmDeleteId` state guard to track delete confirmation per reminder.
+- Replaced immediate deletion with an inline prompt (`"Delete reminder?"`, `"Delete"`, `"Cancel"`), matching the Tasks inline deletion pattern.
+- Confirmation is automatically dismissed on filter tab switch, cancel click, or successful deletion.
+
+### 4. Server-Side Reminder Status Filtering
+
+- Updated `fetchReminders` to pass `{ status: selectedFilter !== "ALL" ? selectedFilter : undefined }` to `listReminders()`.
+- Added `selectedFilter` to `useCallback` dependency array to automatically trigger server reload on filter tab selection.
+- Maintained loading skeleton and error states during filter transitions.
+- Cleaned up redundant client-side array filtering in favor of direct server response binding.
+
+### 5. Security Review
+
+- **Bearer Authentication**: All requests attach authenticated Clerk Bearer tokens via `getToken()`.
+- **Zero Client Identity**: No client-supplied `userId`; identity and tenant isolation remain strictly derived by backend from the Clerk JWT.
+- **Fail-Closed Confirmation**: Safe inline delete guard prevents accidental destructive operations.
+- **Security Boundaries Preserved**: Frontend remains thin; backend domain logic, validation, and multi-tenant isolation are untouched.
+
+### 6. Implementation Files
+
+- `apps/web/app/dashboard/reminders/page.tsx`: Improved `datetime-local` UX, added inline delete confirmation, and converted status filtering to server-side.
+
+### 7. Verification Completed
+
+```text
+Frontend Unit Tests:
+52/52 PASS (apps/web/lib/brainos-client-api.test.ts)
+
+Next.js Production Build & TypeScript Check:
+npm run build (0 errors, 11/11 routes compiled successfully)
+
+Full Backend Regression Suite:
+72/72 test files passed, 832/832 tests passed (0 failures)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+```
+
+### 8. Git Checkpoint
+
+```text
+65b0702 feat(web): improve reminders dashboard UX and server-side filtering
+a80f62f docs(context): update missions 57 and 58
+712230e feat(web): improve tasks dashboard
+```
+
+Verified state:
+- Branch: `main`
+- HEAD: `65b0702` (matches `origin/main`)
+- Untracked files: `.agents/rules/` preserved untouched.
