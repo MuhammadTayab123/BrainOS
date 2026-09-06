@@ -1,12 +1,22 @@
 import { describe, expect, it, vi, beforeEach, afterEach, beforeAll } from "vitest";
 
 let streamAssistant: typeof import("./brainos-client-api").streamAssistant;
+let listReminders: typeof import("./brainos-client-api").listReminders;
+let createReminder: typeof import("./brainos-client-api").createReminder;
+let getReminder: typeof import("./brainos-client-api").getReminder;
+let cancelReminder: typeof import("./brainos-client-api").cancelReminder;
+let deleteReminder: typeof import("./brainos-client-api").deleteReminder;
 type AssistantStreamEvent = import("./brainos-client-api").AssistantStreamEvent;
 
 beforeAll(async () => {
   process.env.NEXT_PUBLIC_BRAINOS_API_URL = "http://localhost:3001";
   const mod = await import("./brainos-client-api");
   streamAssistant = mod.streamAssistant;
+  listReminders = mod.listReminders;
+  createReminder = mod.createReminder;
+  getReminder = mod.getReminder;
+  cancelReminder = mod.cancelReminder;
+  deleteReminder = mod.deleteReminder;
 });
 
 describe("streamAssistant (Frontend SSE Client)", () => {
@@ -340,5 +350,213 @@ describe("streamAssistant (Frontend SSE Client)", () => {
 
     expect(capturedBody?.conversationId).toBe("conv-test-2");
     expect(capturedBody?.enableMemoryRetrieval).toBe(false);
+  });
+});
+
+describe("Reminders API (Frontend Client)", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("1. listReminders: queries with status, dueBefore, limit, and auth header", async () => {
+    let capturedUrl = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedHeaders = (init?.headers ?? {}) as Record<string, string>;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: [
+              {
+                id: "rem-1",
+                userId: "user-1",
+                taskId: null,
+                message: "Call dentist",
+                scheduledFor: "2026-09-07T10:00:00.000Z",
+                status: "PENDING",
+                attempts: 0,
+                deliveredAt: null,
+                lastError: null,
+                createdAt: "2026-09-06T10:00:00.000Z",
+                updatedAt: "2026-09-06T10:00:00.000Z",
+              },
+            ],
+          }),
+      });
+    });
+
+    const dueDate = new Date("2026-09-08T00:00:00.000Z");
+    const result = await listReminders("mock-token", {
+      status: "PENDING",
+      dueBefore: dueDate,
+      limit: 10,
+    });
+
+    expect(capturedUrl).toContain("http://localhost:3001/api/v1/reminders?");
+    expect(capturedUrl).toContain("status=PENDING");
+    expect(capturedUrl).toContain(`dueBefore=${encodeURIComponent(dueDate.toISOString())}`);
+    expect(capturedUrl).toContain("limit=10");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result).toHaveLength(1);
+    expect(result[0].message).toBe("Call dentist");
+  });
+
+  it("2. createReminder: sends POST request with trimmed message and ISO scheduled date", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedBody: Record<string, unknown> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedBody = JSON.parse(init?.body as string);
+      return Promise.resolve({
+        ok: true,
+        status: 201,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "rem-2",
+              userId: "user-1",
+              taskId: "task-1",
+              message: "Team meeting",
+              scheduledFor: "2026-09-07T14:00:00.000Z",
+              status: "PENDING",
+              attempts: 0,
+              deliveredAt: null,
+              lastError: null,
+              createdAt: "2026-09-06T10:00:00.000Z",
+              updatedAt: "2026-09-06T10:00:00.000Z",
+            },
+          }),
+      });
+    });
+
+    const scheduleDate = new Date("2026-09-07T14:00:00.000Z");
+    const result = await createReminder("mock-token", {
+      message: "  Team meeting  ",
+      scheduledFor: scheduleDate,
+      taskId: "task-1",
+    });
+
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/reminders");
+    expect(capturedMethod).toBe("POST");
+    expect(capturedBody.message).toBe("Team meeting");
+    expect(capturedBody.scheduledFor).toBe(scheduleDate.toISOString());
+    expect(capturedBody.taskId).toBe("task-1");
+    expect(result.id).toBe("rem-2");
+  });
+
+  it("3. getReminder: sends GET request to encoded reminder ID", async () => {
+    let capturedUrl = "";
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      capturedUrl = url;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "rem-3",
+              message: "Pay bills",
+              status: "PENDING",
+            },
+          }),
+      });
+    });
+
+    const result = await getReminder("mock-token", "rem/3?special");
+    expect(capturedUrl).toBe(`http://localhost:3001/api/v1/reminders/${encodeURIComponent("rem/3?special")}`);
+    expect(result.id).toBe("rem-3");
+  });
+
+  it("4. cancelReminder: sends POST request to cancel endpoint and returns updated status", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "rem-4",
+              status: "CANCELLED",
+            },
+          }),
+      });
+    });
+
+    const result = await cancelReminder("mock-token", "rem-4");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/reminders/rem-4/cancel");
+    expect(capturedMethod).toBe("POST");
+    expect(result.status).toBe("CANCELLED");
+  });
+
+  it("5. deleteReminder: sends DELETE request to reminder endpoint", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "rem-5",
+            },
+          }),
+      });
+    });
+
+    const result = await deleteReminder("mock-token", "rem-5");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/reminders/rem-5");
+    expect(capturedMethod).toBe("DELETE");
+    expect(result.id).toBe("rem-5");
+  });
+
+  it("6. Error handling: throws formatted error on API failure", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: "Bad Request",
+      json: () =>
+        Promise.resolve({
+          success: false,
+          error: {
+            code: "INVALID_SCHEDULED_FOR",
+            message: "Reminder scheduled time must be a valid date.",
+          },
+        }),
+    });
+
+    await expect(
+      createReminder("mock-token", {
+        message: "Bad date",
+        scheduledFor: "invalid",
+      }),
+    ).rejects.toThrow("Reminder scheduled time must be a valid date.");
   });
 });

@@ -334,6 +334,13 @@ export default function Home() {
               </Link>
 
               <Link
+                href="/dashboard/reminders"
+                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-900 hover:text-white"
+              >
+                Reminders
+              </Link>
+
+              <Link
                 href="/dashboard/automations"
                 className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-900 hover:text-white"
               >

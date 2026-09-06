@@ -603,3 +603,162 @@ export async function deleteTask(
 
   return parseResponse<{ id: string }>(response);
 }
+
+// ==========================
+// Reminders API
+// ==========================
+
+export type ReminderStatus =
+  | "PENDING"
+  | "PROCESSING"
+  | "DELIVERED"
+  | "FAILED"
+  | "CANCELLED";
+
+export interface Reminder {
+  id: string;
+  userId: string;
+  taskId: string | null;
+  message: string;
+  scheduledFor: string;
+  status: ReminderStatus;
+  attempts: number;
+  deliveredAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateReminderInput {
+  message: string;
+  scheduledFor: string | Date;
+  taskId?: string;
+}
+
+export interface ListRemindersOptions {
+  status?: ReminderStatus;
+  dueBefore?: string | Date;
+  limit?: number;
+}
+
+export async function listReminders(
+  token: string,
+  options?: ListRemindersOptions,
+): Promise<Reminder[]> {
+  const params = new URLSearchParams();
+
+  if (options?.limit !== undefined) {
+    params.set("limit", String(options.limit));
+  }
+
+  if (options?.status) {
+    params.set("status", options.status);
+  }
+
+  if (options?.dueBefore) {
+    params.set(
+      "dueBefore",
+      options.dueBefore instanceof Date
+        ? options.dueBefore.toISOString()
+        : options.dueBefore,
+    );
+  }
+
+  const queryString = params.toString();
+
+  const response = await fetch(
+    `${API_URL}/api/v1/reminders${
+      queryString ? `?${queryString}` : ""
+    }`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    },
+  );
+
+  return parseResponse<Reminder[]>(response);
+}
+
+export async function createReminder(
+  token: string,
+  input: CreateReminderInput,
+): Promise<Reminder> {
+  const payload = {
+    message: input.message.trim(),
+    scheduledFor:
+      input.scheduledFor instanceof Date
+        ? input.scheduledFor.toISOString()
+        : input.scheduledFor,
+    taskId: input.taskId ? input.taskId.trim() : undefined,
+  };
+
+  const response = await fetch(`${API_URL}/api/v1/reminders`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseResponse<Reminder>(response);
+}
+
+export async function getReminder(
+  token: string,
+  reminderId: string,
+): Promise<Reminder> {
+  const response = await fetch(
+    `${API_URL}/api/v1/reminders/${encodeURIComponent(reminderId)}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    },
+  );
+
+  return parseResponse<Reminder>(response);
+}
+
+export async function cancelReminder(
+  token: string,
+  reminderId: string,
+): Promise<{ id: string; status: ReminderStatus }> {
+  const response = await fetch(
+    `${API_URL}/api/v1/reminders/${encodeURIComponent(reminderId)}/cancel`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return parseResponse<{ id: string; status: ReminderStatus }>(response);
+}
+
+export async function deleteReminder(
+  token: string,
+  reminderId: string,
+): Promise<{ id: string }> {
+  const response = await fetch(
+    `${API_URL}/api/v1/reminders/${encodeURIComponent(reminderId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return parseResponse<{ id: string }>(response);
+}

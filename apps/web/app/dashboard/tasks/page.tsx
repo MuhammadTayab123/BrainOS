@@ -144,9 +144,17 @@ export default function TasksPage() {
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
         <div>
           <h1 style={{ fontSize: "1.75rem", fontWeight: "bold", margin: 0 }}>BrainOS Tasks</h1>
-          <Link href="/dashboard" style={{ color: "#2563eb", fontSize: "0.875rem", textDecoration: "none" }}>
-            &larr; Back to Dashboard
-          </Link>
+          <div style={{ display: "flex", gap: "1rem", marginTop: "0.25rem" }}>
+            <Link href="/dashboard" style={{ color: "#2563eb", fontSize: "0.875rem", textDecoration: "none" }}>
+              &larr; Chat
+            </Link>
+            <Link href="/dashboard/reminders" style={{ color: "#2563eb", fontSize: "0.875rem", textDecoration: "none" }}>
+              Reminders
+            </Link>
+            <Link href="/dashboard/automations" style={{ color: "#2563eb", fontSize: "0.875rem", textDecoration: "none" }}>
+              Automations
+            </Link>
+          </div>
         </div>
         <UserButton />
       </header>
