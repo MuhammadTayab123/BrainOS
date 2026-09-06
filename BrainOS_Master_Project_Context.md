@@ -3708,3 +3708,92 @@ Verified state:
 - Branch: `main`
 - HEAD: `dfb5180` (matches `origin/main`)
 - Untracked files: `.agents/rules/` preserved untouched.
+
+---
+
+# 56. ADDITIVE UPDATE -- FRONTEND AUTOMATIONS CLIENT INTEGRATION & ARCHITECTURAL STANDARDIZATION
+
+**Updated:** 2026-09-06
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 56 -- Frontend Automations Client Integration & Architectural Standardization -- COMPLETE
+
+Mission 56 standardized the frontend Automations subsystem onto the centralized `apps/web/lib/brainos-client-api.ts` client, removing the last dashboard page that used hardcoded localhost URLs and page-local raw fetch logic.
+
+### 1. Goal and Scope
+
+- Standardize the `/dashboard/automations` page to use the same centralized client API pattern already established by Tasks, Reminders, Documents, and Memories.
+- Remove the hardcoded `localhost:3001` API URL and page-local raw fetch/response handling from the automation page.
+- Add typed automation contracts matching the backend entity.
+- Add focused client API tests for all automation methods.
+- No backend, database, Prisma schema, provider, or architecture changes.
+
+### 2. Frontend Client API (`brainos-client-api.ts`)
+
+- **Types & Interfaces**:
+  - `AutomationStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "FAILED"`
+  - `AutomationTriggerType = "SCHEDULED" | "EVENT" | "MANUAL"`
+  - `AutomationActionType = "CREATE_TASK" | "SEND_REMINDER" | "WEBHOOK"`
+  - `Automation`: Typed model matching the backend entity (`id`, `name`, `description`, `triggerType`, `triggerConfig`, `actionType`, `actionConfig`, `status`, `lastRunAt`, `nextRunAt`, `executionCount`, `maxExecutions`, `createdAt`, `updatedAt`).
+  - `CreateAutomationInput`, `UpdateAutomationInput`: Input contracts for create/update operations.
+  - `ListAutomationsOptions`: `{ status?: AutomationStatus; triggerType?: AutomationTriggerType; limit?: number }`
+- **Client Methods** (7 total):
+  - `listAutomations(token, options)`: Queries `/api/v1/automations` with serialized query params.
+  - `createAutomation(token, input)`: Posts JSON payload to create a new automation.
+  - `getAutomation(token, automationId)`: Fetches single automation with URI-encoded ID.
+  - `updateAutomation(token, automationId, input)`: PATCH request with URI-encoded ID.
+  - `pauseAutomation(token, automationId)`: Posts to `/api/v1/automations/:id/pause`.
+  - `resumeAutomation(token, automationId)`: Posts to `/api/v1/automations/:id/resume`.
+  - `deleteAutomation(token, automationId)`: DELETE with URI-encoded ID.
+
+### 3. Dashboard Page Refactoring (`/dashboard/automations/page.tsx`)
+
+- Removed the hardcoded `API_URL = "http://localhost:3001"` constant.
+- Removed all page-local raw `fetch()` calls and inline response handling.
+- All API interactions now go through the centralized client methods from `brainos-client-api.ts`.
+- Uses configured `NEXT_PUBLIC_BRAINOS_API_URL` environment variable consistently with the other dashboard domains.
+- Existing UI/UX functionality preserved unchanged.
+
+### 4. Security Review
+
+- **Bearer Authentication**: All requests attach `Authorization: Bearer ${token}` via the centralized client.
+- **Zero Client Identity**: No client-supplied `userId`; backend derives identity from the Clerk JWT.
+- **URI Encoding**: Automation IDs are encoded via `encodeURIComponent()` before interpolation into URLs.
+- **Centralized Error Handling**: All responses go through the shared `parseResponse()` function.
+- **Configured API URL**: Uses the `NEXT_PUBLIC_BRAINOS_API_URL` environment variable instead of hardcoded localhost.
+- Backend remains solely responsible for authentication and tenant isolation.
+
+### 5. Implementation Files
+
+- `apps/web/lib/brainos-client-api.ts`: Added automation type contracts and 7 REST client methods.
+- `apps/web/app/dashboard/automations/page.tsx`: Refactored to use centralized client API.
+- `apps/web/lib/brainos-client-api.test.ts`: Added focused tests covering automation methods, query/payload serialization, URI encoding, and error handling.
+
+### 6. Verification Completed
+
+```text
+Frontend Unit Tests:
+38/38 PASS (apps/web/lib/brainos-client-api.test.ts)
+
+Next.js Production Build & TypeScript Check:
+npm run build (0 errors, 11/11 routes compiled successfully)
+
+Full Backend Regression Suite:
+72/72 test files passed, 832/832 tests passed (0 failures)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+```
+
+### 7. Git Checkpoint
+
+```text
+fc85aa3 refactor(web): standardize automation API client
+8ca1b12 feat(web): add memory management and unified dashboard navigation
+```
+
+Verified state:
+- Branch: `main`
+- HEAD: `fc85aa3` (matches `origin/main`)
+- Untracked files: `.agents/rules/` preserved untouched.
