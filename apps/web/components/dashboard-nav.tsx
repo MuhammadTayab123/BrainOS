@@ -30,11 +30,13 @@ const NAV_ITEMS: NavItem[] = [
 export interface DashboardNavProps {
   current?: DashboardNavKey;
   showUserButton?: boolean;
+  orientation?: "horizontal" | "vertical";
 }
 
 export function DashboardNav({
   current,
   showUserButton = true,
+  orientation = "horizontal",
 }: DashboardNavProps) {
   const pathname = usePathname();
 
@@ -46,6 +48,40 @@ export function DashboardNav({
       return pathname === "/dashboard";
     }
     return pathname?.startsWith(item.href) ?? false;
+  }
+
+  if (orientation === "vertical") {
+    return (
+      <nav className="flex flex-1 flex-col justify-between w-full" aria-label="Dashboard Navigation">
+        <Show when="signed-in">
+          <div className="flex flex-col gap-1 w-full">
+            {NAV_ITEMS.map((item) => {
+              const active = isActive(item);
+              return (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  className={`flex items-center rounded-lg px-3 py-2 text-sm font-medium transition ${
+                    active
+                      ? "bg-zinc-800 text-white shadow-sm border border-zinc-700/60"
+                      : "text-zinc-400 hover:bg-zinc-800/50 hover:text-white"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+
+          {showUserButton && (
+            <div className="mt-auto pt-4 border-t border-zinc-800 flex items-center justify-between px-1">
+              <span className="text-xs text-zinc-500">Account</span>
+              <UserButton />
+            </div>
+          )}
+        </Show>
+      </nav>
+    );
   }
 
   return (
