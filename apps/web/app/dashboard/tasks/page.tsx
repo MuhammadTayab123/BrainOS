@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { UserButton, useAuth } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
+import { DashboardNav } from "../../../components/dashboard-nav";
 
 import {
   completeTask,
@@ -140,43 +140,37 @@ export default function TasksPage() {
   };
 
   return (
-    <div style={{ maxWidth: "800px", margin: "0 auto", padding: "2rem 1rem", fontFamily: "sans-serif" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
-        <div>
-          <h1 style={{ fontSize: "1.75rem", fontWeight: "bold", margin: 0 }}>BrainOS Tasks</h1>
-          <div style={{ display: "flex", gap: "1rem", marginTop: "0.25rem" }}>
-            <Link href="/dashboard" style={{ color: "#2563eb", fontSize: "0.875rem", textDecoration: "none" }}>
-              &larr; Chat
-            </Link>
-            <Link href="/dashboard/reminders" style={{ color: "#2563eb", fontSize: "0.875rem", textDecoration: "none" }}>
-              Reminders
-            </Link>
-            <Link href="/dashboard/documents" style={{ color: "#2563eb", fontSize: "0.875rem", textDecoration: "none" }}>
-              Documents
-            </Link>
-            <Link href="/dashboard/automations" style={{ color: "#2563eb", fontSize: "0.875rem", textDecoration: "none" }}>
-              Automations
-            </Link>
+    <main className="min-h-screen bg-zinc-950 text-white">
+      <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10">
+        <header className="mb-8 flex items-center justify-between border-b border-zinc-800 pb-6">
+          <div>
+            <h1 className="text-2xl font-semibold">BrainOS Tasks</h1>
+            <p className="mt-1 text-sm text-zinc-400">
+              Track, execute, and manage AI and manual tasks
+            </p>
           </div>
+
+          <DashboardNav current="tasks" />
+        </header>
+
+        <div className="text-zinc-900">
+          <TaskForm
+            creating={creating}
+            actionError={actionError}
+            onSubmit={handleCreateTask}
+          />
+
+          <TaskList
+            tasks={tasks}
+            loading={loading}
+            error={error}
+            operatingId={operatingId}
+            onRefresh={fetchTasks}
+            onComplete={handleCompleteTask}
+            onDelete={handleDeleteTask}
+          />
         </div>
-        <UserButton />
-      </header>
-
-      <TaskForm
-        creating={creating}
-        actionError={actionError}
-        onSubmit={handleCreateTask}
-      />
-
-      <TaskList
-        tasks={tasks}
-        loading={loading}
-        error={error}
-        operatingId={operatingId}
-        onRefresh={fetchTasks}
-        onComplete={handleCompleteTask}
-        onDelete={handleDeleteTask}
-      />
-    </div>
+      </div>
+    </main>
   );
 }

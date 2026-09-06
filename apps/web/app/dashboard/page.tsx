@@ -5,9 +5,9 @@ import Link from "next/link";
 import {
   SignInButton,
   Show,
-  UserButton,
   useAuth,
 } from "@clerk/nextjs";
+import { DashboardNav } from "../../components/dashboard-nav";
 import {
   streamAssistant,
   createConversation,
@@ -324,39 +324,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Show when="signed-in">
-              <Link
-                href="/dashboard/tasks"
-                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-900 hover:text-white"
-              >
-                Tasks
-              </Link>
-
-              <Link
-                href="/dashboard/reminders"
-                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-900 hover:text-white"
-              >
-                Reminders
-              </Link>
-
-              <Link
-                href="/dashboard/documents"
-                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-900 hover:text-white"
-              >
-                Documents
-              </Link>
-
-              <Link
-                href="/dashboard/automations"
-                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-900 hover:text-white"
-              >
-                Automations
-              </Link>
-
-              <UserButton />
-            </Show>
-          </div>
+          <DashboardNav current="chat" />
         </header>
 
         <Show when="signed-out">

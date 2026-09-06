@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Show, UserButton, useAuth } from "@clerk/nextjs";
+import { Show, useAuth } from "@clerk/nextjs";
+import { DashboardNav } from "../../../components/dashboard-nav";
 
 type Automation = {
   id: string;
@@ -580,18 +581,16 @@ export default function AutomationsPage() {
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
       <div className="mx-auto min-h-screen w-full max-w-5xl px-6 py-10">
-        <header className="mb-10 flex items-center justify-between border-b border-zinc-800 pb-6">
+        <header className="mb-8 flex items-center justify-between border-b border-zinc-800 pb-6">
           <div>
-            <h1 className="text-3xl font-semibold">BrainOS</h1>
+            <h1 className="text-2xl font-semibold">BrainOS Automations</h1>
 
-            <p className="mt-2 text-sm text-zinc-400">
-              Personal AI Operating System
+            <p className="mt-1 text-sm text-zinc-400">
+              Recurring schedules and event-driven automation rules
             </p>
           </div>
 
-          <Show when="signed-in">
-            <UserButton />
-          </Show>
+          <DashboardNav current="automations" />
         </header>
 
         <Show when="signed-out">

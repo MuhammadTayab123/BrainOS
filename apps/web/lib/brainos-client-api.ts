@@ -934,3 +934,167 @@ export async function searchDocuments(
 
   return parseResponse<DocumentSearchResult[]>(response);
 }
+
+// ==========================
+// Memory API
+// ==========================
+
+export interface Memory {
+  id: string;
+  content: string;
+  importance: number;
+  lastAccessedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MemorySearchResult {
+  id: string;
+  content: string;
+  similarity: number;
+  importance: number;
+}
+
+export interface CreateMemoryInput {
+  content: string;
+  importance?: number;
+}
+
+export interface UpdateMemoryInput {
+  content?: string;
+  importance?: number;
+}
+
+export interface ListMemoriesOptions {
+  limit?: number;
+}
+
+export async function listMemories(
+  token: string,
+  options?: ListMemoriesOptions,
+): Promise<Memory[]> {
+  const params = new URLSearchParams();
+  if (options?.limit !== undefined) {
+    params.set("limit", String(options.limit));
+  }
+
+  const query = params.toString();
+  const endpoint = query
+    ? `${API_URL}/api/v1/memories?${query}`
+    : `${API_URL}/api/v1/memories`;
+
+  const response = await fetch(endpoint, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  return parseResponse<Memory[]>(response);
+}
+
+export async function createMemory(
+  token: string,
+  input: CreateMemoryInput,
+): Promise<Memory> {
+  const response = await fetch(`${API_URL}/api/v1/memories`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      content: input.content.trim(),
+      ...(input.importance !== undefined ? { importance: input.importance } : {}),
+    }),
+  });
+
+  return parseResponse<Memory>(response);
+}
+
+export async function getMemory(
+  token: string,
+  memoryId: string,
+): Promise<Memory> {
+  const response = await fetch(
+    `${API_URL}/api/v1/memories/${encodeURIComponent(memoryId)}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    },
+  );
+
+  return parseResponse<Memory>(response);
+}
+
+export async function updateMemory(
+  token: string,
+  memoryId: string,
+  input: UpdateMemoryInput,
+): Promise<Memory> {
+  const payload: Record<string, unknown> = {};
+  if (input.content !== undefined) {
+    payload.content = input.content.trim();
+  }
+  if (input.importance !== undefined) {
+    payload.importance = input.importance;
+  }
+
+  const response = await fetch(
+    `${API_URL}/api/v1/memories/${encodeURIComponent(memoryId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  return parseResponse<Memory>(response);
+}
+
+export async function deleteMemory(
+  token: string,
+  memoryId: string,
+): Promise<{ id: string }> {
+  const response = await fetch(
+    `${API_URL}/api/v1/memories/${encodeURIComponent(memoryId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return parseResponse<{ id: string }>(response);
+}
+
+export async function searchMemories(
+  token: string,
+  query: string,
+  limit?: number,
+): Promise<MemorySearchResult[]> {
+  const response = await fetch(`${API_URL}/api/v1/memories/search`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      query: query.trim(),
+      ...(limit !== undefined ? { limit } : {}),
+    }),
+  });
+
+  return parseResponse<MemorySearchResult[]>(response);
+}

@@ -12,6 +12,12 @@ let createTextDocument: typeof import("./brainos-client-api").createTextDocument
 let getDocument: typeof import("./brainos-client-api").getDocument;
 let deleteDocument: typeof import("./brainos-client-api").deleteDocument;
 let searchDocuments: typeof import("./brainos-client-api").searchDocuments;
+let listMemories: typeof import("./brainos-client-api").listMemories;
+let createMemory: typeof import("./brainos-client-api").createMemory;
+let getMemory: typeof import("./brainos-client-api").getMemory;
+let updateMemory: typeof import("./brainos-client-api").updateMemory;
+let deleteMemory: typeof import("./brainos-client-api").deleteMemory;
+let searchMemories: typeof import("./brainos-client-api").searchMemories;
 type AssistantStreamEvent = import("./brainos-client-api").AssistantStreamEvent;
 
 beforeAll(async () => {
@@ -29,6 +35,12 @@ beforeAll(async () => {
   getDocument = mod.getDocument;
   deleteDocument = mod.deleteDocument;
   searchDocuments = mod.searchDocuments;
+  listMemories = mod.listMemories;
+  createMemory = mod.createMemory;
+  getMemory = mod.getMemory;
+  updateMemory = mod.updateMemory;
+  deleteMemory = mod.deleteMemory;
+  searchMemories = mod.searchMemories;
 });
 
 describe("streamAssistant (Frontend SSE Client)", () => {
@@ -856,5 +868,269 @@ describe("Documents API (Frontend Client)", () => {
         content: "Content",
       }),
     ).rejects.toThrow("An uploaded file is required for UPLOAD documents.");
+  });
+});
+
+describe("Memory API (Frontend Client)", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("1. listMemories: sends GET request with Bearer auth and optional limit", async () => {
+    let capturedUrl = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: [
+              {
+                id: "mem-1",
+                content: "User prefers dark mode",
+                importance: 0.8,
+                lastAccessedAt: "2026-09-06T10:00:00.000Z",
+                createdAt: "2026-09-06T09:00:00.000Z",
+                updatedAt: "2026-09-06T09:00:00.000Z",
+              },
+            ],
+          }),
+      });
+    });
+
+    const result = await listMemories("mock-token", { limit: 15 });
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/memories?limit=15");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(capturedHeaders["Content-Type"]).toBe("application/json");
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("mem-1");
+    expect(result[0].importance).toBe(0.8);
+  });
+
+  it("2. createMemory: sends POST request with JSON content and importance", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+    let capturedBody = "";
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      capturedBody = init?.body as string;
+      return Promise.resolve({
+        ok: true,
+        status: 201,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "mem-2",
+              content: "Doctor is Dr. Adams",
+              importance: 0.9,
+              lastAccessedAt: null,
+              createdAt: "2026-09-06T10:00:00.000Z",
+              updatedAt: "2026-09-06T10:00:00.000Z",
+            },
+          }),
+      });
+    });
+
+    const result = await createMemory("mock-token", {
+      content: "Doctor is Dr. Adams",
+      importance: 0.9,
+    });
+
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/memories");
+    expect(capturedMethod).toBe("POST");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(capturedHeaders["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(capturedBody)).toEqual({
+      content: "Doctor is Dr. Adams",
+      importance: 0.9,
+    });
+    expect(result.id).toBe("mem-2");
+    expect(result.importance).toBe(0.9);
+  });
+
+  it("3. getMemory: encodes memoryId and sends GET request with Bearer auth", async () => {
+    let capturedUrl = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "mem/3#spec",
+              content: "Special memory",
+              importance: 0.5,
+              lastAccessedAt: null,
+              createdAt: "2026-09-06T10:00:00.000Z",
+              updatedAt: "2026-09-06T10:00:00.000Z",
+            },
+          }),
+      });
+    });
+
+    const result = await getMemory("mock-token", "mem/3#spec");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/memories/mem%2F3%23spec");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result.id).toBe("mem/3#spec");
+  });
+
+  it("4. updateMemory: encodes memoryId and sends PATCH request with updatable fields", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+    let capturedBody = "";
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      capturedBody = init?.body as string;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "mem-4",
+              content: "Updated content",
+              importance: 1.0,
+              lastAccessedAt: null,
+              createdAt: "2026-09-06T10:00:00.000Z",
+              updatedAt: "2026-09-06T11:00:00.000Z",
+            },
+          }),
+      });
+    });
+
+    const result = await updateMemory("mock-token", "mem-4", {
+      content: "Updated content",
+      importance: 1.0,
+    });
+
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/memories/mem-4");
+    expect(capturedMethod).toBe("PATCH");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(capturedHeaders["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(capturedBody)).toEqual({
+      content: "Updated content",
+      importance: 1.0,
+    });
+    expect(result.content).toBe("Updated content");
+    expect(result.importance).toBe(1.0);
+  });
+
+  it("5. deleteMemory: encodes memoryId and sends DELETE request with Bearer auth", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "mem-5",
+            },
+          }),
+      });
+    });
+
+    const result = await deleteMemory("mock-token", "mem-5");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/memories/mem-5");
+    expect(capturedMethod).toBe("DELETE");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result.id).toBe("mem-5");
+  });
+
+  it("6. searchMemories: sends POST request to /api/v1/memories/search with query and limit", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+    let capturedBody = "";
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      capturedBody = init?.body as string;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: [
+              {
+                id: "mem-search-1",
+                content: "Prefers Python for quick scripts",
+                similarity: 0.92,
+                importance: 0.7,
+              },
+            ],
+          }),
+      });
+    });
+
+    const result = await searchMemories("mock-token", "coding languages", 5);
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/memories/search");
+    expect(capturedMethod).toBe("POST");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(JSON.parse(capturedBody)).toEqual({
+      query: "coding languages",
+      limit: 5,
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0].similarity).toBe(0.92);
+  });
+
+  it("7. Error handling: throws formatted error on API failure", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: "Bad Request",
+      json: () =>
+        Promise.resolve({
+          success: false,
+          error: {
+            code: "INVALID_IMPORTANCE",
+            message: "Importance must be a number between 0 and 1.",
+          },
+        }),
+    });
+
+    await expect(
+      createMemory("mock-token", {
+        content: "Test",
+        importance: 2.5,
+      }),
+    ).rejects.toThrow("Importance must be a number between 0 and 1.");
   });
 });
