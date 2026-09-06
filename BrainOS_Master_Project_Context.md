@@ -3345,3 +3345,124 @@ The BrainOS assistant now provides an end-to-end real-time generative streaming 
 - Bidirectional WebSockets remain deferred (HTTP SSE fulfills all real-time requirements).
 - Computer Agent native OS desktop drivers remain deferred.
 - No database schema or migration changes were required.
+
+---
+
+# 52. MISSION 52 — DASHBOARD CHAT EXPERIENCE & MEMORY INTEGRATION
+
+### Objective & Architectural Rationale
+
+Following the completion of live token streaming (Mission 51), Mission 52 refines the dashboard conversational interface to deliver a polished, full-fidelity user experience:
+1. **Native Streaming Auto-Scroll**: Eliminates manual scrolling during live token generation while respecting user intent when reading past history.
+2. **Assistant Memory Retrieval Activation**: Removes legacy hardcoded flags that suppressed memory lookup, allowing the assistant to leverage authenticated memories by default.
+3. **Unified Dashboard Navigation**: Adds direct header navigation to both `/dashboard/tasks` and `/dashboard/automations`.
+
+```text
+User Dashboard (/dashboard)
+    ├── Message Container (Native scroll tracking via useRef & handleScroll)
+    │     ├── distanceFromBottom <= 100px  -> isNearBottom = true (Follows text_delta streaming)
+    │     └── distanceFromBottom > 100px   -> isNearBottom = false (Halts auto-scroll on scrollback)
+    │
+    ├── streamAssistant Call (apps/web/app/dashboard/page.tsx)
+    │     └── Omits enableMemoryRetrieval flag -> Backend decideAssistantRetrieval defaults to memory: true
+    │
+    └── Header Navigation
+          ├── Tasks (/dashboard/tasks)
+          ├── Automations (/dashboard/automations)
+          └── UserButton (Clerk Auth)
+```
+
+### 1. Native Streaming Auto-Scroll with User Scroll-Intent Detection
+
+- **State & Refs**:
+  - `messagesContainerRef`: Ref attached to the scrollable container (`<div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 space-y-4 overflow-y-auto pb-6">`).
+  - `messagesEndRef`: Anchor placed at the end of the message list.
+  - `isNearBottomRef`: Synchronous tracking ref initialized to `true`.
+- **User Scroll-Up Intent Protection**:
+  - `handleScroll` computes `distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight`.
+  - When `distanceFromBottom <= 100`, `isNearBottomRef.current = true`.
+  - If the user manually scrolls up past 100px, `isNearBottomRef.current = false`, preventing live `text_delta` streaming updates from aggressively snapping the viewport down.
+  - Returning within 100px of the bottom restores tracking automatically.
+- **Smooth Interaction Resets**:
+  - Sending a new message in `handleAskAssistant` resets `isNearBottomRef.current = true` and triggers `scrollToBottom("smooth")`.
+  - Conversation initialization and switching reset `isNearBottomRef.current = true`.
+- **Zero Third-Party Dependencies**: Built exclusively with native React and DOM APIs (`useRef`, `useEffect`, `onScroll`, `scrollIntoView`, direct `scrollTop` assignment).
+
+### 2. Assistant Memory Retrieval Activation
+
+- **Frontend Update**:
+  - Removed `enableMemoryRetrieval: false` from the `streamAssistant` options in `apps/web/app/dashboard/page.tsx`.
+- **Backend Policy Integration**:
+  - Leverages existing backend retrieval policy in `apps/backend/src/services/assistant/assistant.retrieval.policy.ts`:
+    ```typescript
+    export function decideAssistantRetrieval(
+      input: AssistantRetrievalPolicyInput,
+    ): AssistantRetrievalPolicy {
+      return {
+        memory: input.enableMemoryRetrieval ?? true,
+        documents: input.enableDocumentRetrieval ?? false,
+      };
+    }
+    ```
+  - Authenticated user memories are now automatically retrieved and injected into the assistant prompt context without requiring explicit frontend flags.
+  - Backend AI orchestration, vector embedding search, and security boundaries remain untouched.
+
+### 3. Unified Header Navigation
+
+- Updated the dashboard header navigation bar to include both `/dashboard/tasks` and `/dashboard/automations`:
+  ```tsx
+  <div className="flex items-center gap-3">
+    <Show when="signed-in">
+      <Link
+        href="/dashboard/tasks"
+        className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-900 hover:text-white"
+      >
+        Tasks
+      </Link>
+
+      <Link
+        href="/dashboard/automations"
+        className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-900 hover:text-white"
+      >
+        Automations
+      </Link>
+
+      <UserButton />
+    </Show>
+  </div>
+  ```
+
+### 4. Implementation Files
+
+- `apps/web/app/dashboard/page.tsx`: Added native auto-scroll tracking, removed `enableMemoryRetrieval: false`, and added Tasks link in header navigation.
+- `apps/web/lib/brainos-client-api.test.ts`: Added unit test #10 verifying memory retrieval option pass-through and default backend policy behavior.
+
+### 5. Verification Completed
+
+```text
+Frontend Unit Tests:
+10/10 PASS (apps/web/lib/brainos-client-api.test.ts)
+- Test 10: Memory & Retrieval Options (omits enableMemoryRetrieval by default, forwards explicit options)
+
+Next.js Production Build & TypeScript Check:
+npm run build (0 errors, 8/8 routes compiled successfully)
+
+Full Backend Regression Suite:
+72/72 test files passed, 832/832 tests passed (0 failures)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+```
+
+### 6. Git Checkpoint
+
+```text
+ccdc3e0 feat(web): improve dashboard assistant experience
+fdc6876 docs(context): update missions 50 and 51
+b25e13a feat(web): add live assistant token streaming UI
+```
+
+Verified state:
+- Branch: `main`
+- HEAD: `ccdc3e0` (matches `origin/main`)
+- Untracked files: `.agents/rules/` preserved untouched.
