@@ -151,6 +151,9 @@ export default function TasksPage() {
             <Link href="/dashboard/reminders" style={{ color: "#2563eb", fontSize: "0.875rem", textDecoration: "none" }}>
               Reminders
             </Link>
+            <Link href="/dashboard/documents" style={{ color: "#2563eb", fontSize: "0.875rem", textDecoration: "none" }}>
+              Documents
+            </Link>
             <Link href="/dashboard/automations" style={{ color: "#2563eb", fontSize: "0.875rem", textDecoration: "none" }}>
               Automations
             </Link>

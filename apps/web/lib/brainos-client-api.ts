@@ -762,3 +762,175 @@ export async function deleteReminder(
 
   return parseResponse<{ id: string }>(response);
 }
+
+// ==========================
+// Documents API
+// ==========================
+
+export type DocumentSourceType = "UPLOAD" | "TEXT" | "URL";
+
+export type DocumentStatus = "PENDING" | "READY" | "FAILED" | "DELETED";
+
+export interface Document {
+  id: string;
+  title: string;
+  sourceType: DocumentSourceType;
+  source: string | null;
+  content: string | null;
+  mimeType: string | null;
+  status: DocumentStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentSearchResult {
+  id: string;
+  documentId: string;
+  documentTitle: string;
+  sourceType: DocumentSourceType;
+  source: string | null;
+  chunkIndex: number;
+  content: string;
+  similarity: number;
+}
+
+export interface ListDocumentsOptions {
+  status?: DocumentStatus;
+  limit?: number;
+}
+
+export interface CreateTextDocumentInput {
+  title: string;
+  content: string;
+}
+
+export interface UploadDocumentInput {
+  title: string;
+  file: File;
+}
+
+export async function listDocuments(
+  token: string,
+  options?: ListDocumentsOptions,
+): Promise<Document[]> {
+  const params = new URLSearchParams();
+  if (options?.status) {
+    params.set("status", options.status);
+  }
+  if (options?.limit !== undefined) {
+    params.set("limit", String(options.limit));
+  }
+
+  const query = params.toString();
+  const endpoint = query
+    ? `${API_URL}/api/v1/documents?${query}`
+    : `${API_URL}/api/v1/documents`;
+
+  const response = await fetch(endpoint, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  return parseResponse<Document[]>(response);
+}
+
+export async function uploadDocument(
+  token: string,
+  input: UploadDocumentInput,
+): Promise<Document> {
+  const formData = new FormData();
+  formData.append("title", input.title.trim());
+  formData.append("sourceType", "UPLOAD");
+  formData.append("file", input.file);
+
+  const response = await fetch(`${API_URL}/api/v1/documents`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  return parseResponse<Document>(response);
+}
+
+export async function createTextDocument(
+  token: string,
+  input: CreateTextDocumentInput,
+): Promise<Document> {
+  const response = await fetch(`${API_URL}/api/v1/documents`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      title: input.title.trim(),
+      sourceType: "TEXT",
+      content: input.content.trim(),
+    }),
+  });
+
+  return parseResponse<Document>(response);
+}
+
+export async function getDocument(
+  token: string,
+  documentId: string,
+): Promise<Document> {
+  const response = await fetch(
+    `${API_URL}/api/v1/documents/${encodeURIComponent(documentId)}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    },
+  );
+
+  return parseResponse<Document>(response);
+}
+
+export async function deleteDocument(
+  token: string,
+  documentId: string,
+): Promise<{ id: string }> {
+  const response = await fetch(
+    `${API_URL}/api/v1/documents/${encodeURIComponent(documentId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return parseResponse<{ id: string }>(response);
+}
+
+export async function searchDocuments(
+  token: string,
+  query: string,
+  limit?: number,
+): Promise<DocumentSearchResult[]> {
+  const response = await fetch(`${API_URL}/api/v1/documents/search`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      query: query.trim(),
+      ...(limit !== undefined ? { limit } : {}),
+    }),
+  });
+
+  return parseResponse<DocumentSearchResult[]>(response);
+}

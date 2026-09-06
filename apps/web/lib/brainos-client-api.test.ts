@@ -6,6 +6,12 @@ let createReminder: typeof import("./brainos-client-api").createReminder;
 let getReminder: typeof import("./brainos-client-api").getReminder;
 let cancelReminder: typeof import("./brainos-client-api").cancelReminder;
 let deleteReminder: typeof import("./brainos-client-api").deleteReminder;
+let listDocuments: typeof import("./brainos-client-api").listDocuments;
+let uploadDocument: typeof import("./brainos-client-api").uploadDocument;
+let createTextDocument: typeof import("./brainos-client-api").createTextDocument;
+let getDocument: typeof import("./brainos-client-api").getDocument;
+let deleteDocument: typeof import("./brainos-client-api").deleteDocument;
+let searchDocuments: typeof import("./brainos-client-api").searchDocuments;
 type AssistantStreamEvent = import("./brainos-client-api").AssistantStreamEvent;
 
 beforeAll(async () => {
@@ -17,6 +23,12 @@ beforeAll(async () => {
   getReminder = mod.getReminder;
   cancelReminder = mod.cancelReminder;
   deleteReminder = mod.deleteReminder;
+  listDocuments = mod.listDocuments;
+  uploadDocument = mod.uploadDocument;
+  createTextDocument = mod.createTextDocument;
+  getDocument = mod.getDocument;
+  deleteDocument = mod.deleteDocument;
+  searchDocuments = mod.searchDocuments;
 });
 
 describe("streamAssistant (Frontend SSE Client)", () => {
@@ -558,5 +570,291 @@ describe("Reminders API (Frontend Client)", () => {
         scheduledFor: "invalid",
       }),
     ).rejects.toThrow("Reminder scheduled time must be a valid date.");
+  });
+});
+
+describe("Documents API (Frontend Client)", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("1. listDocuments: sends GET request with Bearer token and optional query params", async () => {
+    let capturedUrl = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: [
+              {
+                id: "doc-1",
+                title: "Test Doc",
+                sourceType: "TEXT",
+                source: null,
+                content: "Sample content",
+                mimeType: "text/plain",
+                status: "READY",
+                createdAt: "2026-09-06T10:00:00.000Z",
+                updatedAt: "2026-09-06T10:00:00.000Z",
+              },
+            ],
+          }),
+      });
+    });
+
+    const result = await listDocuments("mock-token", { status: "READY", limit: 10 });
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/documents?status=READY&limit=10");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(capturedHeaders["Content-Type"]).toBe("application/json");
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("doc-1");
+    expect(result[0].status).toBe("READY");
+  });
+
+  it("2. uploadDocument: sends FormData with title, sourceType=UPLOAD, and file without manual Content-Type", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+    let capturedBody: unknown;
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      capturedBody = init?.body;
+      return Promise.resolve({
+        ok: true,
+        status: 201,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "doc-uploaded-1",
+              title: "Manual.pdf",
+              sourceType: "UPLOAD",
+              source: "Manual.pdf",
+              content: null,
+              mimeType: "application/pdf",
+              status: "READY",
+              createdAt: "2026-09-06T10:00:00.000Z",
+              updatedAt: "2026-09-06T10:00:00.000Z",
+            },
+          }),
+      });
+    });
+
+    const mockFile = new File(["dummy pdf content"], "Manual.pdf", { type: "application/pdf" });
+    const result = await uploadDocument("mock-token", {
+      title: "Manual.pdf",
+      file: mockFile,
+    });
+
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/documents");
+    expect(capturedMethod).toBe("POST");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    // CRITICAL: Do NOT manually set Content-Type header on multipart upload
+    expect(capturedHeaders["Content-Type"]).toBeUndefined();
+
+    expect(capturedBody).toBeInstanceOf(FormData);
+    const formData = capturedBody as FormData;
+    expect(formData.get("title")).toBe("Manual.pdf");
+    expect(formData.get("sourceType")).toBe("UPLOAD");
+    expect(formData.get("file")).toBe(mockFile);
+
+    expect(result.id).toBe("doc-uploaded-1");
+    expect(result.status).toBe("READY");
+  });
+
+  it("3. createTextDocument: sends JSON payload with title, sourceType=TEXT, and content", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+    let capturedBody = "";
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      capturedBody = init?.body as string;
+      return Promise.resolve({
+        ok: true,
+        status: 201,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "doc-text-1",
+              title: "My Notes",
+              sourceType: "TEXT",
+              source: null,
+              content: "Note content",
+              mimeType: null,
+              status: "READY",
+              createdAt: "2026-09-06T10:00:00.000Z",
+              updatedAt: "2026-09-06T10:00:00.000Z",
+            },
+          }),
+      });
+    });
+
+    const result = await createTextDocument("mock-token", {
+      title: "My Notes",
+      content: "Note content",
+    });
+
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/documents");
+    expect(capturedMethod).toBe("POST");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(capturedHeaders["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(capturedBody)).toEqual({
+      title: "My Notes",
+      sourceType: "TEXT",
+      content: "Note content",
+    });
+    expect(result.id).toBe("doc-text-1");
+  });
+
+  it("4. getDocument: encodes documentId and sends GET request with Bearer auth", async () => {
+    let capturedUrl = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "doc/special-id#1",
+              title: "Special Doc",
+              sourceType: "TEXT",
+              source: null,
+              content: "Detail content",
+              mimeType: null,
+              status: "READY",
+              createdAt: "2026-09-06T10:00:00.000Z",
+              updatedAt: "2026-09-06T10:00:00.000Z",
+            },
+          }),
+      });
+    });
+
+    const result = await getDocument("mock-token", "doc/special-id#1");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/documents/doc%2Fspecial-id%231");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result.id).toBe("doc/special-id#1");
+  });
+
+  it("5. deleteDocument: encodes documentId and sends DELETE request with Bearer auth", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "doc-to-delete",
+            },
+          }),
+      });
+    });
+
+    const result = await deleteDocument("mock-token", "doc-to-delete");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/documents/doc-to-delete");
+    expect(capturedMethod).toBe("DELETE");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result.id).toBe("doc-to-delete");
+  });
+
+  it("6. searchDocuments: sends POST to search endpoint with query and limit", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+    let capturedBody = "";
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      capturedBody = init?.body as string;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: [
+              {
+                id: "chunk-1",
+                documentId: "doc-1",
+                documentTitle: "Doc One",
+                sourceType: "TEXT",
+                source: null,
+                chunkIndex: 0,
+                content: "Matched chunk content",
+                similarity: 0.95,
+              },
+            ],
+          }),
+      });
+    });
+
+    const result = await searchDocuments("mock-token", "vector query", 5);
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/documents/search");
+    expect(capturedMethod).toBe("POST");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(JSON.parse(capturedBody)).toEqual({
+      query: "vector query",
+      limit: 5,
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0].chunkIndex).toBe(0);
+    expect(result[0].similarity).toBe(0.95);
+  });
+
+  it("7. Error handling: throws formatted error on API failure", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: "Bad Request",
+      json: () =>
+        Promise.resolve({
+          success: false,
+          error: {
+            code: "FILE_REQUIRED",
+            message: "An uploaded file is required for UPLOAD documents.",
+          },
+        }),
+    });
+
+    await expect(
+      createTextDocument("mock-token", {
+        title: "Test",
+        content: "Content",
+      }),
+    ).rejects.toThrow("An uploaded file is required for UPLOAD documents.");
   });
 });
