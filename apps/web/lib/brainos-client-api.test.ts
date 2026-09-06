@@ -18,6 +18,13 @@ let getMemory: typeof import("./brainos-client-api").getMemory;
 let updateMemory: typeof import("./brainos-client-api").updateMemory;
 let deleteMemory: typeof import("./brainos-client-api").deleteMemory;
 let searchMemories: typeof import("./brainos-client-api").searchMemories;
+let listAutomations: typeof import("./brainos-client-api").listAutomations;
+let createAutomation: typeof import("./brainos-client-api").createAutomation;
+let getAutomation: typeof import("./brainos-client-api").getAutomation;
+let updateAutomation: typeof import("./brainos-client-api").updateAutomation;
+let pauseAutomation: typeof import("./brainos-client-api").pauseAutomation;
+let resumeAutomation: typeof import("./brainos-client-api").resumeAutomation;
+let deleteAutomation: typeof import("./brainos-client-api").deleteAutomation;
 type AssistantStreamEvent = import("./brainos-client-api").AssistantStreamEvent;
 
 beforeAll(async () => {
@@ -41,6 +48,13 @@ beforeAll(async () => {
   updateMemory = mod.updateMemory;
   deleteMemory = mod.deleteMemory;
   searchMemories = mod.searchMemories;
+  listAutomations = mod.listAutomations;
+  createAutomation = mod.createAutomation;
+  getAutomation = mod.getAutomation;
+  updateAutomation = mod.updateAutomation;
+  pauseAutomation = mod.pauseAutomation;
+  resumeAutomation = mod.resumeAutomation;
+  deleteAutomation = mod.deleteAutomation;
 });
 
 describe("streamAssistant (Frontend SSE Client)", () => {
@@ -1132,5 +1146,315 @@ describe("Memory API (Frontend Client)", () => {
         importance: 2.5,
       }),
     ).rejects.toThrow("Importance must be a number between 0 and 1.");
+  });
+});
+
+describe("Automation API Client", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("1. listAutomations: sends GET request with Authorization header and handles options", async () => {
+    let capturedUrl = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: [
+              {
+                id: "auto-1",
+                userId: "user-1",
+                name: "Morning briefing",
+                status: "ACTIVE",
+                triggerType: "SCHEDULE",
+                actionType: "CREATE_TASK",
+                config: { recurrence: { type: "DAILY", hour: 9, minute: 0 } },
+                nextRunAt: "2026-09-07T09:00:00.000Z",
+                lastRunAt: null,
+                createdAt: "2026-09-06T10:00:00.000Z",
+                updatedAt: "2026-09-06T10:00:00.000Z",
+              },
+            ],
+          }),
+      });
+    });
+
+    const result = await listAutomations("mock-token");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/automations");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("Morning briefing");
+
+    // With options
+    await listAutomations("mock-token", { status: "ACTIVE", limit: 10 });
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/automations?status=ACTIVE&limit=10");
+  });
+
+  it("2. createAutomation: sends POST request with JSON payload including Date serialization", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+    let capturedBody = "";
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      capturedBody = init?.body as string;
+      return Promise.resolve({
+        ok: true,
+        status: 201,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "auto-2",
+              userId: "user-1",
+              name: "Weekly report",
+              status: "ACTIVE",
+              triggerType: "SCHEDULE",
+              actionType: "CREATE_REMINDER",
+              config: { message: "Prepare report" },
+              nextRunAt: "2026-09-08T10:00:00.000Z",
+              lastRunAt: null,
+              createdAt: "2026-09-06T10:00:00.000Z",
+              updatedAt: "2026-09-06T10:00:00.000Z",
+            },
+          }),
+      });
+    });
+
+    const runDate = new Date("2026-09-08T10:00:00.000Z");
+    const result = await createAutomation("mock-token", {
+      name: " Weekly report ",
+      triggerType: "SCHEDULE",
+      actionType: "CREATE_REMINDER",
+      config: { message: "Prepare report" },
+      nextRunAt: runDate,
+    });
+
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/automations");
+    expect(capturedMethod).toBe("POST");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(JSON.parse(capturedBody)).toEqual({
+      name: "Weekly report",
+      triggerType: "SCHEDULE",
+      actionType: "CREATE_REMINDER",
+      config: { message: "Prepare report" },
+      nextRunAt: "2026-09-08T10:00:00.000Z",
+    });
+    expect(result.id).toBe("auto-2");
+  });
+
+  it("3. getAutomation: sends GET request with properly encoded automationId", async () => {
+    let capturedUrl = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "auto/special#1",
+              userId: "user-1",
+              name: "Special Auto",
+              status: "ACTIVE",
+              triggerType: "TASK_DUE",
+              actionType: "CREATE_REMINDER",
+              config: { taskId: "task-1" },
+              nextRunAt: null,
+              lastRunAt: null,
+              createdAt: "2026-09-06T10:00:00.000Z",
+              updatedAt: "2026-09-06T10:00:00.000Z",
+            },
+          }),
+      });
+    });
+
+    const result = await getAutomation("mock-token", "auto/special#1");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/automations/auto%2Fspecial%231");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result.id).toBe("auto/special#1");
+  });
+
+  it("4. updateAutomation: sends PATCH request with encoded ID and payload", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+    let capturedBody = "";
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      capturedBody = init?.body as string;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "auto-3",
+            },
+          }),
+      });
+    });
+
+    const result = await updateAutomation("mock-token", "auto-3", {
+      name: " Renamed Automation ",
+      status: "PAUSED",
+      config: { updated: true },
+      nextRunAt: new Date("2026-09-10T12:00:00.000Z"),
+    });
+
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/automations/auto-3");
+    expect(capturedMethod).toBe("PATCH");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(JSON.parse(capturedBody)).toEqual({
+      name: "Renamed Automation",
+      status: "PAUSED",
+      config: { updated: true },
+      nextRunAt: "2026-09-10T12:00:00.000Z",
+    });
+    expect(result.id).toBe("auto-3");
+  });
+
+  it("5. pauseAutomation: sends POST request to /api/v1/automations/:id/pause with encoded ID", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "auto-4/pause",
+              status: "PAUSED",
+            },
+          }),
+      });
+    });
+
+    const result = await pauseAutomation("mock-token", "auto-4/pause");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/automations/auto-4%2Fpause/pause");
+    expect(capturedMethod).toBe("POST");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result).toEqual({
+      id: "auto-4/pause",
+      status: "PAUSED",
+    });
+  });
+
+  it("6. resumeAutomation: sends POST request to /api/v1/automations/:id/resume with encoded ID", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "auto-5",
+              status: "ACTIVE",
+            },
+          }),
+      });
+    });
+
+    const result = await resumeAutomation("mock-token", "auto-5");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/automations/auto-5/resume");
+    expect(capturedMethod).toBe("POST");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result).toEqual({
+      id: "auto-5",
+      status: "ACTIVE",
+    });
+  });
+
+  it("7. deleteAutomation: sends DELETE request with encoded ID", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              id: "auto-6",
+            },
+          }),
+      });
+    });
+
+    const result = await deleteAutomation("mock-token", "auto-6");
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/automations/auto-6");
+    expect(capturedMethod).toBe("DELETE");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(result.id).toBe("auto-6");
+  });
+
+  it("8. Error handling: throws formatted error on API failure", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: "Bad Request",
+      json: () =>
+        Promise.resolve({
+          success: false,
+          error: {
+            code: "INVALID_NAME",
+            message: "Automation name is required.",
+          },
+        }),
+    });
+
+    await expect(
+      createAutomation("mock-token", {
+        name: "",
+        triggerType: "SCHEDULE",
+        actionType: "CREATE_TASK",
+        config: {},
+      }),
+    ).rejects.toThrow("Automation name is required.");
   });
 });

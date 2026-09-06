@@ -3,33 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { Show, useAuth } from "@clerk/nextjs";
 import { DashboardNav } from "../../../components/dashboard-nav";
-
-type Automation = {
-  id: string;
-  userId: string;
-  name: string;
-  status: string;
-  triggerType: string;
-  actionType: string;
-  config: Record<string, unknown>;
-  nextRunAt: string | null;
-  lastRunAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type ApiResponse<T> = {
-  success: boolean;
-  data?: T;
-  error?: {
-    code: string;
-    message: string;
-  };
-};
+import {
+  Automation,
+  AutomationActionType,
+  AutomationTriggerType,
+  createAutomation as apiCreateAutomation,
+  deleteAutomation as apiDeleteAutomation,
+  listAutomations,
+  pauseAutomation as apiPauseAutomation,
+  resumeAutomation as apiResumeAutomation,
+} from "../../../lib/brainos-client-api";
 
 type RecurrenceType = "NONE" | "DAILY" | "WEEKLY";
-
-const API_URL = "http://localhost:3001";
 
 const triggerOptions = [
   {
@@ -100,41 +85,19 @@ export default function AutomationsPage() {
   const [reminderScheduledFor, setReminderScheduledFor] = useState("");
   const [reminderTaskId, setReminderTaskId] = useState("");
 
-  const getAuthHeaders = useCallback(async () => {
-    const token = await getToken();
-
-    if (!token) {
-      throw new Error("Authentication token unavailable.");
-    }
-
-    return {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    };
-  }, [getToken]);
-
   const loadAutomations = useCallback(async () => {
     try {
-      const headers = await getAuthHeaders();
+      const token = await getToken();
+
+      if (!token) {
+        throw new Error("Authentication token unavailable.");
+      }
 
       setLoading(true);
       setError("");
 
-      const response = await fetch(`${API_URL}/api/v1/automations`, {
-        method: "GET",
-        headers,
-        cache: "no-store",
-      });
-
-      const result = (await response.json()) as ApiResponse<Automation[]>;
-
-      if (!response.ok || !result.success) {
-        throw new Error(
-          result.error?.message ?? "Failed to load automations.",
-        );
-      }
-
-      setAutomations(result.data ?? []);
+      const data = await listAutomations(token);
+      setAutomations(data ?? []);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to load automations.",
@@ -142,7 +105,7 @@ export default function AutomationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [getAuthHeaders]);
+  }, [getToken]);
 
   useEffect(() => {
     // The initial load intentionally updates component state
@@ -278,7 +241,11 @@ export default function AutomationsPage() {
     setCreating(true);
 
     try {
-      const headers = await getAuthHeaders();
+      const token = await getToken();
+
+      if (!token) {
+        throw new Error("Authentication token unavailable.");
+      }
 
       const config: Record<string, unknown> = {};
 
@@ -355,38 +322,27 @@ export default function AutomationsPage() {
        */
       buildRecurrenceConfig(config);
 
-      const payload: Record<string, unknown> = {
-        name: name.trim(),
-        triggerType,
-        actionType,
-        config,
-      };
+      let parsedNextRunAt: string | undefined;
 
       if (nextRunAt) {
-        const parsedNextRunAt = new Date(nextRunAt);
+        const nextRunDate = new Date(nextRunAt);
 
-        if (Number.isNaN(parsedNextRunAt.getTime())) {
+        if (Number.isNaN(nextRunDate.getTime())) {
           throw new Error(
             "Automation next run time must be a valid date.",
           );
         }
 
-        payload.nextRunAt = parsedNextRunAt.toISOString();
+        parsedNextRunAt = nextRunDate.toISOString();
       }
 
-      const response = await fetch(`${API_URL}/api/v1/automations`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
+      await apiCreateAutomation(token, {
+        name: name.trim(),
+        triggerType: triggerType as AutomationTriggerType,
+        actionType: actionType as AutomationActionType,
+        config,
+        nextRunAt: parsedNextRunAt,
       });
-
-      const result = (await response.json()) as ApiResponse<Automation>;
-
-      if (!response.ok || !result.success) {
-        throw new Error(
-          result.error?.message ?? "Failed to create automation.",
-        );
-      }
 
       resetCreateForm();
 
@@ -402,55 +358,56 @@ export default function AutomationsPage() {
     }
   }
 
-  async function changeAutomationStatus(
-    id: string,
-    action: "pause" | "resume",
-    successMessage: string,
-  ) {
+  async function pauseAutomation(id: string) {
     setActionId(id);
     setError("");
     setSuccess("");
 
     try {
-      const headers = await getAuthHeaders();
+      const token = await getToken();
 
-      const response = await fetch(
-        `${API_URL}/api/v1/automations/${id}/${action}`,
-        {
-          method: "POST",
-          headers,
-        },
-      );
-
-      const result = (await response.json()) as ApiResponse<{
-        id: string;
-        status: string;
-      }>;
-
-      if (!response.ok || !result.success) {
-        throw new Error(
-          result.error?.message ?? `Failed to ${action} automation.`,
-        );
+      if (!token) {
+        throw new Error("Authentication token unavailable.");
       }
 
-      setSuccess(successMessage);
+      await apiPauseAutomation(token, id);
+
+      setSuccess("Automation paused.");
 
       await loadAutomations();
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : `Failed to ${action} automation.`,
+        err instanceof Error ? err.message : "Failed to pause automation.",
       );
     } finally {
       setActionId(null);
     }
   }
 
-  async function pauseAutomation(id: string) {
-    await changeAutomationStatus(id, "pause", "Automation paused.");
-  }
-
   async function resumeAutomation(id: string) {
-    await changeAutomationStatus(id, "resume", "Automation resumed.");
+    setActionId(id);
+    setError("");
+    setSuccess("");
+
+    try {
+      const token = await getToken();
+
+      if (!token) {
+        throw new Error("Authentication token unavailable.");
+      }
+
+      await apiResumeAutomation(token, id);
+
+      setSuccess("Automation resumed.");
+
+      await loadAutomations();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to resume automation.",
+      );
+    } finally {
+      setActionId(null);
+    }
   }
 
   async function deleteAutomation(id: string) {
@@ -465,22 +422,13 @@ export default function AutomationsPage() {
     setSuccess("");
 
     try {
-      const headers = await getAuthHeaders();
+      const token = await getToken();
 
-      const response = await fetch(`${API_URL}/api/v1/automations/${id}`, {
-        method: "DELETE",
-        headers,
-      });
-
-      const result = (await response.json()) as ApiResponse<{
-        id: string;
-      }>;
-
-      if (!response.ok || !result.success) {
-        throw new Error(
-          result.error?.message ?? "Failed to delete automation.",
-        );
+      if (!token) {
+        throw new Error("Authentication token unavailable.");
       }
+
+      await apiDeleteAutomation(token, id);
 
       setSuccess("Automation deleted.");
 

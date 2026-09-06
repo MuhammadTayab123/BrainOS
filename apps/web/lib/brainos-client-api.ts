@@ -1098,3 +1098,214 @@ export async function searchMemories(
 
   return parseResponse<MemorySearchResult[]>(response);
 }
+
+// ==========================
+// Automation API
+// ==========================
+
+export type AutomationStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "FAILED";
+export type AutomationTriggerType = "SCHEDULE" | "TASK_DUE" | "REMINDER_DUE";
+export type AutomationActionType = "CREATE_TASK" | "CREATE_REMINDER";
+
+export interface Automation {
+  id: string;
+  userId: string;
+  name: string;
+  status: AutomationStatus;
+  triggerType: AutomationTriggerType;
+  actionType: AutomationActionType;
+  config: Record<string, unknown>;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateAutomationInput {
+  name: string;
+  triggerType: AutomationTriggerType;
+  actionType: AutomationActionType;
+  config: Record<string, unknown>;
+  nextRunAt?: string | Date;
+}
+
+export interface UpdateAutomationInput {
+  name?: string;
+  status?: AutomationStatus;
+  config?: Record<string, unknown>;
+  nextRunAt?: string | Date | null;
+}
+
+export interface ListAutomationsOptions {
+  status?: AutomationStatus;
+  limit?: number;
+}
+
+export async function listAutomations(
+  token: string,
+  options?: ListAutomationsOptions,
+): Promise<Automation[]> {
+  const params = new URLSearchParams();
+  if (options?.status !== undefined) {
+    params.set("status", options.status);
+  }
+  if (options?.limit !== undefined) {
+    params.set("limit", String(options.limit));
+  }
+
+  const query = params.toString();
+  const endpoint = query
+    ? `${API_URL}/api/v1/automations?${query}`
+    : `${API_URL}/api/v1/automations`;
+
+  const response = await fetch(endpoint, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  return parseResponse<Automation[]>(response);
+}
+
+export async function createAutomation(
+  token: string,
+  input: CreateAutomationInput,
+): Promise<Automation> {
+  const payload: Record<string, unknown> = {
+    name: input.name.trim(),
+    triggerType: input.triggerType,
+    actionType: input.actionType,
+    config: input.config,
+  };
+
+  if (input.nextRunAt !== undefined) {
+    payload.nextRunAt =
+      input.nextRunAt instanceof Date
+        ? input.nextRunAt.toISOString()
+        : input.nextRunAt;
+  }
+
+  const response = await fetch(`${API_URL}/api/v1/automations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseResponse<Automation>(response);
+}
+
+export async function getAutomation(
+  token: string,
+  automationId: string,
+): Promise<Automation> {
+  const response = await fetch(
+    `${API_URL}/api/v1/automations/${encodeURIComponent(automationId)}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    },
+  );
+
+  return parseResponse<Automation>(response);
+}
+
+export async function updateAutomation(
+  token: string,
+  automationId: string,
+  input: UpdateAutomationInput,
+): Promise<{ id: string }> {
+  const payload: Record<string, unknown> = {};
+  if (input.name !== undefined) {
+    payload.name = input.name.trim();
+  }
+  if (input.status !== undefined) {
+    payload.status = input.status;
+  }
+  if (input.config !== undefined) {
+    payload.config = input.config;
+  }
+  if (input.nextRunAt !== undefined) {
+    payload.nextRunAt =
+      input.nextRunAt instanceof Date
+        ? input.nextRunAt.toISOString()
+        : input.nextRunAt;
+  }
+
+  const response = await fetch(
+    `${API_URL}/api/v1/automations/${encodeURIComponent(automationId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  return parseResponse<{ id: string }>(response);
+}
+
+export async function pauseAutomation(
+  token: string,
+  automationId: string,
+): Promise<{ id: string; status: AutomationStatus }> {
+  const response = await fetch(
+    `${API_URL}/api/v1/automations/${encodeURIComponent(automationId)}/pause`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return parseResponse<{ id: string; status: AutomationStatus }>(response);
+}
+
+export async function resumeAutomation(
+  token: string,
+  automationId: string,
+): Promise<{ id: string; status: AutomationStatus }> {
+  const response = await fetch(
+    `${API_URL}/api/v1/automations/${encodeURIComponent(automationId)}/resume`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return parseResponse<{ id: string; status: AutomationStatus }>(response);
+}
+
+export async function deleteAutomation(
+  token: string,
+  automationId: string,
+): Promise<{ id: string }> {
+  const response = await fetch(
+    `${API_URL}/api/v1/automations/${encodeURIComponent(automationId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return parseResponse<{ id: string }>(response);
+}
