@@ -60,7 +60,9 @@ export class AssistantService {
     const userId = input.userId.trim();
     const trimmedMessage = input.message.trim();
 
-    this.runtime.setState("THINKING");
+    const runtime = input.runtime ?? this.runtime;
+
+    runtime.setState("THINKING");
 
     const retrievedMemories: MemorySearchResult[] = [];
     const retrievedDocuments: SearchDocumentChunkResult[] = [];
@@ -230,9 +232,9 @@ export class AssistantService {
         const taskId =
           `task-${toolCall.id}`;
 
-        this.runtime.startTask(taskId);
+        runtime.startTask(taskId);
 
-        this.runtime.progressTask(
+        runtime.progressTask(
           taskId,
           `Executing ${toolCall.name}.`,
         );
@@ -249,7 +251,7 @@ export class AssistantService {
 },
             );
 
-          this.runtime.completeTask(
+          runtime.completeTask(
             taskId,
             `${toolCall.name} completed.`,
           );
@@ -267,7 +269,7 @@ export class AssistantService {
               ? error.message
               : "Tool execution failed.";
 
-          this.runtime.failTask(
+          runtime.failTask(
             taskId,
             errorMessage,
           );
@@ -307,7 +309,7 @@ export class AssistantService {
       });
     }
 
-    this.runtime.setState("SPEAKING");
+    runtime.setState("SPEAKING");
 
     const response: AssistantResponse = {
       text: llmResponse.text,
@@ -317,8 +319,12 @@ export class AssistantService {
       retrievedDocuments,
     };
 
-    this.runtime.setState("IDLE");
+    runtime.setState("IDLE");
 
     return response;
+  }
+
+  getRuntime(): AssistantRuntime {
+    return this.runtime;
   }
 }

@@ -1,6 +1,7 @@
 import { LLMMessage } from "../ai";
 import { MemorySearchResult } from "../memory/memory.types";
 import { SearchDocumentChunkResult } from "../documents/retrieval/document-retrieval.service";
+import { AssistantRuntime } from "./assistant.runtime";
 
 export interface AssistantMessageInput {
   userId: string;
@@ -18,6 +19,7 @@ export interface AssistantMessageInput {
   model?: string;
   now?: Date;
   timezone?: string;
+  runtime?: AssistantRuntime;
 }
 
 export interface AssistantResponse {
