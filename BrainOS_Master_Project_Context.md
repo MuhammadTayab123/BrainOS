@@ -3573,3 +3573,138 @@ Verified state:
 - Branch: `main`
 - HEAD: `1e5113f` (matches `origin/main`)
 - Untracked files: `.agents/rules/` preserved untouched.
+
+---
+
+# 54. ADDITIVE UPDATE — FRONTEND DOCUMENTS & KNOWLEDGE BASE MANAGEMENT
+
+**Updated:** 2026-09-06
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 54 — Frontend Documents & Knowledge Base Management — COMPLETE
+
+Mission 54 integrates the backend Documents & RAG subsystem directly into the frontend user interface via `apps/web/app/dashboard/documents/page.tsx` and strongly typed client methods in `apps/web/lib/brainos-client-api.ts`.
+
+### 1. Goal and Scope
+
+Provide a dedicated, responsive Knowledge Base management dashboard allowing users to:
+- Ingest documents either via direct file upload (`.pdf`, `.txt`) or raw text/Markdown notes.
+- Monitor document processing status in real-time.
+- View document metadata, source attribution, and indexing timestamps.
+- Manage and delete knowledge items.
+- Ensure all interactions adhere to BrainOS multi-tenant security, Clerk Bearer JWT authentication, and information hiding principles.
+
+### 2. Actual Verified Backend Contract
+
+Inspection of `apps/backend/src/routes/document.routes.ts`, `document.controller.ts`, `document.service.ts`, and `document-upload.middleware.ts` revealed the exact backend contracts:
+- **Status Enum**: Actual Prisma & backend enum values are `PENDING`, `READY`, `FAILED`, and `DELETED`. When document chunking and vector embedding succeed, the backend marks the document as `READY` (not `PROCESSED`).
+- **Source Types**: `UPLOAD`, `TEXT`, and `URL`.
+- **File Upload Endpoint (`POST /api/v1/documents`)**:
+  - Handled by Multer middleware: single file field named `"file"`.
+  - Accepted MIME types: strictly `application/pdf` and `text/plain`.
+  - Maximum file size: 5MB (`5 * 1024 * 1024` bytes).
+  - Multipart fields: `title` (string), `sourceType` (`"UPLOAD"`), `file` (File binary).
+  - Client requirement: Do NOT manually set `Content-Type` header when sending `FormData`; let the browser/runtime establish the boundary automatically.
+- **Text Note Ingestion Endpoint (`POST /api/v1/documents`)**:
+  - `Content-Type: application/json`.
+  - Body: `{ title: string, sourceType: "TEXT", content: string }`.
+- **List Documents Endpoint (`GET /api/v1/documents`)**:
+  - Query params: `status?: DocumentStatus`, `limit?: number`.
+  - Returns `200` with `{ success: true, data: Document[] }`.
+- **Get Document Endpoint (`GET /api/v1/documents/:id`)**:
+  - Returns `200` with `{ success: true, data: Document }`.
+- **Delete Document Endpoint (`DELETE /api/v1/documents/:id`)**:
+  - Returns `200` with `{ success: true, data: { id: string } }`.
+- **Search Documents Endpoint (`POST /api/v1/documents/search`)**:
+  - Body: `{ query: string, limit?: number }`.
+  - Returns `200` with `{ success: true, data: DocumentSearchResult[] }`.
+- **Authentication & Tenant Isolation**: All endpoints require Clerk Bearer JWT (`Authorization: Bearer <token>`). `userId` is strictly derived from `req.user.id` on the backend; client never supplies `userId`.
+
+### 3. Frontend Client API Protocol (`brainos-client-api.ts`)
+
+- **Types & Interfaces**:
+  - `DocumentSourceType = "UPLOAD" | "TEXT" | "URL"`
+  - `DocumentStatus = "PENDING" | "READY" | "FAILED" | "DELETED"`
+  - `Document`: Entity with `id`, `title`, `sourceType`, `source`, `content`, `mimeType`, `status`, `createdAt`, `updatedAt`.
+  - `DocumentSearchResult`: Search item with `id`, `documentId`, `documentTitle`, `sourceType`, `source`, `chunkIndex`, `content`, `similarity`.
+  - `ListDocumentsOptions`: `{ status?: DocumentStatus; limit?: number }`
+  - `CreateTextDocumentInput`: `{ title: string; content: string }`
+  - `UploadDocumentInput`: `{ title: string; file: File }`
+- **Client Methods**:
+  - `listDocuments(token, options)`: Queries `/api/v1/documents` with optional `status` and `limit`.
+  - `uploadDocument(token, input)`: Posts `FormData` with title, sourceType `UPLOAD`, and file without manual Content-Type.
+  - `createTextDocument(token, input)`: Posts JSON `{ title, sourceType: "TEXT", content }`.
+  - `getDocument(token, documentId)`: Fetches document by ID with encoded URI component.
+  - `deleteDocument(token, documentId)`: Sends DELETE to `/api/v1/documents/:id` with encoded URI component.
+  - `searchDocuments(token, query, limit)`: Queries vector search endpoint `/api/v1/documents/search`.
+
+### 4. Knowledge Base UI (`/dashboard/documents/page.tsx`)
+
+- **Creation & Ingestion Panel**:
+  - Tabbed interface switching between "Upload File" and "Write Note".
+  - File picker restricted to `.pdf` and `.txt` with client-side 5MB size limit validation.
+  - Interactive drag-and-drop zone with visual hover/drop indicators.
+  - Plain text / Markdown note editor for immediate context addition.
+  - Auto-fills title from file basename if title is empty.
+  - Form validation, inline error messaging, and loading submission state.
+- **Knowledge Item Listing**:
+  - Document counter displaying total items and number of indexed/ready items.
+  - Filter tabs: `ALL`, `READY`, `PENDING`, `FAILED`.
+  - Status badges: Emerald for `READY`, Amber for `PENDING`, Red for `FAILED`, Zinc for `DELETED`.
+  - Metadata display: title, source type badge (`UPLOAD` / `TEXT`), original source filename/snippet, and localized creation timestamp.
+  - Delete button with per-item loading state (`operatingId`) and optimistic list refresh.
+  - Skeleton loading states and empty state callouts.
+
+### 5. Synchronized Navigation
+
+- Added `Documents` navigation link (`/dashboard/documents`) across:
+  - `/dashboard` (`apps/web/app/dashboard/page.tsx`)
+  - `/dashboard/tasks` (`apps/web/app/dashboard/tasks/page.tsx`)
+  - `/dashboard/reminders` (`apps/web/app/dashboard/reminders/page.tsx`)
+
+### 6. Security Decisions
+
+- **Zero Client Identity**: Client API never accepts or sends `userId`; backend verifies the Clerk JWT and derives user identity server-side.
+- **Information Hiding**: Low-level internals (raw chunk embeddings, vector arrays, internal error traces) are completely hidden from the UI.
+- **MIME & Payload Safety**: Client validates file types (`.pdf`, `.txt`) and 5MB size limit prior to network submission; backend multer filter acts as the strict authority.
+- **Input Sanitization**: Titles, text notes, search queries, and document IDs are trimmed and URI-encoded.
+
+### 7. Implementation Files
+
+- `apps/web/lib/brainos-client-api.ts`: Added Document types and 6 client API functions (`listDocuments`, `uploadDocument`, `createTextDocument`, `getDocument`, `deleteDocument`, `searchDocuments`).
+- `apps/web/app/dashboard/documents/page.tsx` [NEW]: Complete Documents & Knowledge Base management UI.
+- `apps/web/app/dashboard/page.tsx`: Added Documents link to header navigation.
+- `apps/web/app/dashboard/tasks/page.tsx`: Added Documents link to header navigation.
+- `apps/web/app/dashboard/reminders/page.tsx`: Added Documents link to header navigation.
+- `apps/web/lib/brainos-client-api.test.ts`: Added 7 focused unit tests covering document client methods, multipart behavior, auth headers, and error handling.
+
+### 8. Verification Completed
+
+```text
+Frontend Unit Tests:
+23/23 PASS (apps/web/lib/brainos-client-api.test.ts)
+- Tests 1-7: listDocuments, uploadDocument with FormData, createTextDocument, getDocument, deleteDocument, searchDocuments, error handling
+
+Next.js Production Build & TypeScript Check:
+npm run build (0 errors, 10/10 routes compiled successfully including /dashboard/documents)
+
+Full Backend Regression Suite:
+72/72 test files passed, 832/832 tests passed (0 failures)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+```
+
+### 9. Git Checkpoint
+
+```text
+dfb5180 feat(web): add documents knowledge base UI
+da718ea docs(context): update mission 53
+1e5113f feat(web): add reminders management UI
+```
+
+Verified state:
+- Branch: `main`
+- HEAD: `dfb5180` (matches `origin/main`)
+- Untracked files: `.agents/rules/` preserved untouched.
