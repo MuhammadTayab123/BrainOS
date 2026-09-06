@@ -4167,3 +4167,133 @@ Verified state:
 - Branch: `main`
 - HEAD: `6133168` (matches `origin/main`)
 - Untracked files: `.agents/rules/` preserved untouched.
+
+---
+
+# 61. ADDITIVE UPDATE — AUTOMATIONS DASHBOARD UX, SERVER-SIDE FILTERING & SAFE INLINE DELETION
+
+**Updated:** 2026-09-06
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 61 — Automations Dashboard UX, Server-Side Filtering & Safe Inline Deletion — COMPLETE
+
+Mission 61 modernized the Automations dashboard page with safe inline deletion confirmations, native server-side status filtering, and dark-themed datetime pickers.
+
+### 1. Goal and Scope
+
+- Replace browser-native `window.confirm()` with safe inline deletion confirmation (`"Delete automation?"`, `"Delete"`, `"Cancel"`) to prevent accidental deletion of automations.
+- Implement server-side automation status filtering (`listAutomations(token, { status })`) across tabs (`ALL`, `ACTIVE`, `PAUSED`, `COMPLETED`, `FAILED`).
+- Standardize all 3 `datetime-local` input controls (`taskDueAt`, `reminderScheduledFor`, `nextRunAt`) with dark color-scheme styling, cursor pointers, and native `showPicker()` interactions.
+- Preserve all existing automation capabilities: `SCHEDULE` and `TASK_DUE` triggers, `CREATE_TASK` and `CREATE_REMINDER` actions, recurrence schedules, pause/resume lifecycle, `DashboardNav`, and Clerk authentication.
+- Frontend-only changes in `apps/web/app/dashboard/automations/page.tsx`. Zero backend, Prisma schema, database, or API contract modifications.
+
+### 2. Key Implementations
+
+- **Safe Inline Deletion**: Added `confirmDeleteId` state guard; destructive action requires explicit inline confirmation. Automatically resets on cancellation, filter tab change, or successful deletion.
+- **Server-Side Status Filtering**: Filter tabs directly drive `listAutomations` query parameters (`{ status: selectedStatus !== "ALL" ? selectedStatus : undefined }`), ensuring fresh server-side data fetching with loading skeletons and error states.
+- **Enhanced Datetime Inputs**: Standardized `taskDueAt`, `reminderScheduledFor`, and `nextRunAt` with `[color-scheme:dark]`, `cursor-pointer`, and `onClick={(e) => e.currentTarget.showPicker?.()}` while preserving ISO date serialization.
+
+### 3. Security Review
+
+- **Authenticated API Calls**: All mutation and query calls attach authenticated Clerk Bearer tokens via `getToken()`.
+- **Zero Client Identity**: User ID and tenant boundaries are strictly inferred server-side from validated JWT claims.
+- **Fail-Closed Confirmation**: Accidental automation deletions are prevented by inline confirmation guards.
+
+### 4. Implementation Files
+
+- `apps/web/app/dashboard/automations/page.tsx`: Inline delete confirmation, server-side status filter, and enhanced datetime inputs.
+
+### 5. Verification Completed
+
+```text
+Frontend Unit Tests:
+52/52 PASS (apps/web/lib/brainos-client-api.test.ts)
+
+Next.js Production Build & TypeScript Check:
+npm run build (0 errors, 11/11 routes compiled successfully)
+
+Full Backend Regression Suite:
+72/72 test files passed, 832/832 tests passed (0 failures)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+```
+
+### 6. Git Checkpoint
+
+```text
+25c3c80 feat(web): improve automations dashboard
+```
+
+- Code commit: `25c3c80`
+- Checkpoint: `25c3c80`
+
+---
+
+# 62. ADDITIVE UPDATE — CHAT DASHBOARD TWO-PANEL LAYOUT & UX REFINEMENT
+
+**Updated:** 2026-09-06
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 62 — Chat Dashboard Layout & UX Refinement — COMPLETE
+
+Mission 62 rebuilt the main BrainOS Chat Dashboard into a clean, two-panel desktop layout inspired by ChatGPT, featuring an independent scrolling sidebar, stationary conversation header, compact bottom composer, and cardless message streams.
+
+### 1. Goal and Scope
+
+- Establish a strict two-section desktop layout: single left sidebar (~280px) and large right chat area.
+- Add sidebar collapse/expand toggle controls with full responsive support (overlay drawer on mobile).
+- Unify all sidebar elements (`DashboardNav`, `+ New Chat`, `Search conversations...`, `Recent Conversations`, account section) into a single vertical scroll container.
+- Place `Search conversations...` at the top of the conversation section, immediately below `+ New Chat`, while keeping vertical `DashboardNav` above the search/history section.
+- Design a compact ChatGPT-style message composer (~60–75px height) with vertically centered Send button and auto-expanding multiline support.
+- Lock chat viewport (`h-screen h-[100dvh] overflow-hidden`) so the browser window never scrolls, keeping the conversation header stationary at top and message composer docked at bottom while message stream scrolls independently.
+- Adopt WhatsApp/ChatGPT-inspired compact message bubbles (right-aligned emerald user bubbles, left-aligned dark BrainOS bubbles with avatar badge).
+- Preserve all existing functionality: Clerk authentication, conversation creation/switching/deletion, SSE streaming, live typewriter rendering, cancellation, auto-scroll, and security boundaries.
+- Frontend-only changes in `apps/web/app/dashboard/page.tsx` and `apps/web/components/dashboard-nav.tsx`. No backend, Prisma schema, database, AI provider, or SSE protocol changes.
+
+### 2. Key Implementations
+
+- **Vertical Navigation Support**: Added `orientation?: "horizontal" | "vertical"` prop to `DashboardNav`, preserving default horizontal layout across other dashboard pages while rendering a clean vertical navigation stack in `/dashboard`.
+- **Collapsible Sidebar with Independent Scroll**: Single scrollable container (`min-h-0 flex-1 overflow-y-auto`) hosting vertical navigation, New Chat button, top-positioned search input, conversation history, and Clerk UserButton.
+- **Compact Message Composer**: Replaced large rectangular card with a compact rounded container (`py-2.5 md:py-3` wrapper, ~64–70px total desktop height), featuring vertically centered Send/Cancel controls, multiline auto-expansion (`min-h-[38px] max-h-[120px]`), and Enter/Shift+Enter key bindings.
+- **Cardless Chat Stream**: Replaced full-width message card wrappers with compact, natural chat bubbles. User messages display in rounded emerald bubbles, and BrainOS responses display with avatar badge, timestamp, and markdown typography.
+
+### 3. Security Review
+
+- **Bearer Token Authentication**: All conversation and message API requests attach validated Clerk JWT tokens.
+- **Tenant Isolation**: Backend strictly enforces user ownership on conversations and messages; no client-provided user IDs are trusted.
+- **Safe State Transitions**: AbortController handles client-side cancellation securely without leaving dangling stream listeners.
+
+### 4. Implementation Files
+
+- `apps/web/app/dashboard/page.tsx`: Two-panel layout, compact composer, top-positioned sidebar search, independent scroll containers, and chat bubbles.
+- `apps/web/components/dashboard-nav.tsx`: Added `orientation` prop supporting vertical layout.
+
+### 5. Verification Completed
+
+```text
+Frontend Unit Tests:
+52/52 PASS (apps/web/lib/brainos-client-api.test.ts)
+
+Next.js Production Build & TypeScript Check:
+npm run build (0 errors, 11/11 routes compiled successfully)
+
+Full Backend Regression Suite:
+72/72 test files passed, 832/832 tests passed (0 failures)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+```
+
+### 6. Git Checkpoint
+
+```text
+6036cc2 feat(web): add vertical dashboard navigation
+082764e feat(web): refine chat dashboard UI
+25c3c80 feat(web): improve automations dashboard
+```
+
+- Code commits: `082764e` and `6036cc2`
+- Final checkpoint: `6036cc2`
