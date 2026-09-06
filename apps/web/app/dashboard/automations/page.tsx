@@ -6,6 +6,7 @@ import { DashboardNav } from "../../../components/dashboard-nav";
 import {
   Automation,
   AutomationActionType,
+  AutomationStatus,
   AutomationTriggerType,
   createAutomation as apiCreateAutomation,
   deleteAutomation as apiDeleteAutomation,
@@ -15,6 +16,7 @@ import {
 } from "../../../lib/brainos-client-api";
 
 type RecurrenceType = "NONE" | "DAILY" | "WEEKLY";
+type FilterTab = "ALL" | AutomationStatus;
 
 const triggerOptions = [
   {
@@ -55,6 +57,8 @@ export default function AutomationsPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [selectedFilter, setSelectedFilter] = useState<FilterTab>("ALL");
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -96,7 +100,9 @@ export default function AutomationsPage() {
       setLoading(true);
       setError("");
 
-      const data = await listAutomations(token);
+      const data = await listAutomations(token, {
+        status: selectedFilter !== "ALL" ? selectedFilter : undefined,
+      });
       setAutomations(data ?? []);
     } catch (err) {
       setError(
@@ -105,7 +111,7 @@ export default function AutomationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [getToken]);
+  }, [getToken, selectedFilter]);
 
   useEffect(() => {
     // The initial load intentionally updates component state
@@ -411,12 +417,6 @@ export default function AutomationsPage() {
   }
 
   async function deleteAutomation(id: string) {
-    const confirmed = window.confirm("Delete this automation?");
-
-    if (!confirmed) {
-      return;
-    }
-
     setActionId(id);
     setError("");
     setSuccess("");
@@ -429,7 +429,7 @@ export default function AutomationsPage() {
       }
 
       await apiDeleteAutomation(token, id);
-
+      setConfirmDeleteId(null);
       setSuccess("Automation deleted.");
 
       await loadAutomations();
@@ -672,8 +672,15 @@ export default function AutomationsPage() {
                         type="datetime-local"
                         value={taskDueAt}
                         onChange={(event) => setTaskDueAt(event.target.value)}
+                        onClick={(e) => {
+                          try {
+                            e.currentTarget.showPicker?.();
+                          } catch {
+                            // Fallback to default browser behavior
+                          }
+                        }}
                         disabled={creating}
-                        className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-zinc-400 disabled:opacity-50"
+                        className="w-full cursor-pointer rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white [color-scheme:dark] outline-none focus:border-zinc-400 disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     </div>
 
@@ -725,8 +732,15 @@ export default function AutomationsPage() {
                         onChange={(event) =>
                           setReminderScheduledFor(event.target.value)
                         }
+                        onClick={(e) => {
+                          try {
+                            e.currentTarget.showPicker?.();
+                          } catch {
+                            // Fallback to default browser behavior
+                          }
+                        }}
                         disabled={creating}
-                        className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-zinc-400 disabled:opacity-50"
+                        className="w-full cursor-pointer rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white [color-scheme:dark] outline-none focus:border-zinc-400 disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     </div>
 
@@ -828,8 +842,15 @@ export default function AutomationsPage() {
                     type="datetime-local"
                     value={nextRunAt}
                     onChange={(event) => setNextRunAt(event.target.value)}
+                    onClick={(e) => {
+                      try {
+                        e.currentTarget.showPicker?.();
+                      } catch {
+                        // Fallback to default browser behavior
+                      }
+                    }}
                     disabled={creating}
-                    className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-zinc-400 disabled:opacity-50"
+                    className="w-full cursor-pointer rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white [color-scheme:dark] outline-none focus:border-zinc-400 disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </div>
               </div>
@@ -853,16 +874,42 @@ export default function AutomationsPage() {
             </div>
 
             <div>
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-xl font-medium">Your automations</h3>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xl font-medium">Your automations</h3>
+                </div>
 
-                <button
-                  onClick={() => void loadAutomations()}
-                  disabled={loading}
-                  className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
-                >
-                  Refresh
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Filter Tabs */}
+                  <div className="flex rounded-lg border border-zinc-800 bg-zinc-900/80 p-1 text-xs font-medium">
+                    {(["ALL", "ACTIVE", "PAUSED", "COMPLETED", "FAILED"] as FilterTab[]).map((tab) => (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() => {
+                          setConfirmDeleteId(null);
+                          setSelectedFilter(tab);
+                        }}
+                        className={`rounded-md px-3 py-1.5 transition ${
+                          selectedFilter === tab
+                            ? "bg-zinc-800 text-white shadow"
+                            : "text-zinc-400 hover:text-white"
+                        }`}
+                      >
+                        {tab.charAt(0) + tab.slice(1).toLowerCase()}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void loadAutomations()}
+                    disabled={loading}
+                    className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
+                  >
+                    Refresh
+                  </button>
+                </div>
               </div>
 
               {loading ? (
@@ -871,10 +918,16 @@ export default function AutomationsPage() {
                 </div>
               ) : automations.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/50 p-10 text-center">
-                  <p className="text-zinc-300">No automations yet.</p>
+                  <p className="text-zinc-300">
+                    {selectedFilter === "ALL"
+                      ? "No automations yet."
+                      : `No ${selectedFilter.toLowerCase()} automations.`}
+                  </p>
 
                   <p className="mt-2 text-sm text-zinc-500">
-                    Create your first automation above.
+                    {selectedFilter === "ALL"
+                      ? "Create your first automation above."
+                      : `Try selecting a different filter.`}
                   </p>
                 </div>
               ) : (
@@ -980,40 +1033,65 @@ export default function AutomationsPage() {
                             </div>
                           </div>
 
-                          <div className="flex shrink-0 flex-wrap gap-2">
-                            {automation.status === "ACTIVE" && (
-                              <button
-                                onClick={() =>
-                                  void pauseAutomation(automation.id)
-                                }
-                                disabled={actionId === automation.id}
-                                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-800 disabled:opacity-50"
-                              >
-                                Pause
-                              </button>
-                            )}
+                          <div className="flex shrink-0 flex-wrap items-center gap-2">
+                            {confirmDeleteId === automation.id ? (
+                              <div className="flex items-center gap-2 text-xs">
+                                <span className="font-medium text-zinc-300">Delete automation?</span>
+                                <button
+                                  type="button"
+                                  onClick={() => void deleteAutomation(automation.id)}
+                                  disabled={actionId === automation.id}
+                                  className="font-medium text-red-400 hover:text-red-300 disabled:opacity-50"
+                                >
+                                  {actionId === automation.id ? "Deleting..." : "Delete"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteId(null)}
+                                  disabled={actionId === automation.id}
+                                  className="text-zinc-400 hover:text-white disabled:opacity-50"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                {automation.status === "ACTIVE" && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void pauseAutomation(automation.id)
+                                    }
+                                    disabled={actionId === automation.id}
+                                    className="rounded-lg border border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-800 disabled:opacity-50"
+                                  >
+                                    Pause
+                                  </button>
+                                )}
 
-                            {automation.status === "PAUSED" && (
-                              <button
-                                onClick={() =>
-                                  void resumeAutomation(automation.id)
-                                }
-                                disabled={actionId === automation.id}
-                                className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-200 disabled:opacity-50"
-                              >
-                                Resume
-                              </button>
-                            )}
+                                {automation.status === "PAUSED" && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void resumeAutomation(automation.id)
+                                    }
+                                    disabled={actionId === automation.id}
+                                    className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-200 disabled:opacity-50"
+                                  >
+                                    Resume
+                                  </button>
+                                )}
 
-                            <button
-                              onClick={() =>
-                                void deleteAutomation(automation.id)
-                              }
-                              disabled={actionId === automation.id}
-                              className="rounded-lg border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950 disabled:opacity-50"
-                            >
-                              Delete
-                            </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteId(automation.id)}
+                                  disabled={actionId === automation.id}
+                                  className="rounded-lg border border-red-900 px-4 py-2 text-sm text-red-300 hover:bg-red-950 disabled:opacity-50"
+                                >
+                                  Delete
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
