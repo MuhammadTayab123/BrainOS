@@ -3798,3 +3798,218 @@ Verified state:
 - Branch: `main`
 - HEAD: `fc85aa3` (matches `origin/main`)
 - Untracked files: `.agents/rules/` preserved untouched.
+
+---
+
+# 57. ADDITIVE UPDATE -- CONVERSATION MANAGEMENT & CHAT CONTINUITY
+
+**Updated:** 2026-09-06
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 57 -- Conversation Management & Chat Continuity -- COMPLETE
+
+Mission 57 improved the dashboard chat page with conversation title auto-refresh after the first assistant stream, conversation deletion with confirmation and active-conversation fallback, and URI encoding for conversation and message client methods. Focused frontend conversation client tests were added.
+
+### 1. Goal and Scope
+
+- After a successful assistant stream for the first message in a conversation, refresh the conversation list so the automatically generated backend title appears immediately in the sidebar.
+- Add a safe delete action to the conversation sidebar with confirmation.
+- After deletion, fall back to another existing conversation or create a new one.
+- Add URI encoding for `getConversation`, `deleteConversation`, and `listMessages` client methods.
+- Add focused frontend conversation client tests.
+- Preserve existing streaming, cancellation, error handling, and optimistic user-message behavior.
+- No backend, database, Prisma schema, AI provider, or SSE architecture changes.
+
+### 2. Conversation Title Refresh
+
+- After a successful assistant stream completes, the dashboard calls `getConversation(token, conversationId)` to fetch the updated conversation metadata (including the auto-generated title).
+- The refreshed conversation object is applied to both the active `conversation` state and the `conversations` sidebar list via `setConversation` and `setConversations`.
+- The refresh is non-blocking: failures are silently caught to avoid disrupting the main chat flow.
+- No duplicate conversations or messages are created.
+
+### 3. Conversation Deletion
+
+- A delete button was added to each conversation item in the sidebar.
+- Deletion requires explicit confirmation via a `confirmDeleteId` state guard.
+- Uses the existing `deleteConversation(token, conversationId)` client method with authenticated Bearer token.
+- After deletion:
+  - The conversation is removed from the sidebar list.
+  - If the deleted conversation was the active one:
+    - Falls back to the first remaining conversation (loads its messages).
+    - If no conversations remain, creates a new empty conversation.
+  - Guards prevent deletion during loading, switching, or another in-progress delete.
+
+### 4. Frontend Client API — Conversation Methods
+
+5 client methods used (all previously defined in `brainos-client-api.ts`):
+
+- `createConversation(token, title?)`: POST to `/api/v1/conversations` with optional title.
+- `listConversations(token, limit?)`: GET `/api/v1/conversations` with cache `no-store` and optional `limit` query param.
+- `getConversation(token, conversationId)`: GET with URI-encoded conversation ID.
+- `deleteConversation(token, conversationId)`: DELETE with URI-encoded conversation ID.
+- `listMessages(token, conversationId)`: GET `/api/v1/conversations/:id/messages` with URI-encoded conversation ID.
+
+### 5. Frontend Conversation Client Tests (`brainos-client-api.test.ts`)
+
+7 focused tests added in the `Conversations API Client` describe block:
+
+1. `createConversation`: POST with Bearer auth and optional title (trimmed).
+2. `createConversation`: Empty object body when title is omitted.
+3. `listConversations`: GET with cache `no-store` and query `limit` param.
+4. `getConversation`: GET with URI-encoded conversation ID.
+5. `deleteConversation`: DELETE with URI-encoded conversation ID.
+6. `listMessages`: GET with URI-encoded conversation ID in path.
+7. Error handling: Throws parsed error on conversation API failure.
+
+### 6. Security Review
+
+- **Bearer Authentication**: All requests attach `Authorization: Bearer ${token}` via the centralized client.
+- **Zero Client Identity**: No client-supplied `userId`; backend derives identity from the Clerk JWT.
+- **URI Encoding**: Conversation IDs are encoded via `encodeURIComponent()` in `getConversation`, `deleteConversation`, and `listMessages`.
+- **Centralized Error Handling**: All responses go through the shared `parseResponse()` function.
+- **Deletion Guard**: Prevents concurrent deletions and accidental deletes via confirmation state.
+- Backend remains solely responsible for authentication and tenant isolation.
+
+### 7. Implementation Files
+
+- `apps/web/app/dashboard/page.tsx`: Added conversation title refresh after streaming, deletion with confirmation, active conversation fallback.
+- `apps/web/lib/brainos-client-api.ts`: URI encoding applied to `getConversation`, `deleteConversation`, and `listMessages`.
+- `apps/web/lib/brainos-client-api.test.ts`: Added 7 focused conversation client tests.
+
+### 8. Verification Completed
+
+```text
+Frontend Unit Tests:
+45/45 PASS (apps/web/lib/brainos-client-api.test.ts)
+
+Next.js Production Build & TypeScript Check:
+npm run build (0 errors, 11/11 routes compiled successfully)
+
+Full Backend Regression Suite:
+72/72 test files passed, 832/832 tests passed (0 failures)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+```
+
+### 9. Git Checkpoint
+
+```text
+e8ce331 feat(web): improve conversation management
+3406412 docs(context): correct mission 56 contracts
+65fdc5f docs(context): update mission 56
+fc85aa3 refactor(web): standardize automation API client
+```
+
+Verified state:
+- Branch: `main`
+- HEAD: `e8ce331` (matches `origin/main`)
+- Untracked files: `.agents/rules/` preserved untouched.
+
+---
+
+# 58. ADDITIVE UPDATE -- TASKS CLIENT TESTING, FILTERING & UI STANDARDIZATION
+
+**Updated:** 2026-09-06
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 58 -- Tasks Client Testing, Filtering & UI Standardization -- COMPLETE
+
+Mission 58 added comprehensive client API tests for all six task methods, migrated the Tasks dashboard to the unified dark Tailwind design language, added status and priority filtering, safe task deletion confirmation, and improved the Due Date & Time UX using the native `datetime-local` input with dark color scheme support.
+
+### 1. Goal and Scope
+
+- Add focused unit tests for all 6 task client API methods in `brainos-client-api.test.ts`.
+- Standardize the `/dashboard/tasks` page and components onto the global dark Tailwind theme already used by Reminders, Automations, and other dashboard pages.
+- Add status filtering: All / Todo / Completed.
+- Add priority filtering: All / Low / Medium / High.
+- Add safe task deletion with confirmation dialog.
+- Improve Due Date & Time UX: native `datetime-local` with dark color scheme and clickable native picker.
+- No backend, database, Prisma schema, provider, or architecture changes.
+- No new runtime dependencies.
+
+### 2. Tasks Client API Tests (`brainos-client-api.test.ts`)
+
+7 focused tests added covering all 6 task client methods:
+
+- `listTasks(token, options)`: Verifies request path `/api/v1/tasks`, Bearer auth header, and serialized query parameters (`status`, `priority`, `limit`).
+- `createTask(token, input)`: Verifies POST with JSON body serialization (`title`, `description`, `priority`, `status`, `dueDate`).
+- `getTask(token, taskId)`: Verifies GET with URI-encoded task ID.
+- `updateTask(token, taskId, input)`: Verifies PATCH with URI-encoded task ID and JSON body.
+- `completeTask(token, taskId)`: Verifies PATCH to `/api/v1/tasks/:id/complete`.
+- `deleteTask(token, taskId)`: Verifies DELETE with URI-encoded task ID.
+- Error handling: Verifies non-OK responses throw with status and error message.
+
+### 3. Tasks Dashboard UI Standardization
+
+All Tasks dashboard components migrated from light inline styling to the global dark Tailwind design language:
+
+- **`page.tsx`**: Integrated authentication state, loading indicators, and filter state management. Consistent layout with `DashboardNav` and dark `min-h-screen bg-gray-950` background.
+- **`TaskForm.tsx`**: Dark-themed form inputs, labels, and buttons. Improved Due Date & Time field with `[color-scheme:dark]` for native datetime-local dark mode support and `showPicker()` on click.
+- **`TaskList.tsx`**: Added status and priority filter dropdowns with dark-themed select elements. Consistent card-based layout with empty-state messaging.
+- **`TaskItem.tsx`**: Dark card styling with color-coded priority badges and status indicators. Safe delete with `window.confirm()` confirmation dialog.
+
+### 4. Task Filtering
+
+- **Status Filter**: All / Todo / Completed — filters tasks by `status` field.
+- **Priority Filter**: All / Low / Medium / High — filters tasks by `priority` field.
+- Filters are passed as query parameters to `listTasks()` for server-side filtering.
+- Filter state managed in `TaskList` component with controlled select elements.
+
+### 5. Due Date & Time UX
+
+- Uses native `input type="datetime-local"` with `[color-scheme:dark]` CSS property.
+- Native browser date/time picker renders with correct dark-mode contrast.
+- Entire field is clickable via `showPicker()` on click with `cursor-pointer`.
+- A duplicate custom SVG calendar icon was identified and removed — only the native browser icon is displayed.
+- Keyboard accessibility preserved via standard input focus behavior.
+- Existing local timezone and date serialization logic unchanged.
+
+### 6. Security Review
+
+- **Bearer Authentication**: All requests attach `Authorization: Bearer ${token}` via the centralized client.
+- **Zero Client Identity**: No client-supplied `userId`; backend derives identity from the Clerk JWT.
+- **URI Encoding**: Task IDs are encoded via `encodeURIComponent()` before interpolation into URLs.
+- **Centralized Error Handling**: All responses go through the shared `parseResponse()` function.
+- **Safe Deletion**: Delete action requires explicit user confirmation before execution.
+- Backend remains solely responsible for authentication and tenant isolation.
+
+### 7. Implementation Files
+
+- `apps/web/lib/brainos-client-api.test.ts`: Added 7 focused task API unit tests.
+- `apps/web/app/dashboard/tasks/page.tsx`: Integrated filters, auth states, and dark theme layout.
+- `apps/web/app/dashboard/tasks/components/TaskForm.tsx`: Standardized dark theme, improved datetime-local UX.
+- `apps/web/app/dashboard/tasks/components/TaskItem.tsx`: Standardized dark theme, added delete confirmation.
+- `apps/web/app/dashboard/tasks/components/TaskList.tsx`: Standardized dark theme, added status and priority filters.
+
+### 8. Verification Completed
+
+```text
+Frontend Unit Tests:
+52/52 PASS (apps/web/lib/brainos-client-api.test.ts)
+
+Next.js Production Build & TypeScript Check:
+npm run build (0 errors, 11/11 routes compiled successfully)
+
+Full Backend Regression Suite:
+72/72 test files passed, 832/832 tests passed (0 failures)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+```
+
+### 9. Git Checkpoint
+
+```text
+712230e feat(web): improve tasks dashboard
+e8ce331 feat(web): improve conversation management
+3406412 docs(context): correct mission 56 contracts
+65fdc5f docs(context): update mission 56
+```
+
+Verified state:
+- Branch: `main`
+- HEAD: `712230e` (matches `origin/main`)
+- Untracked files: `.agents/rules/` preserved untouched.
