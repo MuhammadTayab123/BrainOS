@@ -2934,3 +2934,143 @@ The BrainOS assistant now provides real-time event streaming and live progress v
 - Frontend assistant streaming UI widgets in Next.js remain future work.
 - Computer Agent and native desktop drivers remain deferred.
 - No database schema or migration changes were required.
+
+---
+
+# 49. MISSION 49 — FRONTEND ASSISTANT SSE CONSUMER & LIVE PROGRESS UI
+
+**Updated:** 2026-09-06
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 49 — Frontend Assistant SSE Consumer & Live Progress UI — COMPLETE
+
+Mission 49 delivers the frontend streaming consumer and real-time user interface for the BrainOS AI Assistant in Next.js (`apps/web`). It connects the frontend directly to the Server-Sent Events (SSE) streaming transport (`POST /api/v1/assistant/stream`) established in Mission 48, replacing static blocking waits with live lifecycle state updates, tool progress visibility, optimistic user message delivery, and client-side stream cancellation.
+
+### Architectural Flow
+
+```text
+Next.js Frontend (apps/web/app/dashboard/page.tsx)
+    ├── User sends prompt
+    ├── Optimistically appends temp USER message to UI list
+    ├── Allocates AbortController for client cancellation
+    ├── Calls streamAssistant(token, message, { onEvent, signal })
+    ↓
+BrainOS Client API (apps/web/lib/brainos-client-api.ts)
+    ├── POST /api/v1/assistant/stream (with Authorization: Bearer <token>)
+    ├── Consumes response.body via ReadableStreamDefaultReader
+    ├── Decodes chunks incrementally with TextDecoder({ stream: true })
+    ├── Splits across double-newline boundaries /(?:\r?\n){2}/
+    ├── Parses structured SSE frames (event: <type>, data: <json>)
+    └── Dispatches typed events to UI callback (onEvent):
+        ├── state_changed -> Updates currentStatus ("Thinking...", "Executing action...", "Finalizing...")
+        ├── task_event -> Updates activeTaskMessage (e.g., "Executing create_task.")
+        ├── response -> Captures final synthesized AssistantResponse
+        ├── error -> Throws sanitized error message
+        └── done -> Signals stream completion
+    ↓
+Dashboard Completion & UI Sync
+    ├── listMessages(token, conversationId) -> Refreshes canonical message history
+    ├── Resets loading / cancellation state
+    └── User can cancel anytime via "Cancel" button -> abortController.abort()
+```
+
+### 1. Frontend SSE Client (`streamAssistant`)
+
+- **Location**: `apps/web/lib/brainos-client-api.ts`
+- **Transport**: Consumes `POST /api/v1/assistant/stream` over HTTP fetch streams with `Accept: text/event-stream`.
+- **Typed Stream Protocol**:
+  - `state_changed`: Emits `AssistantStateSnapshot` (`state: "IDLE" | "THINKING" | "EXECUTING" | "SPEAKING" | "ERROR"`, `activeTaskId: string | null`).
+  - `task_event`: Emits `AssistantTaskEvent` (`type: "TASK_STARTED" | "TASK_PROGRESS" | "TASK_COMPLETED" | "TASK_FAILED"`, `taskId: string`, `message: string`, `timestamp: string`).
+  - `response`: Emits synthesized `AssistantResponse` (`{ text, model, provider, retrievedMemories, retrievedDocuments }`).
+  - `error`: Emits `{ message: string }` and rejects the streaming promise.
+  - `done`: Emits `{}` to signal end-of-stream.
+- **Chunk-Boundary & UTF-8 Safety**:
+  - Employs `TextDecoder.decode(value, { stream: true })` to prevent multi-byte UTF-8 character truncation across packet boundaries.
+  - Buffers incomplete chunks and extracts complete SSE frames using delimiter regex `/(?:\r?\n){2}/`.
+- **Termination Handling**:
+  - Handles non-200 HTTP responses by extracting backend JSON error messages.
+  - Detects premature socket closures and rejects cleanly if the stream closes without a terminal response or error.
+  - Always releases reader lock (`reader.releaseLock()`) in `finally`.
+- **Cancellation**:
+  - Accepts `AbortSignal` in `StreamAssistantOptions` and forwards to `fetch`.
+
+### 2. Dashboard UI Integration
+
+- **Location**: `apps/web/app/dashboard/page.tsx`
+- **Live Progress Indicators**:
+  - Renders an animated status indicator displaying `currentStatus` and `activeTaskMessage` live during assistant execution.
+- **Optimistic Message Rendering**:
+  - Appends the user's message immediately upon submission for responsive UX.
+- **Canonical Synchronization**:
+  - On stream completion, calls `listMessages(token, conversation.id)` to reload canonical database messages, guaranteeing zero duplicate messages.
+- **Interactive Cancellation**:
+  - Renders a "Cancel" button during active streams.
+  - Triggering cancellation invokes `abortController.abort()`, smoothly resetting loading state and rendering `"Request was cancelled."` without corrupting conversation history.
+- **Backwards Compatibility**:
+  - The existing synchronous `askAssistant()` API client function and `/api/v1/assistant/ask` endpoint are 100% preserved.
+
+### 3. Security & Information Hiding
+
+- **Single Backend Gateway**: The browser communicates solely with the BrainOS backend via `NEXT_PUBLIC_BRAINOS_API_URL` and Clerk authentication tokens. It never connects directly to external AI providers (Ollama / OmniRoute).
+- **Sanitized UI Progress**: The UI renders only high-level status messages and tool lifecycle descriptions (e.g. `"Executing create_task."`). No raw tool arguments, vector embeddings, SQL queries, database details, API keys, or stack traces reach the frontend.
+- **Fail-Closed Cancellation**: Aborting an in-flight request releases frontend reader locks and socket connections immediately.
+
+### 4. Build & Test Configuration
+
+- `apps/web/tsconfig.json`: Added `"**/*.test.ts"` and `"**/*.test.tsx"` to the TypeScript `exclude` array so `next build` packages only production bundle code while Vitest manages unit tests independently.
+
+### 5. Implementation Files
+
+- `apps/web/lib/brainos-client-api.ts`: Implemented `streamAssistant` and typed stream event definitions.
+- `apps/web/app/dashboard/page.tsx`: Integrated streaming state, live progress indicators, optimistic messaging, and cancellation UI.
+- `apps/web/lib/brainos-client-api.test.ts` [NEW]: Dedicated 6-scenario unit test suite testing streaming lifecycle, fragmented frames, HTTP errors, SSE errors, client cancellation, and premature termination.
+- `apps/web/tsconfig.json`: Excluded test files from Next.js production build bundle.
+
+### 6. Verification Completed
+
+```text
+Frontend Unit Tests:
+6/6 PASS (apps/web/lib/brainos-client-api.test.ts)
+
+Backend Integration Regression Tests:
+9/9 PASS (apps/backend/test/assistant/assistant.stream.api.test.ts)
+
+Next.js Production Build & TypeScript:
+npm run build (0 errors, CLEAN static & dynamic routes generated)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+
+Security & Cancellation Review:
+PASSED (Single gateway, sanitized progress messages, clean AbortController teardown)
+
+Architectural Review:
+PASSED (Zero backend changes, zero provider abstraction changes, zero database schema changes)
+```
+
+### 7. Git Checkpoint
+
+```text
+2315b32 feat(web): add assistant SSE streaming client
+0049d23 docs(context): update SSE streaming milestone
+726aa1c feat(assistant): add SSE streaming transport
+```
+
+Verified state:
+- Branch: `main`
+- HEAD: `2315b32`
+- Status: 1 commit ahead of origin/main (push pending)
+- Working tree: context update uncommitted (`.agents/rules/` remains untracked user customization)
+
+### 8. Mission Impact
+
+The BrainOS web application now delivers a real-time, responsive assistant experience with live feedback across all tool cycles (tasks, reminders, memories, automations, documents, and computer actions) and full user cancellation control over standard Server-Sent Events.
+
+### 9. Deferred / Unchanged
+
+- Token-by-token provider LLM generation streaming remains deferred (requires AI provider streaming abstraction).
+- Backend cancellation propagation (`AbortSignal` in `LLMService`/`ToolExecutor`) remains deferred.
+- WebSocket bidirectional real-time channels remain deferred.
+- Computer Agent native OS desktop drivers remain deferred.
+- No database schema or migration changes were required.
