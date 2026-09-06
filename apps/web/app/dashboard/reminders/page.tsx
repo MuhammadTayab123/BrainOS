@@ -24,6 +24,7 @@ export default function RemindersPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [operatingId, setOperatingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<FilterTab>("ALL");
 
   // Form states
@@ -32,6 +33,7 @@ export default function RemindersPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const fetchReminders = useCallback(async () => {
+    setLoading(true);
     setError(null);
 
     try {
@@ -41,7 +43,9 @@ export default function RemindersPage() {
         throw new Error("Authentication token is unavailable.");
       }
 
-      const data = await listReminders(token);
+      const data = await listReminders(token, {
+        status: selectedFilter !== "ALL" ? selectedFilter : undefined,
+      });
       setReminders(data);
     } catch (err) {
       setError(
@@ -52,7 +56,7 @@ export default function RemindersPage() {
     } finally {
       setLoading(false);
     }
-  }, [getToken]);
+  }, [getToken, selectedFilter]);
 
   useEffect(() => {
     if (isLoaded && isSignedIn) {
@@ -153,6 +157,7 @@ export default function RemindersPage() {
       }
 
       await deleteReminder(token, reminderId);
+      setConfirmDeleteId(null);
       await fetchReminders();
     } catch (err) {
       setActionError(
@@ -220,11 +225,6 @@ export default function RemindersPage() {
     }
   }
 
-  const filteredReminders = reminders.filter((item) => {
-    if (selectedFilter === "ALL") return true;
-    return item.status === selectedFilter;
-  });
-
   const pendingCount = reminders.filter((r) => r.status === "PENDING").length;
 
   return (
@@ -288,8 +288,15 @@ export default function RemindersPage() {
                       type="datetime-local"
                       value={scheduledFor}
                       onChange={(e) => setScheduledFor(e.target.value)}
+                      onClick={(e) => {
+                        try {
+                          e.currentTarget.showPicker?.();
+                        } catch {
+                          // Fallback to default browser behavior
+                        }
+                      }}
                       disabled={creating}
-                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-sm text-white focus:border-zinc-500 focus:outline-none"
+                      className="mt-1 w-full cursor-pointer rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-sm text-white [color-scheme:dark] focus:border-zinc-500 focus:outline-none disabled:cursor-not-allowed"
                     />
                   </div>
 
@@ -327,7 +334,11 @@ export default function RemindersPage() {
                   {(["ALL", "PENDING", "DELIVERED", "CANCELLED"] as FilterTab[]).map((tab) => (
                     <button
                       key={tab}
-                      onClick={() => setSelectedFilter(tab)}
+                      type="button"
+                      onClick={() => {
+                        setConfirmDeleteId(null);
+                        setSelectedFilter(tab);
+                      }}
                       className={`rounded-md px-3 py-1.5 transition ${
                         selectedFilter === tab
                           ? "bg-zinc-800 text-white shadow"
@@ -348,7 +359,7 @@ export default function RemindersPage() {
                 <div className="rounded-lg border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">
                   {error}
                 </div>
-              ) : filteredReminders.length === 0 ? (
+              ) : reminders.length === 0 ? (
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-8 text-center text-zinc-500">
                   {selectedFilter === "ALL"
                     ? "No reminders yet. Create one above or ask BrainOS in chat!"
@@ -356,7 +367,7 @@ export default function RemindersPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-3">
-                  {filteredReminders.map((item) => (
+                  {reminders.map((item) => (
                     <div
                       key={item.id}
                       className="flex flex-col justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-900 p-4 transition hover:border-zinc-700 sm:flex-row sm:items-center"
@@ -385,23 +396,49 @@ export default function RemindersPage() {
                       </div>
 
                       <div className="flex items-center gap-2 self-end sm:self-center">
-                        {item.status === "PENDING" && (
-                          <button
-                            onClick={() => void handleCancelReminder(item.id)}
-                            disabled={operatingId === item.id}
-                            className="rounded-lg border border-amber-800/80 bg-amber-950/40 px-3 py-1.5 text-xs font-medium text-amber-300 transition hover:bg-amber-900/50 disabled:opacity-40"
-                          >
-                            {operatingId === item.id ? "Cancelling..." : "Cancel"}
-                          </button>
-                        )}
+                        {confirmDeleteId === item.id ? (
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="font-medium text-zinc-300">Delete reminder?</span>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteReminder(item.id)}
+                              disabled={operatingId === item.id}
+                              className="font-medium text-red-400 hover:text-red-300 disabled:opacity-50"
+                            >
+                              {operatingId === item.id ? "Deleting..." : "Delete"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(null)}
+                              disabled={operatingId === item.id}
+                              className="text-zinc-400 hover:text-white disabled:opacity-50"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            {item.status === "PENDING" && (
+                              <button
+                                type="button"
+                                onClick={() => void handleCancelReminder(item.id)}
+                                disabled={operatingId === item.id}
+                                className="rounded-lg border border-amber-800/80 bg-amber-950/40 px-3 py-1.5 text-xs font-medium text-amber-300 transition hover:bg-amber-900/50 disabled:opacity-40"
+                              >
+                                {operatingId === item.id ? "Cancelling..." : "Cancel"}
+                              </button>
+                            )}
 
-                        <button
-                          onClick={() => void handleDeleteReminder(item.id)}
-                          disabled={operatingId === item.id}
-                          className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:border-red-900 hover:text-red-400 disabled:opacity-40"
-                        >
-                          {operatingId === item.id ? "Deleting..." : "Delete"}
-                        </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(item.id)}
+                              disabled={operatingId === item.id}
+                              className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:border-red-900 hover:text-red-400 disabled:opacity-40"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   ))}
