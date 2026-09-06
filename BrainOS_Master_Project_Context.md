@@ -3466,3 +3466,110 @@ Verified state:
 - Branch: `main`
 - HEAD: `ccdc3e0` (matches `origin/main`)
 - Untracked files: `.agents/rules/` preserved untouched.
+
+---
+
+# 53. MISSION 53 — FRONTEND REMINDERS MANAGEMENT UI & CLIENT INTEGRATION
+
+### Objective & Architectural Rationale
+
+While Mission 44 established the backend Reminder infrastructure (service, repository, background scheduler/worker, and assistant tools), reminders lacked visual management in the web application. Mission 53 integrates the client-side Reminders API into `brainos-client-api.ts` and delivers a dedicated `/dashboard/reminders` management interface, bringing Reminders into visual and functional parity with Tasks and Automations.
+
+```text
+Browser User Interface (/dashboard/reminders)
+    ├── Create Reminder Form (datetime-local picker, future validation, local -> UTC ISO)
+    ├── Filter Tabs (ALL, PENDING, DELIVERED, CANCELLED)
+    ├── Action Controls (Cancel pending reminder, Delete reminder)
+    │
+    ▼
+Client API (apps/web/lib/brainos-client-api.ts)
+    ├── listReminders(token, options?)
+    ├── createReminder(token, input)
+    ├── getReminder(token, reminderId)
+    ├── cancelReminder(token, reminderId)
+    └── deleteReminder(token, reminderId)
+    │
+    ▼
+Backend REST Endpoints (/api/v1/reminders) [Protected with requireAuth & Tenant Isolation]
+    ├── GET    /api/v1/reminders
+    ├── POST   /api/v1/reminders
+    ├── GET    /api/v1/reminders/:id
+    ├── POST   /api/v1/reminders/:id/cancel
+    └── DELETE /api/v1/reminders/:id
+```
+
+### 1. Frontend Client API Protocol (`brainos-client-api.ts`)
+
+- **Types & Interfaces**:
+  - `ReminderStatus = "PENDING" | "PROCESSING" | "DELIVERED" | "FAILED" | "CANCELLED"`
+  - `Reminder`: Typed model matching the database entity (`id`, `userId`, `taskId`, `message`, `scheduledFor`, `status`, `attempts`, `deliveredAt`, `lastError`, `createdAt`, `updatedAt`).
+  - `CreateReminderInput`: `{ message: string; scheduledFor: string | Date; taskId?: string; }`
+  - `ListRemindersOptions`: `{ status?: ReminderStatus; dueBefore?: string | Date; limit?: number; }`
+- **Client Methods**:
+  - `listReminders(token, options)`: Queries `/api/v1/reminders` with serialized query params (`status`, `dueBefore` converted to UTC ISO, `limit`).
+  - `createReminder(token, input)`: Serializes payload, trims message, normalizes `scheduledFor` to UTC ISO string, and issues POST request.
+  - `getReminder(token, reminderId)`: Fetches single reminder with encoded URI component.
+  - `cancelReminder(token, reminderId)`: Posts to `/api/v1/reminders/:id/cancel` and returns `{ id, status: "CANCELLED" }`.
+  - `deleteReminder(token, reminderId)`: Sends DELETE to `/api/v1/reminders/:id` and returns `{ id }`.
+- **Security & Authorization**:
+  - Automatically attaches `Authorization: Bearer ${token}` to all requests.
+  - Zero client-supplied `userId` parameters; identity is extracted securely on the backend from the Clerk JWT.
+
+### 2. User Interface (`/dashboard/reminders/page.tsx`)
+
+- **Create Form**:
+  - Form fields for `message` and `scheduledFor` (`<input type="datetime-local">`).
+  - Client-side validation preventing past scheduling (`scheduledDate.getTime() <= Date.now()`).
+  - Converts local datetime to UTC ISO string before API submission.
+- **Filtering & List Views**:
+  - Filter tabs: `ALL`, `PENDING`, `DELIVERED`, `CANCELLED` with active pending counter.
+  - Visual status badges: Amber for `PENDING`, Blue for `PROCESSING`, Emerald for `DELIVERED`, Red for `FAILED`, Zinc for `CANCELLED`.
+  - Displays localized date/time via `new Date().toLocaleString()` alongside relative indicators (`in 2 hours`, `30m ago`).
+- **Interactive Actions**:
+  - Quick `Cancel` action on pending reminders (`POST /api/v1/reminders/:id/cancel`).
+  - `Delete` action (`DELETE /api/v1/reminders/:id`).
+  - Immediate optimistic list refresh upon action completion.
+  - Loading skeletons, empty states, and inline error feedback.
+  - Sensitive internal debugging fields (`attempts`, `lastError`, `deletedAt`, `userId`) remain hidden from the UI.
+
+### 3. Synchronized Header Navigation
+
+- Updated navigation bars in both `/dashboard` ([page.tsx](file:///D:/Project/BrainOS/apps/web/app/dashboard/page.tsx)) and `/dashboard/tasks` ([page.tsx](file:///D:/Project/BrainOS/apps/web/app/dashboard/tasks/page.tsx)) to provide direct navigation to `Reminders` (`/dashboard/reminders`).
+
+### 4. Implementation Files
+
+- `apps/web/lib/brainos-client-api.ts`: Added Reminder types and 5 client API functions.
+- `apps/web/app/dashboard/reminders/page.tsx` [NEW]: Dedicated reminders dashboard page.
+- `apps/web/app/dashboard/page.tsx`: Added Reminders link to header navigation.
+- `apps/web/app/dashboard/tasks/page.tsx`: Added Reminders and Automations links to header navigation.
+- `apps/web/lib/brainos-client-api.test.ts`: Added 6 unit tests covering all client reminder operations.
+
+### 5. Verification Completed
+
+```text
+Frontend Unit Tests:
+16/16 PASS (apps/web/lib/brainos-client-api.test.ts)
+- Tests 1-6: listReminders, createReminder, getReminder, cancelReminder, deleteReminder, and error handling
+
+Next.js Production Build & TypeScript Check:
+npm run build (0 errors, 9/9 routes compiled successfully including /dashboard/reminders)
+
+Full Backend Regression Suite:
+72/72 test files passed, 832/832 tests passed (0 failures)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+```
+
+### 6. Git Checkpoint
+
+```text
+1e5113f feat(web): add reminders management UI
+a297754 docs(context): update mission 52
+ccdc3e0 feat(web): improve dashboard assistant experience
+```
+
+Verified state:
+- Branch: `main`
+- HEAD: `1e5113f` (matches `origin/main`)
+- Untracked files: `.agents/rules/` preserved untouched.
