@@ -29,6 +29,36 @@ export interface AssistantResponse {
   retrievedDocuments?: unknown[];
 }
 
+export interface AssistantStateSnapshot {
+  state: "IDLE" | "THINKING" | "EXECUTING" | "SPEAKING" | "ERROR";
+  activeTaskId: string | null;
+}
+
+export interface AssistantTaskEvent {
+  type: "TASK_STARTED" | "TASK_PROGRESS" | "TASK_COMPLETED" | "TASK_FAILED";
+  taskId: string;
+  message: string;
+  timestamp: string;
+}
+
+export type AssistantStreamEvent =
+  | { type: "state_changed"; data: AssistantStateSnapshot }
+  | { type: "task_event"; data: AssistantTaskEvent }
+  | { type: "response"; data: AssistantResponse }
+  | { type: "error"; data: { message: string } }
+  | { type: "done"; data: Record<string, unknown> };
+
+export interface StreamAssistantOptions {
+  conversationId?: string;
+  enableMemoryRetrieval?: boolean;
+  memoryLimit?: number;
+  enableDocumentRetrieval?: boolean;
+  documentLimit?: number;
+  timezone?: string;
+  signal?: AbortSignal;
+  onEvent?: (event: AssistantStreamEvent) => void;
+}
+
 export async function askAssistant(
   token: string,
   message: string,
@@ -64,6 +94,163 @@ export async function askAssistant(
   );
 
   return parseResponse<AssistantResponse>(response);
+}
+
+export async function streamAssistant(
+  token: string,
+  message: string,
+  options?: StreamAssistantOptions,
+): Promise<AssistantResponse> {
+  const clientTimezone =
+    options?.timezone ??
+    (typeof Intl !== "undefined"
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : undefined);
+
+  const { signal, onEvent, ...requestOptions } = options ?? {};
+
+  const response = await fetch(
+    `${API_URL}/api/v1/assistant/stream`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        message: message.trim(),
+        timezone: clientTimezone,
+        ...requestOptions,
+      }),
+      signal,
+    },
+  );
+
+  if (!response.ok) {
+    let errorMessage = `BrainOS stream request failed: ${response.status} ${response.statusText}`;
+    try {
+      const errorJson = await response.json();
+      if (errorJson?.error?.message) {
+        errorMessage = errorJson.error.message;
+      }
+    } catch {
+      // Fall back to default status text message
+    }
+    throw new Error(errorMessage);
+  }
+
+  if (!response.body) {
+    throw new Error("Streaming response body is not readable.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalResponse: AssistantResponse | null = null;
+  let streamError: Error | null = null;
+
+  const processBlock = (block: string) => {
+    const lines = block.split(/\r?\n/);
+    let eventType = "message";
+    let dataStr = "";
+    let hasData = false;
+
+    for (const line of lines) {
+      if (line.startsWith("event:")) {
+        eventType = line.slice(6).trim();
+      } else if (line.startsWith("data:")) {
+        const value = line.slice(5).trim();
+        dataStr = dataStr ? `${dataStr}\n${value}` : value;
+        hasData = true;
+      }
+    }
+
+    if (!hasData && eventType === "message") {
+      return;
+    }
+
+    let parsedData: unknown = dataStr;
+    if (dataStr) {
+      try {
+        parsedData = JSON.parse(dataStr);
+      } catch {
+        // Fall back to raw string
+      }
+    }
+
+    if (eventType === "state_changed") {
+      const typedEvent: AssistantStreamEvent = {
+        type: "state_changed",
+        data: parsedData as AssistantStateSnapshot,
+      };
+      onEvent?.(typedEvent);
+    } else if (eventType === "task_event") {
+      const typedEvent: AssistantStreamEvent = {
+        type: "task_event",
+        data: parsedData as AssistantTaskEvent,
+      };
+      onEvent?.(typedEvent);
+    } else if (eventType === "response") {
+      finalResponse = parsedData as AssistantResponse;
+      const typedEvent: AssistantStreamEvent = {
+        type: "response",
+        data: finalResponse,
+      };
+      onEvent?.(typedEvent);
+    } else if (eventType === "error") {
+      const errorData = (parsedData as { message?: string }) ?? {};
+      streamError = new Error(errorData.message || "Assistant stream failed.");
+      const typedEvent: AssistantStreamEvent = {
+        type: "error",
+        data: { message: streamError.message },
+      };
+      onEvent?.(typedEvent);
+    } else if (eventType === "done") {
+      const typedEvent: AssistantStreamEvent = {
+        type: "done",
+        data: (parsedData as Record<string, unknown>) ?? {},
+      };
+      onEvent?.(typedEvent);
+    }
+  };
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+
+      const parts = buffer.split(/(?:\r?\n){2}/);
+      buffer = parts.pop() ?? "";
+
+      for (const part of parts) {
+        if (part.trim()) {
+          processBlock(part);
+        }
+      }
+    }
+
+    buffer += decoder.decode();
+    if (buffer.trim()) {
+      processBlock(buffer);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (streamError) {
+    throw streamError;
+  }
+
+  if (!finalResponse) {
+    throw new Error("Stream terminated without delivering a response.");
+  }
+
+  return finalResponse;
 }
 
 // ==========================

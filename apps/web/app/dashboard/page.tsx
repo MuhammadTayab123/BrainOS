@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   SignInButton,
@@ -9,7 +9,7 @@ import {
   useAuth,
 } from "@clerk/nextjs";
 import {
-  askAssistant,
+  streamAssistant,
   createConversation,
   listConversations,
   listMessages,
@@ -29,6 +29,9 @@ export default function Home() {
   const [initializing, setInitializing] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState("");
+  const [currentStatus, setCurrentStatus] = useState("BrainOS is thinking...");
+  const [activeTaskMessage, setActiveTaskMessage] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!isSignedIn) {
@@ -170,6 +173,13 @@ export default function Home() {
     }
   }
 
+  function handleCancelStream() {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+  }
+
   async function handleAskAssistant() {
     if (!message.trim() || !conversation || loading) {
       return;
@@ -177,9 +187,24 @@ export default function Home() {
 
     setLoading(true);
     setError("");
+    setCurrentStatus("BrainOS is thinking...");
+    setActiveTaskMessage(null);
 
     const userMessage = message.trim();
     setMessage("");
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    const tempUserMessage: Message = {
+      id: `temp-user-${Date.now()}`,
+      conversationId: conversation.id,
+      role: "USER",
+      content: userMessage,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempUserMessage]);
 
     try {
       const token = await getToken();
@@ -188,12 +213,31 @@ export default function Home() {
         throw new Error("Authentication token unavailable.");
       }
 
-      const result = await askAssistant(
+      const result = await streamAssistant(
         token,
         userMessage,
         {
           conversationId: conversation.id,
           enableMemoryRetrieval: false,
+          signal: abortController.signal,
+          onEvent: (event) => {
+            if (event.type === "state_changed") {
+              const state = event.data.state;
+              if (state === "THINKING") {
+                setCurrentStatus("BrainOS is thinking...");
+              } else if (state === "EXECUTING") {
+                setCurrentStatus("BrainOS is executing an action...");
+              } else if (state === "SPEAKING") {
+                setCurrentStatus("BrainOS is finalizing the response...");
+                setActiveTaskMessage(null);
+              }
+            } else if (event.type === "task_event") {
+              const taskEvent = event.data;
+              if (taskEvent.message) {
+                setActiveTaskMessage(taskEvent.message);
+              }
+            }
+          },
         },
       );
 
@@ -208,15 +252,24 @@ export default function Home() {
         setError("BrainOS returned an empty response.");
       }
     } catch (err) {
-      setMessage(userMessage);
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong.",
-      );
+      if (
+        (err instanceof DOMException && err.name === "AbortError") ||
+        (err instanceof Error && err.name === "AbortError")
+      ) {
+        setError("Request was cancelled.");
+      } else {
+        setMessage(userMessage);
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Something went wrong.",
+        );
+      }
     } finally {
+      abortControllerRef.current = null;
       setLoading(false);
+      setCurrentStatus("BrainOS is thinking...");
+      setActiveTaskMessage(null);
     }
   }
 
@@ -364,9 +417,17 @@ export default function Home() {
 
                     {loading && (
                       <div className="mr-auto max-w-2xl rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-                        <p className="text-sm text-zinc-500">
-                          BrainOS is thinking...
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-400" />
+                          <p className="text-sm font-medium text-zinc-300">
+                            {currentStatus}
+                          </p>
+                        </div>
+                        {activeTaskMessage && (
+                          <p className="mt-2 text-xs text-zinc-400">
+                            {activeTaskMessage}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -408,22 +469,34 @@ export default function Home() {
                           Enter to send · Shift+Enter for new line
                         </p>
 
-                        <button
-                          onClick={() =>
-                            void handleAskAssistant()
-                          }
-                          disabled={
-                            loading ||
-                            switching ||
-                            !conversation ||
-                            !message.trim()
-                          }
-                          className="rounded-lg bg-white px-5 py-2.5 font-medium text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          {loading
-                            ? "Thinking..."
-                            : "Send"}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {loading && (
+                            <button
+                              type="button"
+                              onClick={handleCancelStream}
+                              className="rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
+                            >
+                              Cancel
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() =>
+                              void handleAskAssistant()
+                            }
+                            disabled={
+                              loading ||
+                              switching ||
+                              !conversation ||
+                              !message.trim()
+                            }
+                            className="rounded-lg bg-white px-5 py-2.5 font-medium text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {loading
+                              ? "Thinking..."
+                              : "Send"}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
