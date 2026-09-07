@@ -4358,4 +4358,88 @@ git diff --check (0 warnings, CLEAN)
 
 ### 6. Git Checkpoint
 
-- Completed Mission 63
+- Code commit: `18ec102`
+- Checkpoint: `18ec102`
+
+---
+
+# 64. ADDITIVE UPDATE — PROVIDER-INDEPENDENT VOICE FOUNDATION
+
+**Updated:** 2026-09-07
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 64 — Provider-Independent Voice Foundation — COMPLETE
+
+Mission 64 implemented the provider-independent Voice Foundation domain, contracts, and orchestration service for BrainOS, establishing voice as a first-class interface while strictly preserving the single BrainOS intelligence, tool execution, memory retrieval, and security model.
+
+### 1. Goal and Scope
+
+- Define transport- and vendor-agnostic contracts for Speech-To-Text (`STTProvider`), Text-To-Speech (`TTSProvider`), and Voice Activity Detection (`VADProvider`).
+- Implement `VoiceService` to orchestrate session lifecycle, finalized transcript resolution, and TTS synthesis.
+- Enforce the **single-brain invariant**: voice interactions directly delegate to `AssistantService.ask()`, retaining existing memory search, document RAG, conversation tracking, and authorized tool calling loops.
+- Support full `AbortSignal` cancellation and interruption/barge-in lifecycle transitions.
+- Enforce strict server-derived user ownership, fail-closed access control, and untrusted transcript sanitization.
+- Add deterministic test-only mock providers (`MockSTTProvider`, `MockTTSProvider`, `MockVADProvider`).
+- Zero external audio/native dependencies, zero database migrations, and zero modifications to existing REST, SSE, or frontend chat logic.
+
+### 2. Key Implementations
+
+- **Voice Domain Types (`apps/backend/src/services/voice/voice.types.ts`)**: Defined `VoiceSession`, `VoiceSessionStatus`, `AudioChunk`, `STTOptions`, `STTResult`, `TTSOptions`, `TTSResult`, `VADFrame`, `VADResult`, `VoiceTurnInput`, and `VoiceTurnResult`.
+- **Provider Contracts (`apps/backend/src/services/voice/providers/`)**:
+  - `STTProvider`: `transcribe(audio: AudioChunk, options?: STTOptions): Promise<STTResult>`
+  - `TTSProvider`: `synthesize(text: string, options?: TTSOptions): Promise<TTSResult>`
+  - `VADProvider`: `processFrame(frame: VADFrame): Promise<VADResult>`
+- **Voice Orchestrator (`apps/backend/src/services/voice/voice.service.ts`)**:
+  - Session management: `createSession`, `getSession`, `endSession`, `interruptSession`.
+  - Turn processing: Validates server-derived `userId`, verifies session ownership, resolves finalized transcript (directly or via STT), delegates to `assistantService.ask()`, optionally synthesizes audio via TTS, and manages `AssistantRuntime` states (`LISTENING` -> `THINKING` -> `SPEAKING` -> `IDLE`).
+- **Cancellation & Interruption**: Inspects `AbortSignal` across all turn phases, immediately halts processing, and transitions session status to `INTERRUPTED` on abort.
+- **Deterministic Mock Providers (`apps/backend/src/services/voice/providers/mock/`)**: Test implementations with configurable responses, simulated delays, call tracking, and `AbortSignal` listener management.
+
+### 3. Security Review
+
+- **Server-Derived Identity**: `userId` is mandatory, non-empty, and validated; client-supplied identity overrides are rejected.
+- **Tenant Isolation**: Voice sessions enforce strict ownership (`session.userId === userId`); cross-tenant access attempts fail closed.
+- **Untrusted Transcript Sanitization**: Transcripts are treated as untrusted user input before invocation of `AssistantService`.
+- **Tool Authorization Preservation**: Any tools executed during voice turns pass through standard `ToolExecutor` and permission validation.
+- **Zero Sensitive Exposure**: Provider credentials, internal errors, and embeddings are never leaked to voice consumers.
+
+### 4. Implementation Files
+
+- `apps/backend/src/services/voice/voice.types.ts`: Voice domain and session types.
+- `apps/backend/src/services/voice/providers/stt.provider.ts`: STT provider interface.
+- `apps/backend/src/services/voice/providers/tts.provider.ts`: TTS provider interface.
+- `apps/backend/src/services/voice/providers/vad.provider.ts`: VAD provider interface.
+- `apps/backend/src/services/voice/providers/mock/mock-stt.provider.ts`: Deterministic STT mock.
+- `apps/backend/src/services/voice/providers/mock/mock-tts.provider.ts`: Deterministic TTS mock.
+- `apps/backend/src/services/voice/providers/mock/mock-vad.provider.ts`: Deterministic VAD mock.
+- `apps/backend/src/services/voice/providers/index.ts`: Provider exports.
+- `apps/backend/src/services/voice/voice.service.ts`: Voice orchestration service.
+- `apps/backend/src/services/voice/index.ts`: Voice service exports.
+- `apps/backend/test/voice/voice.service.test.ts`: 20 focused unit tests.
+
+### 5. Verification Completed
+
+```text
+Focused Voice Unit Tests:
+20/20 PASS (apps/backend/test/voice/voice.service.test.ts)
+
+Backend TypeScript Check:
+npm --prefix apps/backend run typecheck (0 errors, PASS)
+
+Full Backend Regression Suite:
+73/73 test files passed, 852/852 tests passed (0 failures)
+
+Frontend Unit Tests:
+56/56 PASS (apps/web/lib/brainos-client-api.test.ts)
+
+Next.js Production Build:
+npm --prefix apps/web run build (0 errors, 11/11 routes compiled successfully)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+```
+
+### 6. Git Checkpoint
+
+- Completed Mission 64
