@@ -29,3 +29,6 @@ docker-data/
 
 .env.test
 .aider*
+
+# Local developer tooling
+.local/

@@ -79,7 +79,7 @@ const envSchema = z.object({
   // ==========================
 
   VOICE_STT_PROVIDER: z
-    .enum(["mock", "process", "http"])
+    .enum(["mock", "process", "http", "whisper-cpp"])
     .default("mock"),
 
   VOICE_STT_PROCESS_COMMAND: z.string().optional(),
@@ -89,6 +89,12 @@ const envSchema = z.object({
   VOICE_STT_HTTP_ENDPOINT: z.string().optional(),
 
   VOICE_STT_HTTP_API_KEY: z.string().optional(),
+
+  VOICE_WHISPER_BIN_PATH: z.string().optional(),
+
+  VOICE_WHISPER_MODEL_PATH: z.string().optional(),
+
+  VOICE_WHISPER_THREADS: z.coerce.number().int().positive().optional(),
 
   VOICE_TTS_PROVIDER: z
     .enum(["mock", "process", "http"])

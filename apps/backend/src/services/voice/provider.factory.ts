@@ -14,9 +14,11 @@ import {
   ProcessSTTProvider,
   ProcessTTSConfig,
   ProcessTTSProvider,
+  WhisperCppSTTConfig,
+  WhisperCppSTTProvider,
 } from "./providers/adapters";
 
-export type VoiceProviderType = "mock" | "process" | "http";
+export type VoiceProviderType = "mock" | "process" | "http" | "whisper-cpp";
 
 export function createSTTProvider(
   type: string = env.VOICE_STT_PROVIDER ?? "mock",
@@ -56,6 +58,25 @@ export function createSTTProvider(
         timeoutMs: config?.timeoutMs as number | undefined,
       };
       return new HttpSTTProvider(httpConfig);
+    }
+
+    case "whisper-cpp": {
+      const whisperConfig: WhisperCppSTTConfig = {
+        binaryPath:
+          (config?.binaryPath as string) ??
+          env.VOICE_WHISPER_BIN_PATH ??
+          "",
+        modelPath:
+          (config?.modelPath as string) ??
+          env.VOICE_WHISPER_MODEL_PATH ??
+          "",
+        threads:
+          (config?.threads as number) ??
+          env.VOICE_WHISPER_THREADS,
+        timeoutMs: config?.timeoutMs as number | undefined,
+        tempDir: config?.tempDir as string | undefined,
+      };
+      return new WhisperCppSTTProvider(whisperConfig);
     }
 
     default:
