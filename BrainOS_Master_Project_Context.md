@@ -4657,3 +4657,54 @@ With Mission 68 complete, the backend voice subsystem is fully operational from 
   - `POST /api/v1/voice/turn/stream`: Streams turn over SSE (`state_changed`, `text_delta`, `voice_result`, `done`) with cancellation.
 - **Provider Layer**: Mock, Process, HTTP, Whisper.cpp STT (`whisper-cpp`), and Piper TTS (`piper`).
 - **Next Step (Mission 69)**: Web client / frontend voice integration, browser audio capture (Web Audio API / MediaRecorder), or audio streaming player components consuming `/api/v1/voice`.
+
+---
+
+# 69. ADDITIVE UPDATE — FRONTEND VOICE INTEGRATION
+
+**Updated:** 2026-09-08
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 69 — Frontend Voice Integration — COMPLETE
+
+Mission 69 implemented the frontend voice interface in the BrainOS web application, seamlessly connecting the user's browser microphone and audio playback to the authenticated backend Voice API (`/api/v1/voice`) while strictly preserving the single-brain intelligence, conversation context, and security model.
+
+### 1. Goal and Scope
+
+- Implement complete TypeScript Voice API client methods in `apps/web/lib/brainos-client-api.ts`:
+  - Typed contracts: `VoiceSession`, `VoiceSessionStatus`, `VoiceTurnResult`, `VoiceAudioPayload`, `VoiceTurnOptions`, `VoiceStreamEvent`, `StreamVoiceTurnOptions`.
+  - Session lifecycle: `createVoiceSession`, `getVoiceSession`, `interruptVoiceSession`, `endVoiceSession`.
+  - Turn execution: `processVoiceTurn` (synchronous) and `streamVoiceTurn` (SSE streaming parser supporting `state_changed`, `task_event`, `text_delta`, `voice_result`, `error`, `done`).
+- Implement native browser audio utilities in `apps/web/lib/voice-audio.ts`:
+  - Audio capture via `navigator.mediaDevices.getUserMedia` and `MediaRecorder`.
+  - Base64 encoding via `blobToBase64` with clean memory handling.
+  - Fail-safe track cleanup stopping microphone hardware on every success, cancellation, error, and timeout path.
+  - Native audio playback via `HTMLAudioElement` (`playAudioBase64`) supporting immediate cancellation (`.stop()`) and completion tracking.
+- Integrate voice interaction into the dashboard chat interface (`apps/web/app/dashboard/page.tsx`):
+  - Compact microphone control in the chat composer.
+  - Clear visual states for Recording (`Done` pulsing button), Transcribing / Thinking (`currentStatus`), and Speaking (`Stop Audio` active playback control).
+  - Preserved single-brain invariant: voice turns tie directly to the active `conversation.id` and render live transcript & assistant response in the unified conversation message feed.
+  - Universal cancellation: stopping or cancelling at any stage immediately halts recording, aborts inflight SSE streams, and terminates audio playback.
+  - Full preservation of existing text chat, streaming, and tool execution features.
+- Strict scope discipline: No wake words, no always-listening mode, no WebRTC, no phone integration, no raw PCM streaming, no server-side AEC worklets, no new external npm packages, and no database/schema changes.
+
+### 2. Implementation Files
+
+- `apps/web/lib/brainos-client-api.ts`: Added typed voice contracts, session lifecycle methods, and `streamVoiceTurn` SSE client parser.
+- `apps/web/lib/voice-audio.ts`: Created browser audio capture (`MediaRecorder`), base64 encoding, track cleanup, and audio playback (`HTMLAudioElement`) utilities.
+- `apps/web/app/dashboard/page.tsx`: Added microphone control to chat composer, recording/playback state management, optimistic transcription rendering, and stream cancellation.
+- `apps/web/lib/brainos-client-api.test.ts`: Added 9 focused tests for session CRUD, synchronous turns, SSE streaming event emission, error handling, and audio utilities.
+
+### 3. Verification Completed
+
+- Checkpoint before mission: `5fb672b`.
+- Frontend Unit Tests: 65/65 PASS (`npx vitest run apps/web/lib/brainos-client-api.test.ts`).
+- Next.js Production Build: 11/11 routes compiled, 0 errors (`npm --prefix apps/web run build`).
+- Full Backend Regression Suite: 77/77 test files passed, 951/951 tests passed (0 failures) (`npm --prefix apps/backend test`).
+- Git Diff Check: Clean (`git diff --check`).
+
+### 4. Git Checkpoint
+
+- Commit: `feat(voice): integrate frontend voice interface`
+- Status: Frontend Voice Integration complete and verified.

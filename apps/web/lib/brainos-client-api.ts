@@ -30,7 +30,7 @@ export interface AssistantResponse {
 }
 
 export interface AssistantStateSnapshot {
-  state: "IDLE" | "THINKING" | "EXECUTING" | "SPEAKING" | "ERROR";
+  state: "IDLE" | "LISTENING" | "THINKING" | "EXECUTING" | "SPEAKING" | "ERROR";
   activeTaskId: string | null;
 }
 
@@ -1310,4 +1310,319 @@ export async function deleteAutomation(
   );
 
   return parseResponse<{ id: string }>(response);
+}
+
+// ==========================
+// Voice API (Mission 69)
+// ==========================
+
+export type VoiceSessionStatus =
+  | "IDLE"
+  | "LISTENING"
+  | "PROCESSING"
+  | "SPEAKING"
+  | "INTERRUPTED"
+  | "ERROR"
+  | "CLOSED";
+
+export interface VoiceSession {
+  id: string;
+  userId: string;
+  conversationId?: string;
+  status: VoiceSessionStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VoiceAudioPayload {
+  data: string; // Base64 encoded audio
+  mimeType?: string;
+  sampleRate?: number;
+  channels?: number;
+  isFinal?: boolean;
+}
+
+export interface SerializedTTSResult {
+  audioBase64: string;
+  mimeType: string;
+  durationMs?: number;
+  characterCount?: number;
+}
+
+export interface VoiceTurnResult {
+  sessionId: string;
+  conversationId?: string;
+  transcript: string;
+  assistantResponse: AssistantResponse;
+  audioResponse?: SerializedTTSResult;
+  status: VoiceSessionStatus;
+}
+
+export interface VoiceTurnOptions {
+  sessionId?: string;
+  conversationId?: string;
+  transcript?: string;
+  audio?: VoiceAudioPayload;
+  synthesizeSpeech?: boolean;
+  ttsOptions?: {
+    voiceId?: string;
+    speed?: number;
+    pitch?: number;
+    format?: string;
+  };
+  sttOptions?: {
+    language?: string;
+    prompt?: string;
+    temperature?: number;
+  };
+  enableMemoryRetrieval?: boolean;
+  enableDocumentRetrieval?: boolean;
+  authorizedComputerActions?: string[];
+}
+
+export type VoiceStreamEvent =
+  | { type: "state_changed"; data: AssistantStateSnapshot }
+  | { type: "task_event"; data: AssistantTaskEvent }
+  | { type: "text_delta"; data: { delta: string } }
+  | { type: "voice_result"; data: VoiceTurnResult }
+  | { type: "error"; data: { message: string } }
+  | { type: "done"; data: Record<string, unknown> };
+
+export interface StreamVoiceTurnOptions extends VoiceTurnOptions {
+  signal?: AbortSignal;
+  onEvent?: (event: VoiceStreamEvent) => void;
+}
+
+export async function createVoiceSession(
+  token: string,
+  conversationId?: string,
+): Promise<VoiceSession> {
+  const response = await fetch(`${API_URL}/api/v1/voice/sessions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ conversationId }),
+  });
+
+  return parseResponse<VoiceSession>(response);
+}
+
+export async function getVoiceSession(
+  token: string,
+  sessionId: string,
+): Promise<VoiceSession> {
+  const response = await fetch(
+    `${API_URL}/api/v1/voice/sessions/${encodeURIComponent(sessionId)}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return parseResponse<VoiceSession>(response);
+}
+
+export async function interruptVoiceSession(
+  token: string,
+  sessionId: string,
+): Promise<{ interrupted: boolean }> {
+  const response = await fetch(
+    `${API_URL}/api/v1/voice/sessions/${encodeURIComponent(sessionId)}/interrupt`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return parseResponse<{ interrupted: boolean }>(response);
+}
+
+export async function endVoiceSession(
+  token: string,
+  sessionId: string,
+): Promise<{ ended: boolean }> {
+  const response = await fetch(
+    `${API_URL}/api/v1/voice/sessions/${encodeURIComponent(sessionId)}/end`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return parseResponse<{ ended: boolean }>(response);
+}
+
+export async function processVoiceTurn(
+  token: string,
+  options: VoiceTurnOptions,
+): Promise<VoiceTurnResult> {
+  const response = await fetch(`${API_URL}/api/v1/voice/turn`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(options),
+  });
+
+  return parseResponse<VoiceTurnResult>(response);
+}
+
+export async function streamVoiceTurn(
+  token: string,
+  options: StreamVoiceTurnOptions,
+): Promise<VoiceTurnResult> {
+  const { signal, onEvent, ...requestOptions } = options ?? {};
+
+  const response = await fetch(`${API_URL}/api/v1/voice/turn/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(requestOptions),
+    signal,
+  });
+
+  if (!response.ok) {
+    let errorMessage = `BrainOS voice stream request failed: ${response.status} ${response.statusText}`;
+    try {
+      const errorJson = await response.json();
+      if (errorJson?.error?.message) {
+        errorMessage = errorJson.error.message;
+      }
+    } catch {
+      // Fallback to generic message
+    }
+    throw new Error(errorMessage);
+  }
+
+  if (!response.body) {
+    throw new Error("Streaming response body is not readable.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalResult: VoiceTurnResult | null = null;
+  let streamError: Error | null = null;
+
+  const processBlock = (block: string) => {
+    const lines = block.split(/\r?\n/);
+    let eventType = "message";
+    let dataStr = "";
+    let hasData = false;
+
+    for (const line of lines) {
+      if (line.startsWith("event:")) {
+        eventType = line.slice(6).trim();
+      } else if (line.startsWith("data:")) {
+        const value = line.slice(5).trim();
+        dataStr = dataStr ? `${dataStr}\n${value}` : value;
+        hasData = true;
+      }
+    }
+
+    if (!hasData && eventType === "message") {
+      return;
+    }
+
+    let parsedData: unknown = dataStr;
+    if (dataStr) {
+      try {
+        parsedData = JSON.parse(dataStr);
+      } catch {
+        // Fall back to raw string
+      }
+    }
+
+    if (eventType === "state_changed") {
+      const typedEvent: VoiceStreamEvent = {
+        type: "state_changed",
+        data: parsedData as AssistantStateSnapshot,
+      };
+      onEvent?.(typedEvent);
+    } else if (eventType === "task_event") {
+      const typedEvent: VoiceStreamEvent = {
+        type: "task_event",
+        data: parsedData as AssistantTaskEvent,
+      };
+      onEvent?.(typedEvent);
+    } else if (eventType === "text_delta") {
+      const deltaData = (parsedData as { delta?: string }) ?? {};
+      const delta = typeof deltaData.delta === "string" ? deltaData.delta : "";
+      const typedEvent: VoiceStreamEvent = {
+        type: "text_delta",
+        data: { delta },
+      };
+      onEvent?.(typedEvent);
+    } else if (eventType === "voice_result") {
+      finalResult = parsedData as VoiceTurnResult;
+      const typedEvent: VoiceStreamEvent = {
+        type: "voice_result",
+        data: finalResult,
+      };
+      onEvent?.(typedEvent);
+    } else if (eventType === "error") {
+      const errorData = (parsedData as { message?: string }) ?? {};
+      streamError = new Error(errorData.message || "Voice stream failed.");
+      const typedEvent: VoiceStreamEvent = {
+        type: "error",
+        data: { message: streamError.message },
+      };
+      onEvent?.(typedEvent);
+    } else if (eventType === "done") {
+      const typedEvent: VoiceStreamEvent = {
+        type: "done",
+        data: (parsedData as Record<string, unknown>) ?? {},
+      };
+      onEvent?.(typedEvent);
+    }
+  };
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+
+      const parts = buffer.split(/(?:\r?\n){2}/);
+      buffer = parts.pop() ?? "";
+
+      for (const part of parts) {
+        if (part.trim()) {
+          processBlock(part);
+        }
+      }
+    }
+
+    buffer += decoder.decode();
+    if (buffer.trim()) {
+      processBlock(buffer);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (streamError) {
+    throw streamError;
+  }
+
+  if (!finalResult) {
+    throw new Error("Voice stream completed without returning a voice result.");
+  }
+
+  return finalResult;
 }

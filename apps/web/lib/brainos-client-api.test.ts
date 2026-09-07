@@ -36,7 +36,15 @@ let updateAutomation: typeof import("./brainos-client-api").updateAutomation;
 let pauseAutomation: typeof import("./brainos-client-api").pauseAutomation;
 let resumeAutomation: typeof import("./brainos-client-api").resumeAutomation;
 let deleteAutomation: typeof import("./brainos-client-api").deleteAutomation;
+let createVoiceSession: typeof import("./brainos-client-api").createVoiceSession;
+let getVoiceSession: typeof import("./brainos-client-api").getVoiceSession;
+let interruptVoiceSession: typeof import("./brainos-client-api").interruptVoiceSession;
+let endVoiceSession: typeof import("./brainos-client-api").endVoiceSession;
+let processVoiceTurn: typeof import("./brainos-client-api").processVoiceTurn;
+let streamVoiceTurn: typeof import("./brainos-client-api").streamVoiceTurn;
 type AssistantStreamEvent = import("./brainos-client-api").AssistantStreamEvent;
+type VoiceStreamEvent = import("./brainos-client-api").VoiceStreamEvent;
+type VoiceTurnResult = import("./brainos-client-api").VoiceTurnResult;
 
 beforeAll(async () => {
   process.env.NEXT_PUBLIC_BRAINOS_API_URL = "http://localhost:3001";
@@ -77,6 +85,12 @@ beforeAll(async () => {
   pauseAutomation = mod.pauseAutomation;
   resumeAutomation = mod.resumeAutomation;
   deleteAutomation = mod.deleteAutomation;
+  createVoiceSession = mod.createVoiceSession;
+  getVoiceSession = mod.getVoiceSession;
+  interruptVoiceSession = mod.interruptVoiceSession;
+  endVoiceSession = mod.endVoiceSession;
+  processVoiceTurn = mod.processVoiceTurn;
+  streamVoiceTurn = mod.streamVoiceTurn;
 });
 
 describe("streamAssistant (Frontend SSE Client)", () => {
@@ -2105,5 +2119,274 @@ describe("Document Semantic Search API Client", () => {
     await expect(
       searchDocumentChunks("expired-token", "query"),
     ).rejects.toThrow("Authentication token is invalid or expired.");
+  });
+});
+
+describe("Voice API Client (Mission 69)", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function createMockReadableStream(chunks: string[]): ReadableStream<Uint8Array> {
+    const encoder = new TextEncoder();
+    let index = 0;
+
+    return new ReadableStream({
+      pull(controller) {
+        if (index < chunks.length) {
+          controller.enqueue(encoder.encode(chunks[index]));
+          index++;
+        } else {
+          controller.close();
+        }
+      },
+    });
+  }
+
+  describe("Session Lifecycle", () => {
+    it("1. createVoiceSession: sends POST with conversationId and parses response", async () => {
+      let capturedUrl = "";
+      let capturedHeaders: any = {};
+      let capturedBody: any = {};
+
+      globalThis.fetch = vi.fn().mockImplementation((url, init) => {
+        capturedUrl = url.toString();
+        capturedHeaders = init?.headers;
+        capturedBody = JSON.parse(init?.body as string);
+
+        return Promise.resolve({
+          ok: true,
+          status: 201,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: {
+                id: "voice-sess-1",
+                userId: "user-123",
+                conversationId: "conv-abc",
+                status: "IDLE",
+                createdAt: "2026-09-08T00:00:00.000Z",
+                updatedAt: "2026-09-08T00:00:00.000Z",
+              },
+            }),
+        });
+      });
+
+      const session = await createVoiceSession("test-token", "conv-abc");
+
+      expect(capturedUrl).toBe("http://localhost:3001/api/v1/voice/sessions");
+      expect(capturedHeaders["Authorization"]).toBe("Bearer test-token");
+      expect(capturedBody).toEqual({ conversationId: "conv-abc" });
+      expect(session.id).toBe("voice-sess-1");
+      expect(session.status).toBe("IDLE");
+    });
+
+    it("2. getVoiceSession: sends GET with sessionId param", async () => {
+      let capturedUrl = "";
+      let capturedHeaders: any = {};
+
+      globalThis.fetch = vi.fn().mockImplementation((url, init) => {
+        capturedUrl = url.toString();
+        capturedHeaders = init?.headers;
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: {
+                id: "voice-sess-1",
+                userId: "user-123",
+                status: "IDLE",
+                createdAt: "2026-09-08T00:00:00.000Z",
+                updatedAt: "2026-09-08T00:00:00.000Z",
+              },
+            }),
+        });
+      });
+
+      const session = await getVoiceSession("test-token", "voice-sess-1");
+
+      expect(capturedUrl).toBe("http://localhost:3001/api/v1/voice/sessions/voice-sess-1");
+      expect(capturedHeaders["Authorization"]).toBe("Bearer test-token");
+      expect(session.id).toBe("voice-sess-1");
+    });
+
+    it("3. interruptVoiceSession: sends POST to /interrupt", async () => {
+      let capturedUrl = "";
+
+      globalThis.fetch = vi.fn().mockImplementation((url) => {
+        capturedUrl = url.toString();
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: { interrupted: true },
+            }),
+        });
+      });
+
+      const res = await interruptVoiceSession("test-token", "voice-sess-1");
+      expect(capturedUrl).toBe("http://localhost:3001/api/v1/voice/sessions/voice-sess-1/interrupt");
+      expect(res.interrupted).toBe(true);
+    });
+
+    it("4. endVoiceSession: sends POST to /end", async () => {
+      let capturedUrl = "";
+
+      globalThis.fetch = vi.fn().mockImplementation((url) => {
+        capturedUrl = url.toString();
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: { ended: true },
+            }),
+        });
+      });
+
+      const res = await endVoiceSession("test-token", "voice-sess-1");
+      expect(capturedUrl).toBe("http://localhost:3001/api/v1/voice/sessions/voice-sess-1/end");
+      expect(res.ended).toBe(true);
+    });
+  });
+
+  describe("processVoiceTurn", () => {
+    it("sends POST to /turn with audio and synthesizeSpeech", async () => {
+      let capturedUrl = "";
+      let capturedBody: any = {};
+
+      globalThis.fetch = vi.fn().mockImplementation((url, init) => {
+        capturedUrl = url.toString();
+        capturedBody = JSON.parse(init?.body as string);
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: {
+                sessionId: "sess-1",
+                transcript: "Hello BrainOS",
+                assistantResponse: {
+                  text: "Hello! How can I help?",
+                  model: "omniroute/gpt-4o",
+                  provider: "omniroute",
+                  retrievedMemories: [],
+                },
+                audioResponse: {
+                  audioBase64: "UklGRg==",
+                  mimeType: "audio/wav",
+                },
+                status: "IDLE",
+              },
+            }),
+        });
+      });
+
+      const result = await processVoiceTurn("test-token", {
+        conversationId: "conv-1",
+        audio: {
+          data: "UklGRg==",
+          mimeType: "audio/wav",
+        },
+        synthesizeSpeech: true,
+      });
+
+      expect(capturedUrl).toBe("http://localhost:3001/api/v1/voice/turn");
+      expect(capturedBody.conversationId).toBe("conv-1");
+      expect(capturedBody.synthesizeSpeech).toBe(true);
+      expect(result.transcript).toBe("Hello BrainOS");
+      expect(result.audioResponse?.audioBase64).toBe("UklGRg==");
+    });
+  });
+
+  describe("streamVoiceTurn (SSE Client)", () => {
+    it("streams events and parses voice_result properly", async () => {
+      const mockSseStream = [
+        "event: state_changed\ndata: {\"state\":\"LISTENING\",\"activeTaskId\":null}\n\n",
+        "event: state_changed\ndata: {\"state\":\"THINKING\",\"activeTaskId\":null}\n\n",
+        "event: text_delta\ndata: {\"delta\":\"Hello \"}\n\n",
+        "event: text_delta\ndata: {\"delta\":\"world!\"}\n\n",
+        "event: voice_result\ndata: {\"sessionId\":\"sess-1\",\"transcript\":\"Say hello\",\"assistantResponse\":{\"text\":\"Hello world!\",\"model\":\"gpt-4o\",\"provider\":\"omniroute\",\"retrievedMemories\":[]},\"audioResponse\":{\"audioBase64\":\"QVdBVg==\",\"mimeType\":\"audio/wav\"},\"status\":\"IDLE\"}\n\n",
+        "event: done\ndata: {}\n\n",
+      ];
+
+      const emittedEvents: VoiceStreamEvent[] = [];
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "Content-Type": "text/event-stream" }),
+        body: createMockReadableStream(mockSseStream),
+      });
+
+      const result = await streamVoiceTurn("test-token", {
+        transcript: "Say hello",
+        synthesizeSpeech: true,
+        onEvent: (event) => {
+          emittedEvents.push(event);
+        },
+      });
+
+      expect(result.transcript).toBe("Say hello");
+      expect(result.assistantResponse.text).toBe("Hello world!");
+      expect(result.audioResponse?.audioBase64).toBe("QVdBVg==");
+
+      expect(emittedEvents).toHaveLength(6);
+      expect(emittedEvents[0].type).toBe("state_changed");
+      expect(emittedEvents[2].type).toBe("text_delta");
+      expect(emittedEvents[4].type).toBe("voice_result");
+      expect(emittedEvents[5].type).toBe("done");
+    });
+
+    it("throws error when stream emits an error event", async () => {
+      const mockSseStream = [
+        "event: error\ndata: {\"message\":\"Voice provider timeout occurred.\"}\n\n",
+        "event: done\ndata: {}\n\n",
+      ];
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "Content-Type": "text/event-stream" }),
+        body: createMockReadableStream(mockSseStream),
+      });
+
+      await expect(
+        streamVoiceTurn("test-token", { transcript: "Failing query" }),
+      ).rejects.toThrow("Voice provider timeout occurred.");
+    });
+  });
+});
+
+describe("Voice Audio Utilities (Mission 69)", () => {
+  it("blobToBase64: converts Blob to base64 string", async () => {
+    const { blobToBase64 } = await import("./voice-audio");
+
+    const testBlob = new Blob(["test audio content"], { type: "text/plain" });
+    const base64 = await blobToBase64(testBlob);
+
+    expect(typeof base64).toBe("string");
+    expect(base64.length).toBeGreaterThan(0);
+    expect(atob(base64)).toBe("test audio content");
+  });
+
+  it("isAudioRecordingSupported: returns boolean in environment", async () => {
+    const { isAudioRecordingSupported } = await import("./voice-audio");
+    const supported = isAudioRecordingSupported();
+    expect(typeof supported).toBe("boolean");
   });
 });

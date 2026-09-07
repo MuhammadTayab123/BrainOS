@@ -11,6 +11,7 @@ import {
 import { DashboardNav } from "../../components/dashboard-nav";
 import {
   streamAssistant,
+  streamVoiceTurn,
   createConversation,
   listConversations,
   getConversation,
@@ -19,6 +20,12 @@ import {
   type Conversation,
   type Message,
 } from "../../lib/brainos-client-api";
+import {
+  startVoiceRecording,
+  playAudioBase64,
+  type VoiceRecorderController,
+  type AudioPlaybackController,
+} from "../../lib/voice-audio";
 
 export default function Home() {
   const { getToken, isSignedIn } = useAuth();
@@ -39,7 +46,11 @@ export default function Home() {
   const [streamingMessage, setStreamingMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const voiceRecorderRef = useRef<VoiceRecorderController | null>(null);
+  const audioPlaybackRef = useRef<AudioPlaybackController | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -278,9 +289,171 @@ export default function Home() {
   }
 
   function handleCancelStream() {
+    if (audioPlaybackRef.current) {
+      audioPlaybackRef.current.stop();
+      audioPlaybackRef.current = null;
+      setIsPlayingAudio(false);
+    }
+    if (voiceRecorderRef.current) {
+      voiceRecorderRef.current.cancel();
+      voiceRecorderRef.current = null;
+      setIsRecording(false);
+    }
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
+    }
+    setLoading(false);
+    setStreamingMessage(null);
+  }
+
+  async function handleToggleVoiceRecording() {
+    if (isRecording) {
+      // Stop recording and send audio turn
+      if (!voiceRecorderRef.current || !conversation || loading || switching) {
+        return;
+      }
+
+      setError("");
+      setCurrentStatus("BrainOS is transcribing & thinking...");
+      setIsRecording(false);
+      setLoading(true);
+      setStreamingMessage("");
+      setActiveTaskMessage(null);
+      isNearBottomRef.current = true;
+
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
+      const tempUserMsgId = `temp-${Date.now()}`;
+      const optimisticUserMessage: Message = {
+        id: tempUserMsgId,
+        conversationId: conversation.id,
+        role: "USER",
+        content: "🎙️ [Processing voice input...]",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, optimisticUserMessage]);
+
+      try {
+        const audioResult = await voiceRecorderRef.current.stop();
+        voiceRecorderRef.current = null;
+
+        const token = await getToken();
+        if (!token) {
+          throw new Error("Authentication token unavailable.");
+        }
+
+        const turnResult = await streamVoiceTurn(token, {
+          conversationId: conversation.id,
+          audio: {
+            data: audioResult.base64Data,
+            mimeType: audioResult.mimeType,
+          },
+          synthesizeSpeech: true,
+          signal: abortController.signal,
+          onEvent: (event) => {
+            if (event.type === "state_changed") {
+              const state = event.data.state;
+              if (state === "LISTENING") {
+                setCurrentStatus("BrainOS is listening...");
+              } else if (state === "THINKING") {
+                setCurrentStatus("BrainOS is thinking...");
+              } else if (state === "EXECUTING") {
+                setCurrentStatus("BrainOS is executing an action...");
+              } else if (state === "SPEAKING") {
+                setCurrentStatus("BrainOS is speaking...");
+                setActiveTaskMessage(null);
+              }
+            } else if (event.type === "task_event") {
+              const taskEvent = event.data;
+              if (taskEvent.message) {
+                setActiveTaskMessage(taskEvent.message);
+              }
+            } else if (event.type === "text_delta") {
+              if (event.data.delta) {
+                setStreamingMessage((prev) => (prev ? prev + event.data.delta : event.data.delta));
+              }
+            } else if (event.type === "voice_result") {
+              if (event.data.transcript) {
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === tempUserMsgId
+                      ? { ...msg, content: event.data.transcript }
+                      : msg,
+                  ),
+                );
+              }
+            }
+          },
+        });
+
+        const updatedMessages = await listMessages(token, conversation.id);
+        setMessages(updatedMessages);
+        setStreamingMessage(null);
+
+        if (turnResult.audioResponse?.audioBase64) {
+          const playback = playAudioBase64(
+            turnResult.audioResponse.audioBase64,
+            turnResult.audioResponse.mimeType,
+          );
+          audioPlaybackRef.current = playback;
+          setIsPlayingAudio(true);
+          playback.promise
+            .catch(() => {})
+            .finally(() => {
+              setIsPlayingAudio(false);
+              audioPlaybackRef.current = null;
+            });
+        }
+
+        try {
+          const updatedConversation = await getConversation(token, conversation.id);
+          if (updatedConversation) {
+            setConversation((current) =>
+              current?.id === conversation.id ? updatedConversation : current,
+            );
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.id === conversation.id ? updatedConversation : c,
+              ),
+            );
+          }
+        } catch {
+          // Non-blocking metadata refresh
+        }
+      } catch (err: any) {
+        setMessages((prev) => prev.filter((msg) => msg.id !== tempUserMsgId));
+        if (
+          (err instanceof DOMException && err.name === "AbortError") ||
+          (err instanceof Error && err.name === "AbortError")
+        ) {
+          setError("Voice request was cancelled.");
+        } else {
+          setError(err instanceof Error ? err.message : "Voice processing failed.");
+        }
+      } finally {
+        abortControllerRef.current = null;
+        voiceRecorderRef.current = null;
+        setLoading(false);
+        setStreamingMessage(null);
+      }
+    } else {
+      // Start recording
+      if (!conversation || loading || switching || isPlayingAudio) {
+        return;
+      }
+
+      setError("");
+      try {
+        const recorder = await startVoiceRecording({ maxDurationMs: 60000 });
+        voiceRecorderRef.current = recorder;
+        setIsRecording(true);
+      } catch (err: any) {
+        setError(err instanceof Error ? err.message : "Failed to access microphone.");
+      }
     }
   }
 
@@ -769,6 +942,53 @@ export default function Home() {
                       />
 
                       <div className="flex items-center gap-1.5 shrink-0 self-center">
+                        {/* Audio playback active indicator with stop control */}
+                        {isPlayingAudio && (
+                          <button
+                            type="button"
+                            onClick={handleCancelStream}
+                            className="flex items-center gap-1.5 rounded-lg border border-blue-500/50 bg-blue-950/60 px-2.5 py-1.5 text-xs font-medium text-blue-300 transition hover:bg-blue-900/80 hover:text-white shadow-sm"
+                            title="Stop voice audio playback"
+                            aria-label="Stop audio"
+                          >
+                            <span className="inline-block h-2 w-2 animate-ping rounded-full bg-blue-400" />
+                            <span>Stop Audio</span>
+                          </button>
+                        )}
+
+                        {/* Microphone Record / Stop Button */}
+                        {isRecording ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleToggleVoiceRecording()}
+                            className="flex items-center gap-1.5 rounded-lg border border-red-500/60 bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700 shadow-sm animate-pulse"
+                            title="Stop recording and send"
+                            aria-label="Stop recording"
+                          >
+                            <span className="inline-block h-2 w-2 rounded-full bg-white animate-ping" />
+                            <span>Done</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => void handleToggleVoiceRecording()}
+                            disabled={loading || switching || !conversation}
+                            title="Record voice message"
+                            aria-label="Record voice message"
+                            className="flex items-center justify-center rounded-lg border border-zinc-700 bg-zinc-800/80 p-2 text-zinc-300 transition hover:bg-zinc-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="currentColor"
+                              className="h-4 w-4"
+                            >
+                              <path d="M8.25 4.5a3.75 3.75 0 117.5 0v8.25a3.75 3.75 0 11-7.5 0V4.5z" />
+                              <path d="M6 10.5a.75.75 0 01.75.75v1.5a5.25 5.25 0 1010.5 0v-1.5a.75.75 0 011.5 0v1.5a6.751 6.751 0 01-6 6.709v2.291h3a.75.75 0 010 1.5h-7.5a.75.75 0 010-1.5h3v-2.291a6.751 6.751 0 01-6-6.709v-1.5A.75.75 0 016 10.5z" />
+                            </svg>
+                          </button>
+                        )}
+
                         {loading && (
                           <button
                             type="button"
@@ -781,7 +1001,7 @@ export default function Home() {
 
                         <button
                           onClick={() => void handleAskAssistant()}
-                          disabled={loading || switching || !conversation || !message.trim()}
+                          disabled={loading || switching || !conversation || !message.trim() || isRecording}
                           title="Send message (Enter)"
                           aria-label="Send message"
                           className="flex items-center justify-center rounded-lg bg-white px-3.5 py-1.5 text-xs md:text-sm font-medium text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
