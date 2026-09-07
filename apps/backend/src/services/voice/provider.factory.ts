@@ -1,3 +1,4 @@
+import type * as childProcess from "node:child_process";
 import { env } from "../../config/env";
 import { STTProvider } from "./providers/stt.provider";
 import { TTSProvider } from "./providers/tts.provider";
@@ -16,9 +17,11 @@ import {
   ProcessTTSProvider,
   WhisperCppSTTConfig,
   WhisperCppSTTProvider,
+  PiperTTSConfig,
+  PiperTTSProvider,
 } from "./providers/adapters";
 
-export type VoiceProviderType = "mock" | "process" | "http" | "whisper-cpp";
+export type VoiceProviderType = "mock" | "process" | "http" | "whisper-cpp" | "piper";
 
 export function createSTTProvider(
   type: string = env.VOICE_STT_PROVIDER ?? "mock",
@@ -126,6 +129,45 @@ export function createTTSProvider(
         timeoutMs: config?.timeoutMs as number | undefined,
       };
       return new HttpTTSProvider(httpConfig);
+    }
+
+    case "piper": {
+      const piperConfig: PiperTTSConfig = {
+        binaryPath:
+          (config?.binaryPath as string) ??
+          env.VOICE_PIPER_BIN_PATH ??
+          "",
+        args:
+          (config?.args as string[]) ??
+          (env.VOICE_PIPER_ARGS
+            ? env.VOICE_PIPER_ARGS.split(" ").filter(Boolean)
+            : []),
+        modelPath:
+          (config?.modelPath as string) ??
+          env.VOICE_PIPER_MODEL_PATH ??
+          "",
+        configPath:
+          (config?.configPath as string) ??
+          env.VOICE_PIPER_CONFIG_PATH,
+        speaker:
+          (config?.speaker as number) ??
+          env.VOICE_PIPER_SPEAKER,
+        lengthScale:
+          (config?.lengthScale as number) ??
+          env.VOICE_PIPER_LENGTH_SCALE,
+        noiseScale:
+          (config?.noiseScale as number) ??
+          env.VOICE_PIPER_NOISE_SCALE,
+        noiseW:
+          (config?.noiseW as number) ??
+          env.VOICE_PIPER_NOISE_W,
+        sentenceSilenceSeconds:
+          (config?.sentenceSilenceSeconds as number) ??
+          env.VOICE_PIPER_SENTENCE_SILENCE,
+        timeoutMs: config?.timeoutMs as number | undefined,
+        spawnFn: config?.spawnFn as typeof childProcess.spawn | undefined,
+      };
+      return new PiperTTSProvider(piperConfig);
     }
 
     default:

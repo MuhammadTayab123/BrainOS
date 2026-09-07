@@ -97,7 +97,7 @@ const envSchema = z.object({
   VOICE_WHISPER_THREADS: z.coerce.number().int().positive().optional(),
 
   VOICE_TTS_PROVIDER: z
-    .enum(["mock", "process", "http"])
+    .enum(["mock", "process", "http", "piper"])
     .default("mock"),
 
   VOICE_TTS_PROCESS_COMMAND: z.string().optional(),
@@ -107,6 +107,24 @@ const envSchema = z.object({
   VOICE_TTS_HTTP_ENDPOINT: z.string().optional(),
 
   VOICE_TTS_HTTP_API_KEY: z.string().optional(),
+
+  VOICE_PIPER_BIN_PATH: z.string().optional(),
+
+  VOICE_PIPER_ARGS: z.string().optional(),
+
+  VOICE_PIPER_MODEL_PATH: z.string().optional(),
+
+  VOICE_PIPER_CONFIG_PATH: z.string().optional(),
+
+  VOICE_PIPER_SPEAKER: z.coerce.number().int().nonnegative().optional(),
+
+  VOICE_PIPER_LENGTH_SCALE: z.coerce.number().positive().optional(),
+
+  VOICE_PIPER_NOISE_SCALE: z.coerce.number().positive().optional(),
+
+  VOICE_PIPER_NOISE_W: z.coerce.number().positive().optional(),
+
+  VOICE_PIPER_SENTENCE_SILENCE: z.coerce.number().nonnegative().optional(),
 
   VOICE_VAD_PROVIDER: z
     .enum(["mock"])

@@ -4520,3 +4520,83 @@ git diff --check (0 warnings, CLEAN)
 ### 6. Git Checkpoint
 
 - Completed Mission 65
+
+---
+
+# 66. ADDITIVE UPDATE — LOCAL WHISPER.CPP SPEECH-TO-TEXT ADAPTER
+
+**Updated:** 2026-09-07
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 66 — Local whisper.cpp STT Integration — COMPLETE
+
+Mission 66 integrated a real local speech-to-text adapter using `whisper.cpp`, implementing the existing `STTProvider` contract while keeping `VoiceService`, `AssistantService`, and frontend/DB interfaces strictly decoupled.
+
+### 1. Goal and Scope
+
+- Implement `WhisperCppSTTProvider` implementing `STTProvider`.
+- Invoke the whisper.cpp CLI directly via `spawn` (`shell: false`).
+- Convert input `AudioChunk.data` to a temporary `.wav` file, passing `-f <tempFile>` and model path `-m <modelPath>`.
+- Support configurable thread count (`-t`), language (`-l`), and disable CLI print overhead (`-nt`, `-np`).
+- Enforce strict 8 KB bounding on captured `stderr` to prevent unbounded memory allocation.
+- Enforce fail-closed temporary audio cleanup with non-`ENOENT` error propagation.
+- Support `AbortSignal` cancellation and timeout termination via `SIGTERM`.
+- Add `"whisper-cpp"` to provider factory and `VOICE_WHISPER_*` configuration to `apps/backend/src/config/env.ts`.
+
+### 2. Implementation Files
+
+- `apps/backend/src/services/voice/providers/adapters/whisper-cpp-stt.provider.ts`: Local whisper.cpp STT provider.
+- `apps/backend/src/services/voice/providers/adapters/index.ts`: Adapter export.
+- `apps/backend/src/services/voice/provider.factory.ts`: Added `"whisper-cpp"` STT provider case.
+- `apps/backend/src/config/env.ts`: Added `VOICE_WHISPER_BIN_PATH`, `VOICE_WHISPER_MODEL_PATH`, `VOICE_WHISPER_THREADS`.
+- `apps/backend/test/voice/whisper-cpp.test.ts`: 17 focused unit tests.
+
+### 3. Verification Completed
+
+- Focused whisper-cpp unit tests: 17/17 PASS.
+- Full backend regression: 75/75 test files passed, 895/895 tests passed.
+- Backend typecheck: 0 errors.
+- Checkpoint commit: `ae10beb feat(voice): add local whisper cpp STT`.
+
+---
+
+# 67. ADDITIVE UPDATE — LOCAL PIPER TEXT-TO-SPEECH ADAPTER
+
+**Updated:** 2026-09-07
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 67 — Local Piper TTS Integration — COMPLETE
+
+Mission 67 implemented a real, local, high-performance neural Text-To-Speech adapter using Piper (`PiperTTSProvider`), implementing the existing `TTSProvider` contract without external dependencies or architectural changes.
+
+### 1. Goal and Scope
+
+- Implement `PiperTTSProvider` implementing `TTSProvider`.
+- Execute Piper directly via `spawn` (`shell: false`) with configurable binary and model paths.
+- Support optional command `args` prepended before Piper flags (supporting `python.exe -m piper` execution).
+- Pipe text input through `stdin` and generate valid RIFF/WAVE audio on disk with fail-closed cleanup in `finally`.
+- Map generic `TTSOptions.voiceId` to Piper's `--speaker` parameter with strict non-negative numeric validation.
+- Correctly translate generic `TTSOptions.speed` to Piper's duration-based `--length-scale` semantics (`lengthScale = 1.0 / speed`).
+- Validate output audio integrity by enforcing a valid RIFF/WAVE header (minimum 12 bytes, `RIFF` and `WAVE` magic bytes).
+- Fail closed for unsupported format (rejecting anything other than `"audio/wav"`), unsupported pitch, empty text, non-zero exit codes, or empty audio output.
+- Enforce 8 KB bounding on captured `stderr` (`MAX_PIPER_STDERR_BUFFER_BYTES = 8 * 1024`).
+- Support `AbortSignal` cancellation and timeout handling via `SIGTERM`.
+- Add `"piper"` to TTS factory and `VOICE_PIPER_*` configuration to `env.ts`.
+
+### 2. Implementation Files
+
+- `apps/backend/src/services/voice/providers/adapters/piper-tts.provider.ts`: Local Piper TTS provider.
+- `apps/backend/src/services/voice/providers/adapters/index.ts`: Exported `PiperTTSProvider`.
+- `apps/backend/src/services/voice/provider.factory.ts`: Registered `"piper"` in `createTTSProvider`.
+- `apps/backend/src/config/env.ts`: Added `VOICE_PIPER_BIN_PATH`, `VOICE_PIPER_ARGS`, `VOICE_PIPER_MODEL_PATH`, etc.
+- `apps/backend/test/voice/piper-tts.test.ts`: 30 focused unit tests.
+
+### 3. Verification Completed
+
+- Focused Piper TTS unit tests: 30/30 PASS.
+- All Voice test suites: 93/93 PASS across 4 files (`test/voice/`).
+- Real environment integration test: Successfully synthesized speech via `python.exe -m piper`, validated 182,828 bytes WAV file with verified RIFF/WAVE headers.
+- Backend TypeScript Check: 0 errors (`tsc --noEmit`).
+- Git diff check: Clean.
