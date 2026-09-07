@@ -46,7 +46,7 @@ const documentRetrievalService =
     embeddingsService,
     documentChunkRepository,
   );
-const assistantService = new AssistantService(
+export const assistantService = new AssistantService(
   llmService,
   memoryService,
   toolExecutor,

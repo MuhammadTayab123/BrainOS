@@ -13,6 +13,7 @@ import { errorHandler } from "./middleware/error.middleware";
 import userRoutes from "./routes/user.routes";
 import memoryRoutes from "./routes/memory.routes";
 import assistantRoutes from "./routes/assistant.routes";
+import voiceRoutes from "./routes/voice.routes";
 import conversationRoutes from "./routes/conversation.routes";
 import documentRoutes from "./routes/document.routes";
 import automationRoutes from "./routes/automation.routes";
@@ -64,6 +65,9 @@ app.use("/api/v1/memories", memoryRoutes);
 app.use("/api/v1/documents", documentRoutes);
 // Assistant routes
 app.use("/api/v1/assistant", assistantRoutes);
+
+// Voice routes
+app.use("/api/v1/voice", voiceRoutes);
 
 // Conversation routes
 app.use("/api/v1/conversations", conversationRoutes);
