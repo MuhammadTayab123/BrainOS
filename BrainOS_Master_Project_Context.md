@@ -4442,4 +4442,81 @@ git diff --check (0 warnings, CLEAN)
 
 ### 6. Git Checkpoint
 
-- Completed Mission 64
+- Code commit: `fc730bb`
+- Checkpoint: `fc730bb`
+
+---
+
+# 65. ADDITIVE UPDATE — HARDWARE & VENDOR-AGNOSTIC VOICE PROVIDER ADAPTERS
+
+**Updated:** 2026-09-07
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 65 — Hardware-Agnostic Voice Provider Adapters & Factory — COMPLETE
+
+Mission 65 established pluggable, decoupled execution adapters for Voice Speech-To-Text (STT) and Text-To-Speech (TTS), treating hardware (CPU, GPU, NPU), operating system, runtimes, models, standalone binaries, and cloud APIs as **replaceable deployment capabilities** while leaving `VoiceService`, `AssistantService`, and domain contracts 100% untouched.
+
+### 1. Goal and Scope
+
+- Implement generic process adapters (`ProcessSTTProvider`, `ProcessTTSProvider`) that execute any local standalone binary, CLI tool, or script via standard I/O streams and `AbortSignal` process termination (`SIGTERM`).
+- Implement generic HTTP adapters (`HttpSTTProvider`, `HttpTTSProvider`) that communicate with any local Docker container, LAN GPU server, or cloud vendor API (e.g., OpenAI Audio API, ElevenLabs) using standard `fetch` with `AbortSignal` cancellation and Bearer authentication.
+- Implement `provider.factory.ts` for voice with `createSTTProvider`, `createTTSProvider`, and `createVADProvider` matching the proven BrainOS provider factory pattern (`createLLMProvider`).
+- Add optional environment configuration in `apps/backend/src/config/env.ts` with safe defaults (`"mock"` default in dev/test).
+- Ensure the single-brain invariant is strictly preserved: `VoiceService`, `AssistantService`, and all domain contracts remain untouched.
+- Zero npm package additions, zero database migrations, and zero modifications to existing REST, SSE, or frontend logic.
+
+### 2. Key Implementations
+
+- **Process STT Adapter (`ProcessSTTProvider`)**: Spawns local executables without shell expansion (`shell: false`), pipes audio buffer via `stdin`, collects `stdout` transcript, respects `AbortSignal` with process termination, and fails closed on non-zero exit codes.
+- **Process TTS Adapter (`ProcessTTSProvider`)**: Synthesizes speech via local executables, captures `stdout` audio streams, supports format options, and terminates cleanly on `AbortSignal`.
+- **HTTP STT Adapter (`HttpSTTProvider`)**: Sends audio binary/multipart payloads to remote/local endpoints with Bearer auth, parses JSON/text transcripts, and integrates `AbortSignal` cancellation.
+- **HTTP TTS Adapter (`HttpTTSProvider`)**: Posts synthesis payload to HTTP endpoints, parses binary audio array buffers, and supports configurable format and voice settings.
+- **Voice Provider Factory (`createSTTProvider`, `createTTSProvider`, `createVADProvider`)**: Factory layer that dynamically instantiates `"mock"`, `"process"`, or `"http"` adapters with fail-closed validation on unsupported types.
+- **Environment Schema Update**: Added optional `VOICE_STT_PROVIDER`, `VOICE_STT_PROCESS_*`, `VOICE_STT_HTTP_*`, `VOICE_TTS_PROVIDER`, `VOICE_TTS_PROCESS_*`, `VOICE_TTS_HTTP_*`, and `VOICE_VAD_PROVIDER` fields to `apps/backend/src/config/env.ts`.
+
+### 3. Security Review
+
+- **Command Injection Prevention**: Process adapters pass arguments strictly as argument arrays to `child_process.spawn()` with `shell: false`. No shell metacharacter expansion is possible. Audio is piped through `stdin`.
+- **Secret & Credential Protection**: API keys are passed via HTTP headers and are never logged to console, stdout, or stderr.
+- **Process & Resource Lifecycle**: AbortSignals send `SIGTERM` and detach event listeners, preventing zombie child processes or leaked timers.
+- **Fail-Closed Guarantees**: Process non-zero exit codes, spawn failures, and non-2xx HTTP responses throw structured, fail-closed errors.
+
+### 4. Implementation Files
+
+- `apps/backend/src/services/voice/providers/adapters/process-stt.provider.ts`: Process STT adapter.
+- `apps/backend/src/services/voice/providers/adapters/process-tts.provider.ts`: Process TTS adapter.
+- `apps/backend/src/services/voice/providers/adapters/http-stt.provider.ts`: HTTP STT adapter.
+- `apps/backend/src/services/voice/providers/adapters/http-tts.provider.ts`: HTTP TTS adapter.
+- `apps/backend/src/services/voice/providers/adapters/index.ts`: Adapter exports.
+- `apps/backend/src/services/voice/provider.factory.ts`: Voice provider factory.
+- `apps/backend/src/services/voice/providers/index.ts`: Updated provider exports.
+- `apps/backend/src/services/voice/index.ts`: Updated module exports.
+- `apps/backend/src/config/env.ts`: Environment configuration schema update.
+- `apps/backend/test/voice/voice.adapters.test.ts`: 26 unit tests for adapters and factory.
+
+### 5. Verification Completed
+
+```text
+Focused Voice Unit Tests (Service + Adapters):
+46/46 PASS (apps/backend/test/voice/voice.service.test.ts, voice.adapters.test.ts)
+
+Backend TypeScript Check:
+npm --prefix apps/backend run typecheck (0 errors, PASS)
+
+Full Backend Regression Suite:
+74/74 test files passed, 878/878 tests passed (0 failures)
+
+Frontend Unit Tests:
+56/56 PASS (apps/web/lib/brainos-client-api.test.ts)
+
+Next.js Production Build:
+npm --prefix apps/web run build (0 errors, 11/11 routes compiled successfully)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+```
+
+### 6. Git Checkpoint
+
+- Completed Mission 65

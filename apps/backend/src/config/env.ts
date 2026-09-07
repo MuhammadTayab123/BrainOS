@@ -73,6 +73,38 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(["trace", "debug", "info", "warn", "error"])
     .default("info"),
+
+  // ==========================
+  // Voice Providers (Optional)
+  // ==========================
+
+  VOICE_STT_PROVIDER: z
+    .enum(["mock", "process", "http"])
+    .default("mock"),
+
+  VOICE_STT_PROCESS_COMMAND: z.string().optional(),
+
+  VOICE_STT_PROCESS_ARGS: z.string().optional(),
+
+  VOICE_STT_HTTP_ENDPOINT: z.string().optional(),
+
+  VOICE_STT_HTTP_API_KEY: z.string().optional(),
+
+  VOICE_TTS_PROVIDER: z
+    .enum(["mock", "process", "http"])
+    .default("mock"),
+
+  VOICE_TTS_PROCESS_COMMAND: z.string().optional(),
+
+  VOICE_TTS_PROCESS_ARGS: z.string().optional(),
+
+  VOICE_TTS_HTTP_ENDPOINT: z.string().optional(),
+
+  VOICE_TTS_HTTP_API_KEY: z.string().optional(),
+
+  VOICE_VAD_PROVIDER: z
+    .enum(["mock"])
+    .default("mock"),
 });
 
 const parsed = envSchema.safeParse(process.env);
