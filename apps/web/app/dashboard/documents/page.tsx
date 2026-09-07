@@ -8,8 +8,10 @@ import {
   createTextDocument,
   deleteDocument,
   listDocuments,
+  searchDocumentChunks,
   uploadDocument,
   type Document,
+  type DocumentSearchResult,
   type DocumentStatus,
 } from "../../../lib/brainos-client-api";
 
@@ -29,6 +31,12 @@ export default function DocumentsPage() {
   const [operatingId, setOperatingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<FilterTab>("ALL");
+
+  // Semantic Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<DocumentSearchResult[] | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   // Creation form state
   const [creationTab, setCreationTab] = useState<CreationTab>("UPLOAD");
@@ -182,6 +190,44 @@ export default function DocumentsPage() {
     }
   };
 
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const query = searchQuery.trim();
+    if (!query) {
+      setSearchError("Search query is required.");
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchError(null);
+
+    try {
+      const token = await getToken();
+
+      if (!token) {
+        throw new Error("Authentication token is unavailable.");
+      }
+
+      const results = await searchDocumentChunks(token, query, 5);
+      setSearchResults(results);
+    } catch (err) {
+      setSearchError(
+        err instanceof Error
+          ? err.message
+          : "Failed to search document chunks.",
+      );
+      setSearchResults(null);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery("");
+    setSearchResults(null);
+    setSearchError(null);
+  };
+
   const handleDeleteDocument = async (documentId: string) => {
     setOperatingId(documentId);
     setActionError(null);
@@ -195,6 +241,13 @@ export default function DocumentsPage() {
 
       await deleteDocument(token, documentId);
       setConfirmDeleteId(null);
+
+      if (searchResults) {
+        setSearchResults((prev) =>
+          prev ? prev.filter((chunk) => chunk.documentId !== documentId) : null,
+        );
+      }
+
       await fetchDocuments();
     } catch (err) {
       setActionError(
@@ -417,8 +470,117 @@ export default function DocumentsPage() {
               </div>
             </div>
 
-            {/* Right: Document List */}
-            <div className="lg:col-span-2">
+            {/* Right: Semantic Search & Document List */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Semantic Knowledge Search Section */}
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="flex items-center gap-2">
+                    <svg className="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">
+                      Semantic Knowledge Search
+                    </h3>
+                  </div>
+                  <span className="text-[11px] text-zinc-500">
+                    Query pgvector chunk embeddings
+                  </span>
+                </div>
+
+                <form onSubmit={handleSearch} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search documents by concept (e.g. system architecture, API auth)..."
+                    className="flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSearching || !searchQuery.trim()}
+                    className="rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSearching ? "Searching..." : "Search"}
+                  </button>
+                  {searchResults !== null && (
+                    <button
+                      type="button"
+                      onClick={handleClearSearch}
+                      className="rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-400 hover:text-zinc-200 transition"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </form>
+
+                {searchError && (
+                  <p className="mt-2 text-xs text-red-300">{searchError}</p>
+                )}
+              </div>
+
+              {/* Search Loading Skeleton */}
+              {isSearching && (
+                <div className="space-y-3">
+                  <div className="h-24 animate-pulse rounded-xl border border-zinc-800/80 bg-zinc-900/40" />
+                  <div className="h-24 animate-pulse rounded-xl border border-zinc-800/80 bg-zinc-900/40" />
+                </div>
+              )}
+
+              {/* Search Results Display */}
+              {!isSearching && searchResults !== null && (
+                <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+                  <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">
+                      Search Results for &ldquo;{searchQuery}&rdquo; ({searchResults.length})
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={handleClearSearch}
+                      className="text-xs text-zinc-400 hover:text-zinc-200 transition"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+
+                  {searchResults.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-zinc-800 py-8 text-center text-xs text-zinc-400">
+                      No matching document chunks found for this query.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {searchResults.map((chunk) => (
+                        <div
+                          key={chunk.id}
+                          className="rounded-lg border border-zinc-800/90 bg-zinc-950/80 p-3.5 transition hover:border-zinc-700"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-zinc-800/60 text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-zinc-200 truncate max-w-[240px]">
+                                {chunk.documentTitle || "Untitled document"}
+                              </span>
+                              <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400">
+                                Chunk #{chunk.chunkIndex}
+                              </span>
+                              <span className="rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 uppercase">
+                                {chunk.sourceType}
+                              </span>
+                            </div>
+                            <span className="rounded-md border border-emerald-900/60 bg-emerald-950/40 px-2 py-0.5 text-[11px] font-mono font-medium text-emerald-300">
+                              {(chunk.similarity * 100).toFixed(0)}% match
+                            </span>
+                          </div>
+                          <p className="mt-2.5 text-xs md:text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                            {chunk.content}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Document List Section */}
               <div className="flex flex-col gap-4">
                 {/* Header & Filter Controls */}
                 <div className="flex flex-wrap items-center justify-between gap-3">

@@ -4297,3 +4297,65 @@ git diff --check (0 warnings, CLEAN)
 
 - Code commits: `082764e` and `6036cc2`
 - Final checkpoint: `6036cc2`
+
+---
+
+# 63. ADDITIVE UPDATE — DOCUMENT KNOWLEDGE SEARCH & LEGACY ROUTE DECOMMISSION
+
+**Updated:** 2026-09-07
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 63 — Document Semantic Search & Legacy Test Route Decommission — COMPLETE
+
+Mission 63 added direct document semantic search to the documents dashboard, standardized typed document chunk queries in the frontend client API, safely decommissioned the legacy `/dashboard/memory-test` route, and removed unused legacy API code.
+
+### 1. Goal and Scope
+
+- Standardize frontend client API method `searchDocumentChunks` in `apps/web/lib/brainos-client-api.ts` to query document chunks via the existing backend `POST /api/v1/documents/search` endpoint.
+- Enhance `/dashboard/documents` with a dedicated Document Semantic Search section that renders similarity score badges, document references (with `"Untitled document"` fallback), chunk snippet previews, and instant load actions.
+- Decommission obsolete route `apps/web/app/dashboard/memory-test` and provide clear user guidance and redirect to `/dashboard/memories`.
+- Delete unused legacy file `apps/web/lib/brainos-api.ts` after confirming zero remaining consumers across the repository.
+- Preserve all existing document upload, parsing, embedding, chunking, and pagination behavior.
+- Frontend-only changes; no backend API, schema, database, or AI provider changes.
+
+### 2. Key Implementations
+
+- **Typed Client API (`searchDocumentChunks`)**: Added typed query function matching backend `SearchDocumentChunkResult` payload structure (`documentId`, `chunkIndex`, `content`, `similarity`, `createdAt`) with Bearer token authentication, input validation, and fail-closed error handling.
+- **Document Semantic Search UX**: Added search bar and interactive results section on `/dashboard/documents`, displaying semantic matches with percentage relevance badges, matched text excerpts, creation dates, and direct document focus triggers.
+- **Legacy Route Decommission**: Replaced active dev test harness in `/dashboard/memory-test` with a lightweight, clean notice directing users to `/dashboard/memories`.
+- **Legacy Code Cleanup**: Deleted `apps/web/lib/brainos-api.ts` after verifying zero references in web or backend workspaces.
+
+### 3. Security Review
+
+- **Bearer Token Authentication**: All document search requests attach validated Clerk JWT tokens.
+- **Tenant Isolation**: Backend strictly filters chunk search results by authenticated `userId`; no client-provided user IDs are accepted.
+- **Sanitized Outputs**: Chunk content is rendered safely using standard React text nodes without raw HTML injection.
+
+### 4. Implementation Files
+
+- `apps/web/lib/brainos-client-api.ts`: Added typed `searchDocumentChunks` client API method.
+- `apps/web/lib/brainos-client-api.test.ts`: Added 4 focused unit tests covering successful semantic search, empty query validation, API error propagation, and empty results handling.
+- `apps/web/app/dashboard/documents/page.tsx`: Added semantic search UI, relevance badges, snippet rendering, and document focus interaction.
+- `apps/web/app/dashboard/memory-test/page.tsx`: Decommissioned route with redirect notice.
+- `apps/web/lib/brainos-api.ts`: Deleted legacy file.
+
+### 5. Verification Completed
+
+```text
+Frontend Unit Tests:
+56/56 PASS (apps/web/lib/brainos-client-api.test.ts)
+
+Next.js Production Build & TypeScript Check:
+npm run build (0 errors, 11/11 routes compiled successfully)
+
+Full Backend Regression Suite:
+72/72 test files passed, 832/832 tests passed (0 failures)
+
+Diff Check:
+git diff --check (0 warnings, CLEAN)
+```
+
+### 6. Git Checkpoint
+
+- Completed Mission 63

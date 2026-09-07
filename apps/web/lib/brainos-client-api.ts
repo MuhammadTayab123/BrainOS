@@ -915,7 +915,9 @@ export async function deleteDocument(
   return parseResponse<{ id: string }>(response);
 }
 
-export async function searchDocuments(
+export type SearchDocumentChunkResult = DocumentSearchResult;
+
+export async function searchDocumentChunks(
   token: string,
   query: string,
   limit?: number,

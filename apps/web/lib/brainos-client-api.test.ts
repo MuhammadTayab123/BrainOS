@@ -22,7 +22,7 @@ let uploadDocument: typeof import("./brainos-client-api").uploadDocument;
 let createTextDocument: typeof import("./brainos-client-api").createTextDocument;
 let getDocument: typeof import("./brainos-client-api").getDocument;
 let deleteDocument: typeof import("./brainos-client-api").deleteDocument;
-let searchDocuments: typeof import("./brainos-client-api").searchDocuments;
+let searchDocumentChunks: typeof import("./brainos-client-api").searchDocumentChunks;
 let listMemories: typeof import("./brainos-client-api").listMemories;
 let createMemory: typeof import("./brainos-client-api").createMemory;
 let getMemory: typeof import("./brainos-client-api").getMemory;
@@ -63,7 +63,7 @@ beforeAll(async () => {
   createTextDocument = mod.createTextDocument;
   getDocument = mod.getDocument;
   deleteDocument = mod.deleteDocument;
-  searchDocuments = mod.searchDocuments;
+  searchDocumentChunks = mod.searchDocumentChunks;
   listMemories = mod.listMemories;
   createMemory = mod.createMemory;
   getMemory = mod.getMemory;
@@ -837,7 +837,7 @@ describe("Documents API (Frontend Client)", () => {
     expect(result.id).toBe("doc-to-delete");
   });
 
-  it("6. searchDocuments: sends POST to search endpoint with query and limit", async () => {
+  it("6. searchDocumentChunks: sends POST to search endpoint with query and limit", async () => {
     let capturedUrl = "";
     let capturedMethod = "";
     let capturedHeaders: Record<string, string> = {};
@@ -870,7 +870,7 @@ describe("Documents API (Frontend Client)", () => {
       });
     });
 
-    const result = await searchDocuments("mock-token", "vector query", 5);
+    const result = await searchDocumentChunks("mock-token", "vector query", 5);
     expect(capturedUrl).toBe("http://localhost:3001/api/v1/documents/search");
     expect(capturedMethod).toBe("POST");
     expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
@@ -1978,5 +1978,132 @@ describe("Tasks API Client", () => {
     await expect(
       createTask("mock-token", { title: "" }),
     ).rejects.toThrow("Task title is required.");
+  });
+});
+
+describe("Document Semantic Search API Client", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("1. searchDocumentChunks: sends POST request with Bearer auth, trimmed query and limit", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedHeaders: Record<string, string> = {};
+    let capturedBody: any = null;
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedMethod = init?.method || "GET";
+      capturedHeaders = (init?.headers as Record<string, string>) || {};
+      capturedBody = init?.body ? JSON.parse(init.body as string) : null;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: [
+              {
+                id: "chunk-101",
+                documentId: "doc-1",
+                documentTitle: "Architecture Specs",
+                sourceType: "UPLOAD",
+                source: "specs.pdf",
+                chunkIndex: 0,
+                content: "BrainOS uses a layered service-repository architecture.",
+                similarity: 0.93,
+              },
+            ],
+          }),
+      });
+    });
+
+    const results = await searchDocumentChunks("mock-token", "  layered architecture  ", 5);
+
+    expect(capturedUrl).toBe("http://localhost:3001/api/v1/documents/search");
+    expect(capturedMethod).toBe("POST");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer mock-token");
+    expect(capturedHeaders["Content-Type"]).toBe("application/json");
+    expect(capturedBody).toEqual({
+      query: "layered architecture",
+      limit: 5,
+    });
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe("chunk-101");
+    expect(results[0].documentTitle).toBe("Architecture Specs");
+    expect(results[0].similarity).toBe(0.93);
+    expect(results[0].content).toContain("layered service-repository");
+  });
+
+  it("2. searchDocumentChunks: omits limit from payload when undefined", async () => {
+    let capturedBody: any = null;
+
+    globalThis.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      capturedBody = init?.body ? JSON.parse(init.body as string) : null;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: [],
+          }),
+      });
+    });
+
+    const results = await searchDocumentChunks("mock-token", "testing default limit");
+
+    expect(capturedBody).toEqual({
+      query: "testing default limit",
+    });
+    expect(capturedBody.limit).toBeUndefined();
+    expect(results).toEqual([]);
+  });
+
+  it("3. searchDocumentChunks: throws parsed error message on 400 validation error", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: "Bad Request",
+      json: () =>
+        Promise.resolve({
+          success: false,
+          error: {
+            code: "INVALID_QUERY",
+            message: "Search query is required.",
+          },
+        }),
+    });
+
+    await expect(
+      searchDocumentChunks("mock-token", ""),
+    ).rejects.toThrow("Search query is required.");
+  });
+
+  it("4. searchDocumentChunks: throws parsed error message on 401 unauthorized", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      json: () =>
+        Promise.resolve({
+          success: false,
+          error: {
+            code: "UNAUTHORIZED",
+            message: "Authentication token is invalid or expired.",
+          },
+        }),
+    });
+
+    await expect(
+      searchDocumentChunks("expired-token", "query"),
+    ).rejects.toThrow("Authentication token is invalid or expired.");
   });
 });
