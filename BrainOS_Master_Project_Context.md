@@ -4600,3 +4600,60 @@ Mission 67 implemented a real, local, high-performance neural Text-To-Speech ada
 - Real environment integration test: Successfully synthesized speech via `python.exe -m piper`, validated 182,828 bytes WAV file with verified RIFF/WAVE headers.
 - Backend TypeScript Check: 0 errors (`tsc --noEmit`).
 - Git diff check: Clean.
+
+---
+
+# 68. ADDITIVE UPDATE — AUTHENTICATED VOICE TRANSPORT LAYER (HTTP / SSE API)
+
+**Updated:** 2026-09-07
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 68 — Authenticated Voice Transport Layer (HTTP / SSE API) — COMPLETE
+
+Mission 68 implemented the authenticated HTTP and Server-Sent Events (SSE) transport layer for BrainOS voice capabilities (`/api/v1/voice`), enabling web clients and external consumers to initiate voice sessions, process synchronous turns, stream real-time turn events over SSE, and control playback/interruption while strictly preserving BrainOS's single-brain invariant and security boundaries.
+
+### 1. Goal and Scope
+
+- Expose authenticated HTTP and SSE endpoints under `/api/v1/voice` using `requireAuth` and server-derived `req.user.id`.
+- Implement full voice session lifecycle endpoints (`POST /sessions`, `GET /sessions/:id`, `POST /sessions/:id/interrupt`, `POST /sessions/:id/end`) with strict tenant isolation.
+- Implement synchronous voice turn endpoint (`POST /turn`) accepting either raw text transcripts or base64-encoded audio chunks (`{ data: string, mimeType?: string, sampleRate?: number, channels?: number }`), returning serialized turn results (`VoiceTurnResult`) with base64-encoded audio responses when TTS is requested.
+- Implement real-time streaming voice turn endpoint (`POST /turn/stream`) using Server-Sent Events (SSE), streaming `state_changed`, `task_event`, `text_delta`, `voice_result`, and `done` events via `AssistantRuntime`.
+- Wire client-disconnect cancellation via `req.on("close")` and `AbortController` to abort ongoing speech recognition, assistant reasoning, and speech synthesis operations.
+- Enforce the single-brain invariant by reusing the existing `assistantService` singleton, ensuring voice turns share the exact same tools, memory retrieval, RAG documents, and conversation tracking.
+- Provide dependency-injected router factory (`createVoiceRouter(voiceService?, authMiddleware?)`) for fully deterministic testing without external databases or Clerk auth servers.
+- Zero database or schema migrations, zero new external npm dependencies, and zero modifications to core `VoiceService` or `AssistantService` logic.
+
+### 2. Implementation Files
+
+- `apps/backend/src/controllers/voice/voice.controller.ts`: Voice controller handling validation, base64 audio decoding/encoding, session CRUD, turn execution, SSE streaming, and error sanitization.
+- `apps/backend/src/routes/voice.routes.ts`: Router mounting `/sessions`, `/sessions/:id`, `/sessions/:id/interrupt`, `/sessions/:id/end`, `/turn`, and `/turn/stream` with `requireAuth`.
+- `apps/backend/src/app.ts`: Mounted `/api/v1/voice` router.
+- `apps/backend/src/controllers/assistant/assistant.controller.ts`: Exported `assistantService` singleton to allow `VoiceController` to bind to the active BrainOS brain instance.
+- `apps/backend/test/voice/voice.controller.test.ts`: 26 focused unit and supertest integration tests covering authentication, input validation, tenant isolation, synchronous turns, audio decoding/encoding, SSE event emission, disconnect cancellation, and session lifecycle.
+
+### 3. Verification Completed
+
+- Focused Voice Controller Tests: 26/26 PASS (`apps/backend/test/voice/voice.controller.test.ts`).
+- All Voice Test Suites: 119/119 PASS across 5 files (`test/voice/`).
+- Backend TypeScript Check: 0 errors (`npm --prefix apps/backend run typecheck`).
+- Full Backend Regression Suite: 77/77 test files passed, 951/951 tests passed (0 failures).
+- Git Diff Check: Clean (`git diff --check`).
+
+### 4. Git Checkpoint
+
+- Commit: `5756d06`
+- Status: Authenticated Voice Transport Layer (HTTP / SSE API) complete and verified.
+
+### 5. Architecture State for Next Mission (Mission 69)
+
+With Mission 68 complete, the backend voice subsystem is fully operational from provider adapters up to authenticated HTTP and SSE transport:
+- **Transport Endpoints (`/api/v1/voice`)**:
+  - `POST /api/v1/voice/sessions`: Creates voice session (`201 Created`).
+  - `GET /api/v1/voice/sessions/:id`: Retrieves session with tenant ownership validation (`200 OK` / `404 Not Found`).
+  - `POST /api/v1/voice/sessions/:id/interrupt`: Interrupts active session (`200 OK`).
+  - `POST /api/v1/voice/sessions/:id/end`: Closes active session (`200 OK`).
+  - `POST /api/v1/voice/turn`: Processes turn with text or base64 audio; returns serialized `VoiceTurnResult` (`200 OK`).
+  - `POST /api/v1/voice/turn/stream`: Streams turn over SSE (`state_changed`, `text_delta`, `voice_result`, `done`) with cancellation.
+- **Provider Layer**: Mock, Process, HTTP, Whisper.cpp STT (`whisper-cpp`), and Piper TTS (`piper`).
+- **Next Step (Mission 69)**: Web client / frontend voice integration, browser audio capture (Web Audio API / MediaRecorder), or audio streaming player components consuming `/api/v1/voice`.
