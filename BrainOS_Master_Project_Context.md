@@ -8,10 +8,10 @@
 **Branch:** `main`
 **OS:** Windows
 **Editor:** VS Code
-**Current date checkpoint:** 2026-09-04
-**Latest verified Git commit:** `debd156 feat(computer): add agent persistence and lifecycle`
+**Current date checkpoint:** 2026-09-08
+**Latest verified Git commit:** `ad6ce15 feat(security): enforce server-side computer action authorization`
 **Working tree at latest user verification:** clean
-**Remote:** `origin/main` matched local `main` at `debd156`
+**Remote:** `origin/main` matched local `main` at `ad6ce15`
 
 ---
 
@@ -1428,22 +1428,22 @@ The assistant must:
 
 ```text
 Date:
-2026-09-04
+2026-09-08
 
 Current product state:
-Core BrainOS foundation + Tasks/Reminders/Automation + Documents/RAG foundation + Computer Action Authorization/Audit + Provider-independent LLM Architecture (Ollama & OmniRoute with BrainOS-Coding) verified.
+Core BrainOS foundation + Tasks + Reminders + Automation + Documents/RAG + Memory + Computer Agent + secure computer action authorization + provider-independent LLM architecture + SSE/token streaming + frontend chat + local Whisper.cpp STT + local Piper TTS + authenticated voice transport + frontend voice integration.
 
 Latest Git checkpoint:
-49e7675 feat(ai): add OmniRoute provider routing
+ad6ce15 feat(security): enforce server-side computer action authorization
 
 Branch:
 main
 
 Working tree:
-modified (unrelated unstaged edit in apps/backend/test/tools/tool.executor.audit.test.ts)
+clean
 
 Remote:
-origin/main synchronized at 49e7675
+origin/main synchronized with local main at ad6ce15
 ```
 
 The immediate next development direction is **not to rebuild existing foundations**.
@@ -4708,3 +4708,82 @@ Mission 69 implemented the frontend voice interface in the BrainOS web applicati
 
 - Commit: `feat(voice): integrate frontend voice interface`
 - Status: Frontend Voice Integration complete and verified.
+
+---
+
+# 70. ADDITIVE UPDATE — SECURE ASSISTANT/VOICE COMPUTER AUTHORIZATION
+
+**Updated:** 2026-09-08
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 70 — Secure Assistant/Voice Computer Authorization — COMPLETE
+
+### 1. Goal and Purpose
+
+Mission 70 eliminated the security vulnerability where client-provided `authorizedComputerActions` could directly self-authorize privileged Computer Agent actions (`computer_launch_application`, `computer_write_file`) through the Assistant or Voice interfaces without server-side verification against the database permission model.
+
+### 2. Architecture
+
+```text
+Assistant / Voice (HTTP / SSE Turn)
+  ↓
+AssistantService.ask(input) [uses server-derived req.user.id]
+  ↓
+ComputerAuthorizationService
+  ↓
+server-derived userId validation
+  ↓
+active Computer Agent resolution (ComputerAgentRepository.listByUser)
+  ↓
+server-side ComputerAgent permissions (ComputerAgentPermissionRepository.listPermissions)
+  ↓
+client requested actions ∩ server-granted actions
+  ↓
+effective authorized computer actions
+  ↓
+ToolExecutor.execute(toolName, args, { userId, authorizedComputerActions })
+  ↓
+Computer tools (computer.tools.ts) → ComputerAgentGateway → LocalComputerAgent
+```
+
+### 3. Security Rules & Invariants
+
+- `req.user.id` remains the only user identity source.
+- Client `authorizedComputerActions` is only a requested subset, never authority.
+- Client input can never grant authority beyond server-derived database grants.
+- **Active Agent Resolution**:
+  - 0 active agents → fails closed (`null` agent $\to$ `effectiveActions = []`).
+  - Exactly 1 active agent → resolves that agent $\to$ fetches active permissions from DB.
+  - Multiple active agents without an explicit target → fails closed (`null` agent $\to$ `effectiveActions = []`).
+  - Database/repository errors → fail closed (`null` / `[]`).
+- Permissions are resolved strictly against both `userId` and `agentId`.
+- Only recognized privileged computer actions (`isComputerTool` & `requiresComputerAuthorization`) are included.
+- Safe read-only computer actions (`computer_get_status`, `computer_read_file`, `computer_list_files`, `computer_list_applications`) remain policy-authorized and usable without persistent action grants.
+- Voice uses the exact same `AssistantService` authorization path (`VoiceService.processTurn` $\to$ `AssistantService.ask`).
+- Existing `ComputerAgentActionDispatcher` and downstream authorization remain intact as defense in depth.
+- No authorization logic was added to `LocalComputerAgent`.
+- No second permission model was introduced.
+- No arbitrary active-agent selection heuristic was introduced.
+
+### 4. Implementation
+
+- Created `ComputerAuthorizationService` and `DefaultComputerAuthorizationService` in `apps/backend/src/services/computer/security/computer-authorization.service.ts` as the single dedicated authorization boundary.
+- Removed duplicated authorization-resolution helpers from `ComputerAgentService`, keeping it focused on domain operations.
+- Updated `AssistantService` (`apps/backend/src/services/assistant/assistant.service.ts`) to resolve effective server-authorized computer actions before calling `ToolExecutor`.
+- Effective authorization is strictly computed as:
+  $$\text{effectiveActions} = \text{requestedActions} \cap \text{serverGrantedActions}$$
+
+### 5. Verification Completed
+
+- Mission 70 focused authorization tests: 24/24 passed (`test/services/computer/security/computer-authorization.service.test.ts` & `test/assistant/assistant.computer-authorization.test.ts`).
+- Full backend regression suite: 79/79 test files passed, 975/975 tests passed (0 failures).
+- Backend TypeScript: 0 errors (`npx tsc --noEmit`).
+- Frontend client tests: 65/65 passed (`apps/web/lib/brainos-client-api.test.ts`).
+- Frontend production build: 11/11 routes compiled, 0 errors (`npm --prefix apps/web run build`).
+- Git diff check: Clean (`git diff --check`).
+- Final Git state:
+  - Commit: `ad6ce15 feat(security): enforce server-side computer action authorization`
+  - `HEAD` = `ad6ce1506aecd4626df972e3d686102b2de6b2d9`
+  - `origin/main` = `ad6ce1506aecd4626df972e3d686102b2de6b2d9`
+  - Working tree = clean.
