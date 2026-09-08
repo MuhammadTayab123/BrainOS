@@ -1251,4 +1251,91 @@ describe("AssistantService", () => {
     );
     expect(assistantCreates).toHaveLength(0);
   });
+
+  it("executes multiple rounds of tool calls sequentially and passes server-derived userId context", async () => {
+    const llmService = createLlmServiceMock();
+    const memoryService = createMemoryServiceMock();
+    const toolExecutor = createToolExecutorMock();
+
+    memoryService.searchMemories.mockResolvedValue([]);
+
+    // 1. First LLM response requests first tool
+    llmService.generate
+      .mockResolvedValueOnce({
+        text: "Checking documents first...",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [
+          {
+            id: "call-1",
+            name: "document_search",
+            arguments: { query: "BrainOS architecture" },
+          },
+        ],
+      })
+      // 3. Second LLM response requests second tool
+      .mockResolvedValueOnce({
+        text: "Now creating the follow-up task...",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [
+          {
+            id: "call-2",
+            name: "create_task",
+            arguments: { title: "Review architecture document" },
+          },
+        ],
+      })
+      // 5. Final LLM response returns normal text without tool calls
+      .mockResolvedValueOnce({
+        text: "I searched the architecture documents and created the follow-up task.",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [],
+      });
+
+    // Mock tool executions
+    toolExecutor.execute
+      .mockResolvedValueOnce({ chunks: ["BrainOS layered architecture doc"] })
+      .mockResolvedValueOnce({ taskId: "task-101", status: "TODO" });
+
+    const service = new AssistantService(
+      llmService as unknown as LLMService,
+      memoryService as unknown as MemoryService,
+      toolExecutor as unknown as ToolExecutor,
+    );
+
+    const result = await service.ask({
+      userId: "user-123",
+      message: "Find architecture doc and create a task for it",
+      enableMemoryRetrieval: false,
+    });
+
+    // 2, 4, 6. Verify both tool calls executed with the server-derived userId and context
+    expect(toolExecutor.execute).toHaveBeenCalledTimes(2);
+    expect(toolExecutor.execute).toHaveBeenNthCalledWith(
+      1,
+      "document_search",
+      { query: "BrainOS architecture" },
+      {
+        userId: "user-123",
+        authorizedComputerActions: undefined,
+      },
+    );
+    expect(toolExecutor.execute).toHaveBeenNthCalledWith(
+      2,
+      "create_task",
+      { title: "Review architecture document" },
+      {
+        userId: "user-123",
+        authorizedComputerActions: undefined,
+      },
+    );
+
+    // 7. Assert generate call count and final response text
+    expect(llmService.generate).toHaveBeenCalledTimes(3);
+    expect(result.text).toBe(
+      "I searched the architecture documents and created the follow-up task.",
+    );
+  });
 });
