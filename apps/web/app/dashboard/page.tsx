@@ -9,6 +9,7 @@ import {
   useAuth,
 } from "@clerk/nextjs";
 import { DashboardNav } from "../../components/dashboard-nav";
+import { ChatMessageMarkdown } from "../../components/chat-message-markdown";
 import {
   streamAssistant,
   streamVoiceTurn,
@@ -922,8 +923,8 @@ export default function Home() {
                                 {new Date(item.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                               </span>
                             </div>
-                            <div className="mr-auto max-w-[90%] md:max-w-[80%] rounded-2xl rounded-tl-sm border border-zinc-800/80 bg-zinc-900/90 px-4 py-3 text-sm md:text-base text-zinc-100 shadow-sm leading-relaxed whitespace-pre-wrap">
-                              {item.content}
+                            <div className="mr-auto max-w-[90%] md:max-w-[80%] rounded-2xl rounded-tl-sm border border-zinc-800/80 bg-zinc-900/90 px-4 py-3 text-sm md:text-base text-zinc-100 shadow-sm leading-relaxed">
+                              <ChatMessageMarkdown content={item.content} />
                             </div>
                           </>
                         )}
@@ -938,8 +939,8 @@ export default function Home() {
                           </span>
                           <span>BrainOS</span>
                         </div>
-                        <div className="mr-auto max-w-[90%] md:max-w-[80%] rounded-2xl rounded-tl-sm border border-zinc-800/80 bg-zinc-900/90 px-4 py-3 text-sm md:text-base text-zinc-100 shadow-sm leading-relaxed whitespace-pre-wrap">
-                          {streamingMessage}
+                        <div className="mr-auto max-w-[90%] md:max-w-[80%] rounded-2xl rounded-tl-sm border border-zinc-800/80 bg-zinc-900/90 px-4 py-3 text-sm md:text-base text-zinc-100 shadow-sm leading-relaxed">
+                          <ChatMessageMarkdown content={streamingMessage} />
                           <span className="inline-block h-4 w-1.5 animate-pulse bg-blue-400 ml-1 align-middle" />
                         </div>
                       </div>
