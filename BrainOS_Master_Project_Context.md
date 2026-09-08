@@ -4936,3 +4936,179 @@ AssistantRuntime & SSE / Voice Stream Events (task-start, task-progress)
 - **Branch**: `main`
 - `HEAD` == `origin/main` (`f1717d76c42a3c65d75bbe481ab8f779150d3991`)
 - Working tree clean.
+
+---
+
+# 74. ADDITIVE UPDATE — RICH CHAT MARKDOWN & SAFE CODE RENDERING
+
+### 1. Goal and Purpose
+
+Mission 74 implemented safe, rich GitHub Flavored Markdown (GFM) and code rendering for the assistant chat interface in the BrainOS web application. It delivers a modern, ChatGPT-quality reading experience for Markdown text, lists, tables, blockquotes, links, and fenced code blocks with Prism syntax highlighting and one-click code copying, while strictly enforcing XSS protections, zero `dangerouslySetInnerHTML`, and smooth token streaming and cancellation.
+
+### 2. Architecture & Additions
+
+```text
+SSE Assistant Stream / Chat History
+  ↓ (Streaming text chunks or completed markdown messages)
+ChatMessageMarkdown (apps/web/components/chat-message-markdown.tsx)
+  ↓
+Markdown Parser / Tokenizer
+  ├── Headings, Paragraphs, Lists, Blockquotes, Tables, Strong, Emphasis, Inline Code
+  ├── Link Sanitizer (isSafeUrl whitelist: http, https, mailto, relative, fragments; rejects // protocol-relative & javascript:)
+  └── Fenced Code Blocks (Prism Tokenizer → React Element Tree with Syntax Classes, Copy Button)
+  ↓
+Safe React DOM Nodes (0 dangerouslySetInnerHTML)
+```
+
+- **Markdown Component (`apps/web/components/chat-message-markdown.tsx`)**:
+  - Implemented standalone lightweight Markdown parser supporting headings (`#` to `######`), unordered/ordered lists, blockquotes, tables with headers and alignment, inline bold/italic/code, and fenced code blocks with language specifiers.
+  - **Prism Syntax Highlighting via React Nodes**: Tokenizes language code blocks (JavaScript, TypeScript, Python, Bash, JSON, SQL, HTML, CSS, Markdown, etc.) using Prism grammar, rendering highlighted tokens directly as React elements rather than injecting raw HTML strings.
+  - **Single-Click Copy Button**: Integrated copy button on code headers with clipboard write and visual confirmation ("Copied!").
+  - **Streaming Resiliency**: Handles incomplete code blocks and open markdown formatting gracefully without breaking during live token streams.
+  - **Link Security (`isSafeUrl`)**: Strictly whitelists `http:`, `https:`, `mailto:`, relative paths (`/path`), and fragment identifiers (`#hash`), while explicitly rejecting protocol-relative URLs (`//evil.com`), `javascript:`, `data:`, and `vbscript:`.
+
+### 3. Security Rules & Invariants
+
+- **Zero HTML Injection**: Completely eliminated `dangerouslySetInnerHTML` from the frontend markdown rendering pipeline.
+- **XSS Sanitization**: HTML entities and raw HTML tags inside message text are safely escaped as plain text.
+- **Fail-Safe Links**: Disallowed or suspicious URLs are rendered as plain text spans rather than clickable anchor elements. External links automatically receive `target="_blank"` and `rel="noopener noreferrer"`.
+- **Streaming & Voice Stability**: Markdown parsing runs deterministically on every render without state corruption or interference with speech synthesis and token cancellation.
+
+### 4. Verification Completed
+
+- **Focused Markdown Unit Tests**: 28/28 passed (`apps/web/components/chat-message-markdown.test.tsx`), validating XSS prevention, link protocol checks, table rendering, list nesting, streaming partial fences, and Prism element tree construction.
+- **Frontend Client API Tests**: 74/74 passed (`apps/web/lib/brainos-client-api.test.ts`).
+- **Next.js Production Build**: 12/12 routes compiled with 0 errors (`npm --prefix apps/web run build`).
+- **Git Diff Check**: Clean (`git diff --check`).
+
+### 5. Final Git State
+
+- **Commit**: `f7da32c feat(web): add rich markdown chat rendering`
+- **Branch**: `main`
+- `HEAD` == `origin/main` (`f7da32ca718b5eafe30c0c05dfc0bb48148eebf8`)
+- Working tree clean.
+
+---
+
+# 75. ADDITIVE UPDATE — ASSISTANT MULTI-ROUND TOOL EXECUTION & CONTEXT RECOVERY
+
+### 1. Goal and Purpose
+
+Mission 75 verified and reinforced `AssistantService` multi-turn tool execution across multiple consecutive LLM iterations. It ensured that when an AI model requests multiple tool executions in sequence, each tool executes strictly with server-derived `userId` context, returns structured output to the model, and recovers smoothly to deliver synthesized natural language responses. It also cleaned up development artifacts from the active production tool registry.
+
+### 2. Architecture & Additions
+
+```text
+User Turn (Chat / Voice)
+  ↓
+AssistantService.ask / stream
+  ↓
+Round 1: LLM generates tool_call (document_search)
+  ↓
+ToolExecutor.execute (document_search with server-derived userId) → Tool Result (Chunks)
+  ↓
+Round 2: LLM receives Tool Result → generates tool_call (create_task)
+  ↓
+ToolExecutor.execute (create_task with server-derived userId) → Tool Result (TaskId)
+  ↓
+Round 3: LLM receives Tool Result → generates final synthesized text response
+  ↓
+Persisted Assistant Message & SSE Streaming Event Stream
+```
+
+- **Tool Registry Hygiene (`apps/backend/src/tools/index.ts`)**:
+  - Removed leftover temporary development test tool (`test_tool`) from the active registry (commit `a3da30f`), ensuring only official BrainOS capability tools are registered.
+- **Multi-Round Assistant Test Coverage (`apps/backend/test/assistant/assistant.service.test.ts`)**:
+  - Added dedicated end-to-end multi-round execution test proving:
+    1. First LLM response requests first tool call (`document_search`).
+    2. Assistant executes the tool with authenticated `userId` and server context.
+    3. Tool result feeds back into LLM history for the next iteration.
+    4. Second LLM response requests second tool call (`create_task`).
+    5. Assistant executes the second tool with authenticated `userId` and server context.
+    6. Third LLM response produces final conversational text.
+    7. Asserts exact call sequence, tool context integrity, and synthesized output.
+
+### 3. Security Rules & Invariants
+
+- **Server-Derived Context Invariance**: Across arbitrary tool rounds, `userId` is never derived from client input or LLM hallucinated arguments; it is strictly propagated from server session authentication context.
+- **Failure Recovery**: Individual tool execution errors in early rounds are passed back to the model as structured failure observations, allowing the model to correct parameters or explain errors gracefully.
+- **Production Registry Protection**: Production tool registration is strictly limited to validated capability providers (`tasks`, `reminders`, `documents`, `memory`, `automations`, `computer`).
+
+### 4. Verification Completed
+
+- **Focused Assistant Unit Tests**: 18/18 passed (`apps/backend/test/assistant/assistant.service.test.ts`).
+- **Full Backend Regression Suite**: 79/79 test files passed, 985/985 tests passed (0 failures) (`npm --prefix apps/backend test`).
+- **Backend TypeScript Validation**: Clean, 0 errors (`npm --prefix apps/backend run typecheck`).
+- **Git Diff Hygiene**: Clean (`git diff --check`).
+
+### 5. Final Git State
+
+- **Commits**:
+  - `a3da30f fix(tools): remove development test tool from registry`
+  - `f545d67 test(assistant): cover multi-round tool execution`
+- **Branch**: `main`
+- `HEAD` == `origin/main` (`f545d6778f654b08709587441364d9418e5ae997`)
+- Working tree clean.
+
+---
+
+# 76. ADDITIVE UPDATE — STANDALONE AUTHENTICATED COMPUTER AGENT CLIENT
+
+### 1. Goal and Purpose
+
+Mission 76 implemented the lightweight, type-safe, standalone Node/TypeScript client (`ComputerAgentClient`) for the BrainOS Computer Agent Protocol contract (`POST /api/v1/computer-agents/protocol/messages`). This client enables external daemon runners, host workers, and paired devices to communicate securely with the BrainOS backend using standard protocol request/response envelopes, robust timeout and cancellation handling, and zero credential leakage.
+
+### 2. Architecture & Additions
+
+```text
+External Worker / Host Process (fromEnv / config)
+  ↓
+ComputerAgentClient (apps/backend/src/services/computer/client/)
+  ├── ping(options?)
+  ├── sendAction(action, params?, options?)
+  └── sendEnvelope(type, payload, options?)
+  ↓
+Envelope Construction (crypto.randomUUID, version "1.0", timestamp, agentId)
+  ↓
+Authenticated HTTP Transport (POST /api/v1/computer-agents/protocol/messages)
+  ├── Headers: x-agent-id, x-agent-credential, Content-Type: application/json
+  └── Strict AbortController timeout & signal cancellation
+  ↓
+BrainOS Backend Transport / Ingress Controller
+  ↓
+Response Envelope Validation (validateProtocolResponseEnvelope)
+  └── Fail-closed error mapping & structured ComputerAgentClientError
+```
+
+- **Client Implementation (`apps/backend/src/services/computer/client/`)**:
+  - **`computer-agent-client.types.ts`**: Defined `ComputerAgentClientConfig`, `ComputerAgentClientOptions`, and `ComputerAgentClientError`. Error class automatically redacts credentials from messages and recursive details payloads.
+  - **`computer-agent-client.ts`**: Implemented `ComputerAgentClient` class:
+    - `fromEnv(env?)` factory parsing `BRAINOS_BACKEND_URL`, `BRAINOS_AGENT_ID`, `BRAINOS_AGENT_CREDENTIAL`, and `BRAINOS_AGENT_TIMEOUT_MS`.
+    - `ping(options?)` sending standard `"ping"` protocol messages.
+    - `sendAction(action, params?, options?)` sending `"action_request"` envelopes with unique UUIDs and correlation IDs.
+    - `sendEnvelope(type, payload, options?)` low-level protocol dispatcher over authenticated HTTP.
+    - Timeout and user cancellation using `AbortController` and merged `AbortSignal` with reliable timer and listener cleanup.
+    - Response envelope validation via `validateProtocolResponseEnvelope`.
+    - Redacted `toJSON()` and custom `nodejs.util.inspect.custom` methods masking credentials to `"[REDACTED]"`.
+  - **`index.ts`**: Barrel exports for client, error class, and configuration types.
+
+### 3. Security Rules & Invariants
+
+- **Zero Credential Exposure**: Plaintext credentials are accepted solely via configuration or environment variables; they are never printed in logs, console representations (`util.inspect`), serialization (`toJSON`), or error stacks.
+- **Transport-Only Separation**: The client operates strictly as an authenticated transport layer. It contains no shell execution, no filesystem operations, and no duplicated backend authorization logic.
+- **Fail-Closed Guarantees**: Any network disruption, HTTP error status (401, 403, 400, 500), timeout (408), abort signal (499), or malformed response envelope immediately fails closed with a typed `ComputerAgentClientError`.
+- **Contract Reusability**: Reused canonical protocol types (`COMPUTER_AGENT_PROTOCOL_VERSION`, `ProtocolErrorCode`, `createProtocolRequest`, `validateProtocolResponseEnvelope`) with zero duplicate definitions.
+
+### 4. Verification Completed
+
+- **Dedicated Client Unit Tests**: 23/23 passed (`apps/backend/test/services/computer/client/computer-agent-client.test.ts`), verifying configuration, environment parsing, authentication headers, envelope creation, ping, action request, response validation, timeout/cancellation, and zero credential leakage.
+- **Full Backend Regression Suite**: 80/80 test files passed, 1,008/1,008 tests passed (0 failures) (`npm --prefix apps/backend test`).
+- **Backend TypeScript Validation**: Clean, 0 errors (`npm --prefix apps/backend run typecheck`).
+- **Git Diff Hygiene**: Clean (`git diff --check`).
+
+### 5. Final Git State
+
+- **Commit**: `ba020c5 feat(computer): add authenticated agent client`
+- **Branch**: `main`
+- `HEAD` == `origin/main` (`ba020c56de16456b634853b98dbc76e6cfd7db80`)
+- Working tree clean.
