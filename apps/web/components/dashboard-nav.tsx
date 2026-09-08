@@ -10,7 +10,8 @@ export type DashboardNavKey =
   | "reminders"
   | "documents"
   | "memories"
-  | "automations";
+  | "automations"
+  | "computer";
 
 interface NavItem {
   key: DashboardNavKey;
@@ -25,6 +26,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: "documents", label: "Documents", href: "/dashboard/documents" },
   { key: "memories", label: "Memories", href: "/dashboard/memories" },
   { key: "automations", label: "Automations", href: "/dashboard/automations" },
+  { key: "computer", label: "Computer", href: "/dashboard/computer" },
 ];
 
 export interface DashboardNavProps {

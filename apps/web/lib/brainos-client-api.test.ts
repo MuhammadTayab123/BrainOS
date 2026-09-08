@@ -42,6 +42,14 @@ let interruptVoiceSession: typeof import("./brainos-client-api").interruptVoiceS
 let endVoiceSession: typeof import("./brainos-client-api").endVoiceSession;
 let processVoiceTurn: typeof import("./brainos-client-api").processVoiceTurn;
 let streamVoiceTurn: typeof import("./brainos-client-api").streamVoiceTurn;
+let listComputerAgents: typeof import("./brainos-client-api").listComputerAgents;
+let getComputerAgent: typeof import("./brainos-client-api").getComputerAgent;
+let createComputerAgent: typeof import("./brainos-client-api").createComputerAgent;
+let revokeComputerAgent: typeof import("./brainos-client-api").revokeComputerAgent;
+let deleteComputerAgent: typeof import("./brainos-client-api").deleteComputerAgent;
+let listComputerAgentPermissions: typeof import("./brainos-client-api").listComputerAgentPermissions;
+let grantComputerAgentPermission: typeof import("./brainos-client-api").grantComputerAgentPermission;
+let revokeComputerAgentPermission: typeof import("./brainos-client-api").revokeComputerAgentPermission;
 type AssistantStreamEvent = import("./brainos-client-api").AssistantStreamEvent;
 type VoiceStreamEvent = import("./brainos-client-api").VoiceStreamEvent;
 type VoiceTurnResult = import("./brainos-client-api").VoiceTurnResult;
@@ -91,6 +99,14 @@ beforeAll(async () => {
   endVoiceSession = mod.endVoiceSession;
   processVoiceTurn = mod.processVoiceTurn;
   streamVoiceTurn = mod.streamVoiceTurn;
+  listComputerAgents = mod.listComputerAgents;
+  getComputerAgent = mod.getComputerAgent;
+  createComputerAgent = mod.createComputerAgent;
+  revokeComputerAgent = mod.revokeComputerAgent;
+  deleteComputerAgent = mod.deleteComputerAgent;
+  listComputerAgentPermissions = mod.listComputerAgentPermissions;
+  grantComputerAgentPermission = mod.grantComputerAgentPermission;
+  revokeComputerAgentPermission = mod.revokeComputerAgentPermission;
 });
 
 describe("streamAssistant (Frontend SSE Client)", () => {
@@ -2388,5 +2404,330 @@ describe("Voice Audio Utilities (Mission 69)", () => {
     const { isAudioRecordingSupported } = await import("./voice-audio");
     const supported = isAudioRecordingSupported();
     expect(typeof supported).toBe("boolean");
+  });
+});
+
+describe("Computer Agent API (Mission 72)", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  describe("listComputerAgents", () => {
+    it("fetches computer agents with authentication and query params", async () => {
+      const mockAgents = [
+        {
+          id: "agent-1",
+          userId: "user-1",
+          name: "Work PC",
+          status: "ACTIVE",
+          lastAuthenticatedAt: null,
+          revokedAt: null,
+          createdAt: "2026-09-08T00:00:00.000Z",
+          updatedAt: "2026-09-08T00:00:00.000Z",
+        },
+      ];
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: mockAgents,
+        }),
+      });
+
+      const result = await listComputerAgents("mock-token", {
+        status: "ACTIVE",
+        limit: 10,
+      });
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "http://localhost:3001/api/v1/computer-agents?status=ACTIVE&limit=10",
+        expect.objectContaining({
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer mock-token",
+          },
+        }),
+      );
+      expect(result).toEqual(mockAgents);
+    });
+
+    it("handles API errors gracefully", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: "Unauthorized",
+        json: async () => ({
+          success: false,
+          error: { message: "Authentication required." },
+        }),
+      });
+
+      await expect(listComputerAgents("invalid-token")).rejects.toThrow(
+        "Authentication required.",
+      );
+    });
+  });
+
+  describe("getComputerAgent", () => {
+    it("fetches a single computer agent by ID", async () => {
+      const mockAgent = {
+        id: "agent-1",
+        userId: "user-1",
+        name: "Work PC",
+        status: "ACTIVE",
+        lastAuthenticatedAt: null,
+        revokedAt: null,
+        createdAt: "2026-09-08T00:00:00.000Z",
+        updatedAt: "2026-09-08T00:00:00.000Z",
+      };
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: mockAgent,
+        }),
+      });
+
+      const result = await getComputerAgent("mock-token", "agent-1");
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "http://localhost:3001/api/v1/computer-agents/agent-1",
+        expect.objectContaining({
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer mock-token",
+          },
+        }),
+      );
+      expect(result).toEqual(mockAgent);
+    });
+  });
+
+  describe("createComputerAgent", () => {
+    it("creates a new computer agent and returns credential", async () => {
+      const mockResponse = {
+        agent: {
+          id: "agent-new",
+          userId: "user-1",
+          name: "Home Laptop",
+          status: "ACTIVE",
+          lastAuthenticatedAt: null,
+          revokedAt: null,
+          createdAt: "2026-09-08T00:00:00.000Z",
+          updatedAt: "2026-09-08T00:00:00.000Z",
+        },
+        credential: "plain-secret-credential-token",
+      };
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: mockResponse,
+        }),
+      });
+
+      const result = await createComputerAgent("mock-token", {
+        name: "Home Laptop",
+        id: "agent-new",
+      });
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "http://localhost:3001/api/v1/computer-agents",
+        expect.objectContaining({
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer mock-token",
+          },
+          body: JSON.stringify({
+            name: "Home Laptop",
+            id: "agent-new",
+          }),
+        }),
+      );
+      expect(result).toEqual(mockResponse);
+    });
+  });
+
+  describe("revokeComputerAgent", () => {
+    it("revokes an active computer agent", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: {
+            id: "agent-1",
+            status: "REVOKED",
+          },
+        }),
+      });
+
+      const result = await revokeComputerAgent("mock-token", "agent-1");
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "http://localhost:3001/api/v1/computer-agents/agent-1/revoke",
+        expect.objectContaining({
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer mock-token",
+          },
+        }),
+      );
+      expect(result).toEqual({ id: "agent-1", status: "REVOKED" });
+    });
+  });
+
+  describe("deleteComputerAgent", () => {
+    it("deletes a computer agent by ID", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: {
+            id: "agent-1",
+            deleted: true,
+          },
+        }),
+      });
+
+      const result = await deleteComputerAgent("mock-token", "agent-1");
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "http://localhost:3001/api/v1/computer-agents/agent-1",
+        expect.objectContaining({
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer mock-token",
+          },
+        }),
+      );
+      expect(result).toEqual({ id: "agent-1", deleted: true });
+    });
+  });
+
+  describe("listComputerAgentPermissions", () => {
+    it("lists permissions for a computer agent", async () => {
+      const mockPermissions = [
+        {
+          id: "perm-1",
+          agentId: "agent-1",
+          action: "computer_launch_application",
+          createdAt: "2026-09-08T00:00:00.000Z",
+          updatedAt: "2026-09-08T00:00:00.000Z",
+        },
+      ];
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: mockPermissions,
+        }),
+      });
+
+      const result = await listComputerAgentPermissions("mock-token", "agent-1");
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "http://localhost:3001/api/v1/computer-agents/agent-1/permissions",
+        expect.objectContaining({
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer mock-token",
+          },
+        }),
+      );
+      expect(result).toEqual(mockPermissions);
+    });
+  });
+
+  describe("grantComputerAgentPermission", () => {
+    it("grants a permission action to a computer agent", async () => {
+      const mockPermission = {
+        id: "perm-1",
+        agentId: "agent-1",
+        action: "computer_write_file",
+        createdAt: "2026-09-08T00:00:00.000Z",
+        updatedAt: "2026-09-08T00:00:00.000Z",
+      };
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: mockPermission,
+        }),
+      });
+
+      const result = await grantComputerAgentPermission(
+        "mock-token",
+        "agent-1",
+        "computer_write_file",
+      );
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "http://localhost:3001/api/v1/computer-agents/agent-1/permissions",
+        expect.objectContaining({
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer mock-token",
+          },
+          body: JSON.stringify({ action: "computer_write_file" }),
+        }),
+      );
+      expect(result).toEqual(mockPermission);
+    });
+  });
+
+  describe("revokeComputerAgentPermission", () => {
+    it("revokes a permission action from a computer agent", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: {
+            agentId: "agent-1",
+            action: "computer_write_file",
+            revoked: true,
+          },
+        }),
+      });
+
+      const result = await revokeComputerAgentPermission(
+        "mock-token",
+        "agent-1",
+        "computer_write_file",
+      );
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "http://localhost:3001/api/v1/computer-agents/agent-1/permissions/computer_write_file",
+        expect.objectContaining({
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer mock-token",
+          },
+        }),
+      );
+      expect(result).toEqual({
+        agentId: "agent-1",
+        action: "computer_write_file",
+        revoked: true,
+      });
+    });
   });
 });

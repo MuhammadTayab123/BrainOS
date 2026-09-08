@@ -1626,3 +1626,212 @@ export async function streamVoiceTurn(
 
   return finalResult;
 }
+
+// ==========================
+// Computer Agent API (Mission 72)
+// ==========================
+
+export type ComputerAgentStatus = "ACTIVE" | "REVOKED";
+
+export interface ComputerAgent {
+  id: string;
+  userId: string;
+  name: string;
+  status: ComputerAgentStatus;
+  lastAuthenticatedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RegisteredComputerAgent {
+  agent: ComputerAgent;
+  credential: string;
+}
+
+export interface ComputerAgentPermission {
+  id: string;
+  agentId: string;
+  action: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListComputerAgentsOptions {
+  status?: ComputerAgentStatus;
+  limit?: number;
+}
+
+export interface CreateComputerAgentInput {
+  name: string;
+  id?: string;
+}
+
+export async function listComputerAgents(
+  token: string,
+  options?: ListComputerAgentsOptions,
+): Promise<ComputerAgent[]> {
+  const params = new URLSearchParams();
+
+  if (options?.status !== undefined) {
+    params.set("status", options.status);
+  }
+  if (options?.limit !== undefined) {
+    params.set("limit", String(options.limit));
+  }
+
+  const query = params.toString();
+  const endpoint = query
+    ? `${API_URL}/api/v1/computer-agents?${query}`
+    : `${API_URL}/api/v1/computer-agents`;
+
+  const response = await fetch(endpoint, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  return parseResponse<ComputerAgent[]>(response);
+}
+
+export async function getComputerAgent(
+  token: string,
+  agentId: string,
+): Promise<ComputerAgent> {
+  const response = await fetch(
+    `${API_URL}/api/v1/computer-agents/${encodeURIComponent(agentId)}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    },
+  );
+
+  return parseResponse<ComputerAgent>(response);
+}
+
+export async function createComputerAgent(
+  token: string,
+  input: CreateComputerAgentInput,
+): Promise<RegisteredComputerAgent> {
+  const payload: Record<string, unknown> = {
+    name: input.name.trim(),
+  };
+
+  if (input.id !== undefined && input.id.trim().length > 0) {
+    payload.id = input.id.trim();
+  }
+
+  const response = await fetch(`${API_URL}/api/v1/computer-agents`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseResponse<RegisteredComputerAgent>(response);
+}
+
+export async function revokeComputerAgent(
+  token: string,
+  agentId: string,
+): Promise<{ id: string; status: ComputerAgentStatus }> {
+  const response = await fetch(
+    `${API_URL}/api/v1/computer-agents/${encodeURIComponent(agentId)}/revoke`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return parseResponse<{ id: string; status: ComputerAgentStatus }>(response);
+}
+
+export async function deleteComputerAgent(
+  token: string,
+  agentId: string,
+): Promise<{ id: string; deleted: boolean }> {
+  const response = await fetch(
+    `${API_URL}/api/v1/computer-agents/${encodeURIComponent(agentId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return parseResponse<{ id: string; deleted: boolean }>(response);
+}
+
+export async function listComputerAgentPermissions(
+  token: string,
+  agentId: string,
+): Promise<ComputerAgentPermission[]> {
+  const response = await fetch(
+    `${API_URL}/api/v1/computer-agents/${encodeURIComponent(agentId)}/permissions`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    },
+  );
+
+  return parseResponse<ComputerAgentPermission[]>(response);
+}
+
+export async function grantComputerAgentPermission(
+  token: string,
+  agentId: string,
+  action: string,
+): Promise<ComputerAgentPermission> {
+  const response = await fetch(
+    `${API_URL}/api/v1/computer-agents/${encodeURIComponent(agentId)}/permissions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ action: action.trim() }),
+    },
+  );
+
+  return parseResponse<ComputerAgentPermission>(response);
+}
+
+export async function revokeComputerAgentPermission(
+  token: string,
+  agentId: string,
+  action: string,
+): Promise<{ agentId: string; action: string; revoked: boolean }> {
+  const response = await fetch(
+    `${API_URL}/api/v1/computer-agents/${encodeURIComponent(agentId)}/permissions/${encodeURIComponent(action.trim())}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return parseResponse<{ agentId: string; action: string; revoked: boolean }>(
+    response,
+  );
+}
