@@ -39,7 +39,6 @@ import {
 } from "./reminder.tools";
 
 import { ToolRegistry } from "./tool.registry";
-import { testTool } from "./test.tool";
 
 import {
   createTaskTool,
@@ -63,8 +62,6 @@ export function createToolRegistry(
   options: ToolContainerOptions = {},
 ): ToolRegistry {
   const registry = new ToolRegistry();
-
-  registry.register(testTool);
 
   registry.register(createTaskTool);
   registry.register(listTasksTool);
