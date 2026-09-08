@@ -9,9 +9,9 @@
 **OS:** Windows
 **Editor:** VS Code
 **Current date checkpoint:** 2026-09-09
-**Latest verified Git commit:** `eee0436 feat(web): add computer agent management dashboard`
+**Latest verified Git commit:** `f1717d7 feat(security): auto-resolve authorized computer actions`
 **Working tree at latest user verification:** clean
-**Remote:** `origin/main` matched local `main` at `eee0436`
+**Remote:** `origin/main` matched local `main` at `f1717d7`
 
 ---
 
@@ -4860,4 +4860,79 @@ Prisma Database (ComputerAgent, ComputerAgentPermission, ComputerAgentCredential
 - **Commit**: `eee0436 feat(web): add computer agent management dashboard`
 - **Branch**: `main`
 - `HEAD` == `origin/main` (`eee0436c18b2a4134255ca418e935519f57563e0`)
+- Working tree clean.
+
+---
+
+# 73. ADDITIVE UPDATE — ASSISTANT & VOICE COMPUTER ACTION AUTO-RESOLUTION
+
+### 1. Goal and Purpose
+
+Mission 73 connects server-side Computer Agent permissions to normal Assistant (Chat) and Voice computer-tool execution. When callers omit `authorizedComputerActions` (`undefined`), BrainOS automatically and securely resolves effective permissions from the authenticated user's active registered Computer Agent and persistent database grants without requiring manual client-side authorization parameters.
+
+### 2. Architecture & Additions
+
+```text
+User Turn (Chat / Voice)
+  ↓ [authorizedComputerActions = undefined | requestedActions]
+AssistantService.ask / VoiceService.processTurn
+  ↓
+AssistantService.resolveEffectiveComputerActions(userId, requestedActions)
+  ↓
+ComputerAuthorizationService.resolveEffectiveActions(userId, requestedActions)
+  ↓
+Auto-Resolution Policy:
+  • 0 active agents                     → Fail closed ([])
+  • Exactly 1 active agent              → Auto-select & load DB permissions (computer_agent_permissions)
+  • >1 active agents                    → Fail closed ([] - never guess or pick first)
+  • Explicit requested actions provided → requested ∩ serverGranted
+  ↓
+ToolExecutor.execute (computer tools)
+  • Read-Only tools (status, read, list)  → Allowed (policy-authorized)
+  • Privileged tools (launch, write)      → Enforced against effective actions
+  ↓
+AssistantRuntime & SSE / Voice Stream Events (task-start, task-progress)
+```
+
+- **Backend Authorization Logic (`apps/backend/src/services/computer/security/computer-authorization.service.ts`)**:
+  - Enhanced `resolveEffectiveActions`: When `requestedActions === undefined`, automatically resolves to `serverGrantedActions`.
+  - Preserved explicit array filtering: When `requestedActions` is provided, effective actions are strictly `requested ∩ serverGranted`.
+  - Enforced single-agent auto-selection: If user has 0 or $>1$ active agents without explicit server target specification, fails closed (`[]`).
+  - Enforced database/error fail-closed behavior across all query paths.
+- **Assistant & Voice Orchestration (`apps/backend/src/services/assistant/assistant.service.ts`)**:
+  - `resolveEffectiveComputerActions` delegates directly to `computerAuthorizationService.resolveEffectiveActions(userId, requestedActions)`.
+  - Chat and Voice invoke the exact same authorization path with zero duplicated logic.
+  - Safe array guard ensures non-array or failure results fail closed.
+- **Frontend Dashboard Awareness (`apps/web/app/dashboard/page.tsx`)**:
+  - Added subtle device/authorization awareness indicator in conversation header showing active Computer Agent and granted action count with direct link to `/dashboard/computer`.
+  - Non-blocking client status loading via existing `listComputerAgents` and `listComputerAgentPermissions` APIs.
+- **Tool Progress Events**:
+  - Computer tool execution events and progress messages continue rendering seamlessly in the chat/voice timeline through existing task/stream mechanisms.
+
+### 3. Security Rules & Invariants
+
+- **Server-Side Authority**: Client inputs are never trusted as authorization authority. Only persistent records in `computer_agent_permissions` for active agents owned by `userId` can authorize privileged tools (`computer_launch_application`, `computer_write_file`).
+- **Fail-Closed Guarantees**:
+  - 0 active agents $\to$ returns `[]`.
+  - $>1$ active agents $\to$ logs warning and returns `[]` (never picks first).
+  - DB query failures $\to$ logs error and returns `[]`.
+  - Revoked or deleted agents $\to$ returns `[]`.
+- **Read-Only vs. Privileged Distinction**:
+  - Read-Only actions (`computer_get_status`, `computer_list_applications`, `computer_list_files`, `computer_read_file`) remain policy-authorized without requiring explicit DB grants.
+- **Zero Scope Creep**: No database/schema changes, new dependencies, modifications to `LocalComputerAgent`, computer transport, wake word, vision, or remote WebSockets.
+
+### 4. Verification Completed
+
+- **Focused Computer Authorization Unit & Integration Tests**: 33/33 passed (`apps/backend/test/services/computer/security/computer-authorization.service.test.ts` & `apps/backend/test/assistant/assistant.computer-authorization.test.ts`).
+- **Full Backend Regression Suite**: 79/79 test files passed, 984/984 tests passed (0 failures) (`npm --prefix apps/backend test`).
+- **Backend TypeScript Validation**: Clean, 0 errors (`tsc --noEmit`).
+- **Frontend Client API Tests**: 74/74 passed (`apps/web/lib/brainos-client-api.test.ts`).
+- **Frontend Production Build**: 12/12 routes compiled, 0 errors (`npm --prefix apps/web run build`).
+- **Git Diff Hygiene**: Clean (`git diff --check`).
+
+### 5. Final Git State
+
+- **Commit**: `f1717d7 feat(security): auto-resolve authorized computer actions`
+- **Branch**: `main`
+- `HEAD` == `origin/main` (`f1717d76c42a3c65d75bbe481ab8f779150d3991`)
 - Working tree clean.
