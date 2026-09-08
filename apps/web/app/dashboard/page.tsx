@@ -17,6 +17,10 @@ import {
   getConversation,
   deleteConversation,
   listMessages,
+  listComputerAgents,
+  listComputerAgentPermissions,
+  type ComputerAgent,
+  type ComputerAgentPermission,
   type Conversation,
   type Message,
 } from "../../lib/brainos-client-api";
@@ -51,6 +55,8 @@ export default function Home() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const voiceRecorderRef = useRef<VoiceRecorderController | null>(null);
   const audioPlaybackRef = useRef<AudioPlaybackController | null>(null);
+  const [activeAgent, setActiveAgent] = useState<ComputerAgent | null>(null);
+  const [agentPermissions, setAgentPermissions] = useState<ComputerAgentPermission[]>([]);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -136,6 +142,22 @@ export default function Home() {
         if (!cancelled) {
           setMessages(conversationMessages);
           isNearBottomRef.current = true;
+        }
+
+        try {
+          const agents = await listComputerAgents(token, { status: "ACTIVE" });
+          if (!cancelled && agents && agents.length === 1) {
+            setActiveAgent(agents[0]);
+            const perms = await listComputerAgentPermissions(token, agents[0].id);
+            if (!cancelled) {
+              setAgentPermissions(perms ?? []);
+            }
+          } else if (!cancelled) {
+            setActiveAgent(null);
+            setAgentPermissions([]);
+          }
+        } catch {
+          // Non-blocking device status
         }
       } catch (err) {
         if (!cancelled) {
@@ -815,6 +837,32 @@ export default function Home() {
                     Your conversation is saved automatically.
                   </p>
                 </div>
+              </div>
+
+              {/* Connected Device & Authorization Awareness */}
+              <div className="flex items-center gap-2 shrink-0">
+                {activeAgent ? (
+                  <Link
+                    href="/dashboard/computer"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-emerald-800/80 bg-emerald-950/60 px-2.5 py-1 text-[11px] font-medium text-emerald-300 transition hover:bg-emerald-900/80 hover:text-white shadow-sm"
+                    title={`${activeAgent.name} active • ${agentPermissions.length} actions granted`}
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="truncate max-w-[110px] hidden sm:inline">{activeAgent.name}</span>
+                    <span className="text-[10px] text-emerald-400/90 font-mono">
+                      {agentPermissions.length} {agentPermissions.length === 1 ? "action" : "actions"}
+                    </span>
+                  </Link>
+                ) : (
+                  <Link
+                    href="/dashboard/computer"
+                    className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 px-2.5 py-1 text-[11px] text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-200"
+                    title="Manage connected devices & permissions"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-zinc-500" />
+                    <span>No Device Active</span>
+                  </Link>
+                )}
               </div>
             </header>
 

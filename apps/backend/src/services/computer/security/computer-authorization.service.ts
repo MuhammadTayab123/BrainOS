@@ -135,16 +135,17 @@ export class DefaultComputerAuthorizationService
       return [];
     }
 
-    if (
-      !requestedActions ||
-      !Array.isArray(requestedActions) ||
-      requestedActions.length === 0
-    ) {
+    const serverGrantedActions = await this.resolveServerGrantedActions(userId);
+    if (serverGrantedActions.length === 0) {
       return [];
     }
 
-    const serverGrantedActions = await this.resolveServerGrantedActions(userId);
-    if (serverGrantedActions.length === 0) {
+    // Auto-resolve: if requestedActions is omitted (undefined), return all server-granted actions
+    if (requestedActions === undefined) {
+      return serverGrantedActions;
+    }
+
+    if (!Array.isArray(requestedActions) || requestedActions.length === 0) {
       return [];
     }
 

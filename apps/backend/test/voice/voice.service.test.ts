@@ -347,7 +347,7 @@ describe("VoiceService", () => {
     it("propagates AbortSignal to STT transcription", async () => {
       const assistantService = createAssistantServiceMock();
       const mockStt = new MockSTTProvider();
-      mockStt.delayMs = 100;
+      mockStt.delayMs = 300;
 
       const voiceService = new VoiceService(assistantService, mockStt);
       const controller = new AbortController();
@@ -358,7 +358,7 @@ describe("VoiceService", () => {
         signal: controller.signal,
       });
 
-      setTimeout(() => controller.abort(), 20);
+      setTimeout(() => controller.abort(), 10);
 
       await expect(promise).rejects.toThrow();
     });

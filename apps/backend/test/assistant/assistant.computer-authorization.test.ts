@@ -61,9 +61,9 @@ describe("Assistant & Voice Computer Authorization Integration (Mission 70)", ()
     } as unknown as ComputerAgentGateway;
 
     mockAuthService = {
-      resolveActiveAgent: vi.fn(),
-      resolveServerGrantedActions: vi.fn(),
-      resolveEffectiveActions: vi.fn(),
+      resolveActiveAgent: vi.fn().mockResolvedValue(null),
+      resolveServerGrantedActions: vi.fn().mockResolvedValue([]),
+      resolveEffectiveActions: vi.fn().mockResolvedValue([]),
     };
 
     auditService = new ToolAuditService();
@@ -366,5 +366,111 @@ describe("Assistant & Voice Computer Authorization Integration (Mission 70)", ()
     ]);
     expect(mockGateway.writeFile).toHaveBeenCalledWith("voice-notes.txt", "spoken note");
     expect(voiceResult.assistantResponse.text).toBe("Voice note written.");
+  });
+
+  it("auto-resolves server permissions and allows execution when authorizedComputerActions is omitted (undefined)", async () => {
+    mockLLMService.generate.mockResolvedValueOnce({
+      text: null,
+      model: "test-llm",
+      provider: "test",
+      toolCalls: [
+        {
+          id: "call-auto-1",
+          name: "computer_launch_application",
+          arguments: { appId: "notepad" },
+        },
+      ],
+    }).mockResolvedValueOnce({
+      text: "Notepad launched successfully.",
+      model: "test-llm",
+      provider: "test",
+      toolCalls: [],
+    });
+
+    // Mock auth service auto-resolves to server-granted permissions
+    vi.mocked(mockAuthService.resolveEffectiveActions).mockResolvedValueOnce([
+      "computer_launch_application",
+    ]);
+
+    const response = await assistantService.ask({
+      userId: "user-1",
+      message: "Launch notepad",
+      // authorizedComputerActions is intentionally omitted
+    });
+
+    expect(mockAuthService.resolveEffectiveActions).toHaveBeenCalledWith("user-1", undefined);
+    expect(mockGateway.launchApplication).toHaveBeenCalledWith("notepad");
+    expect(response.text).toBe("Notepad launched successfully.");
+  });
+
+  it("auto-resolves and fails closed when authorizedComputerActions is omitted and user has no server permissions", async () => {
+    mockLLMService.generate.mockResolvedValueOnce({
+      text: null,
+      model: "test-llm",
+      provider: "test",
+      toolCalls: [
+        {
+          id: "call-auto-2",
+          name: "computer_write_file",
+          arguments: { path: "secret.txt", content: "data" },
+        },
+      ],
+    }).mockResolvedValueOnce({
+      text: "Could not write file.",
+      model: "test-llm",
+      provider: "test",
+      toolCalls: [],
+    });
+
+    // Auth service auto-resolves to empty array (no active agent or 0 permissions)
+    vi.mocked(mockAuthService.resolveEffectiveActions).mockResolvedValueOnce([]);
+
+    const response = await assistantService.ask({
+      userId: "user-1",
+      message: "Write to secret.txt",
+      // authorizedComputerActions omitted
+    });
+
+    expect(mockAuthService.resolveEffectiveActions).toHaveBeenCalledWith("user-1", undefined);
+    expect(mockGateway.writeFile).not.toHaveBeenCalled();
+    expect(response.text).toBe("Could not write file.");
+  });
+
+  it("auto-resolves server permissions and allows execution when authorizedComputerActions is omitted in VoiceService.processTurn", async () => {
+    const voiceService = new VoiceService(assistantService);
+
+    mockLLMService.generate.mockResolvedValueOnce({
+      text: null,
+      model: "test-llm",
+      provider: "test",
+      toolCalls: [
+        {
+          id: "voice-auto-1",
+          name: "computer_launch_application",
+          arguments: { appId: "calc" },
+        },
+      ],
+    }).mockResolvedValueOnce({
+      text: "Calculator opened.",
+      model: "test-llm",
+      provider: "test",
+      toolCalls: [],
+    });
+
+    vi.mocked(mockAuthService.resolveEffectiveActions).mockResolvedValueOnce([
+      "computer_launch_application",
+    ]);
+
+    const voiceInput: VoiceTurnInput = {
+      userId: "user-1",
+      transcript: "Open calculator",
+      // authorizedComputerActions omitted
+    };
+
+    const voiceResult = await voiceService.processTurn(voiceInput);
+
+    expect(mockAuthService.resolveEffectiveActions).toHaveBeenCalledWith("user-1", undefined);
+    expect(mockGateway.launchApplication).toHaveBeenCalledWith("calc");
+    expect(voiceResult.assistantResponse.text).toBe("Calculator opened.");
   });
 });

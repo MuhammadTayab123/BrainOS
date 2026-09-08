@@ -309,5 +309,97 @@ describe("DefaultComputerAuthorizationService", () => {
 
       expect(effective).toEqual([]);
     });
+
+    describe("auto-resolution when requestedActions is omitted (undefined)", () => {
+      it("auto-resolves all server-granted actions for the single active agent", async () => {
+        vi.mocked(mockAgentRepo.listByUser).mockResolvedValueOnce([validAgent]);
+        vi.mocked(mockPermissionRepo.listPermissions).mockResolvedValueOnce([
+          {
+            id: "p1",
+            agentId: "agent-1",
+            action: "computer_write_file",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            deletedAt: null,
+          },
+          {
+            id: "p2",
+            agentId: "agent-1",
+            action: "computer_launch_application",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            deletedAt: null,
+          },
+        ]);
+
+        const effective = await service.resolveEffectiveActions("user-1", undefined);
+
+        expect(effective).toEqual([
+          "computer_write_file",
+          "computer_launch_application",
+        ]);
+      });
+
+      it("auto-resolves to empty array when user has 0 active agents", async () => {
+        vi.mocked(mockAgentRepo.listByUser).mockResolvedValueOnce([]);
+
+        const effective = await service.resolveEffectiveActions("user-1", undefined);
+
+        expect(effective).toEqual([]);
+      });
+
+      it("fails closed (returns empty array) when user has multiple (>1) active agents", async () => {
+        const secondAgent: ComputerAgentRecord = {
+          ...validAgent,
+          id: "agent-2",
+          name: "Second Desktop",
+        };
+        vi.mocked(mockAgentRepo.listByUser).mockResolvedValueOnce([
+          validAgent,
+          secondAgent,
+        ]);
+
+        const effective = await service.resolveEffectiveActions("user-1", undefined);
+
+        expect(effective).toEqual([]);
+      });
+
+      it("auto-resolves to empty array when active agent has no DB permissions", async () => {
+        vi.mocked(mockAgentRepo.listByUser).mockResolvedValueOnce([validAgent]);
+        vi.mocked(mockPermissionRepo.listPermissions).mockResolvedValueOnce([]);
+
+        const effective = await service.resolveEffectiveActions("user-1", undefined);
+
+        expect(effective).toEqual([]);
+      });
+
+      it("returns empty array when client explicitly provides empty array []", async () => {
+        vi.mocked(mockAgentRepo.listByUser).mockResolvedValueOnce([validAgent]);
+        vi.mocked(mockPermissionRepo.listPermissions).mockResolvedValueOnce([
+          {
+            id: "p1",
+            agentId: "agent-1",
+            action: "computer_write_file",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            deletedAt: null,
+          },
+        ]);
+
+        const effective = await service.resolveEffectiveActions("user-1", []);
+
+        expect(effective).toEqual([]);
+      });
+
+      it("fails closed (returns empty array) on database errors during auto-resolution", async () => {
+        vi.mocked(mockAgentRepo.listByUser).mockRejectedValueOnce(
+          new Error("DB error"),
+        );
+
+        const effective = await service.resolveEffectiveActions("user-1", undefined);
+
+        expect(effective).toEqual([]);
+      });
+    });
   });
 });

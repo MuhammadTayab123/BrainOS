@@ -376,19 +376,13 @@ export class AssistantService {
     userId: string,
     requestedActions?: string[],
   ): Promise<string[]> {
-    if (
-      !requestedActions ||
-      !Array.isArray(requestedActions) ||
-      requestedActions.length === 0
-    ) {
-      return [];
-    }
-
     try {
-      return await this.computerAuthorizationService.resolveEffectiveActions(
-        userId,
-        requestedActions,
-      );
+      const result =
+        await this.computerAuthorizationService.resolveEffectiveActions(
+          userId,
+          requestedActions,
+        );
+      return Array.isArray(result) ? result : [];
     } catch {
       return [];
     }
