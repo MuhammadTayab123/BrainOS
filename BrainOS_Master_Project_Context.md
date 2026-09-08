@@ -8,10 +8,10 @@
 **Branch:** `main`
 **OS:** Windows
 **Editor:** VS Code
-**Current date checkpoint:** 2026-09-08
-**Latest verified Git commit:** `ad6ce15 feat(security): enforce server-side computer action authorization`
+**Current date checkpoint:** 2026-09-09
+**Latest verified Git commit:** `eee0436 feat(web): add computer agent management dashboard`
 **Working tree at latest user verification:** clean
-**Remote:** `origin/main` matched local `main` at `ad6ce15`
+**Remote:** `origin/main` matched local `main` at `eee0436`
 
 ---
 
@@ -1428,13 +1428,13 @@ The assistant must:
 
 ```text
 Date:
-2026-09-08
+2026-09-09
 
 Current product state:
-Core BrainOS foundation + Tasks + Reminders + Automation + Documents/RAG + Memory + Computer Agent + secure computer action authorization + provider-independent LLM architecture + SSE/token streaming + frontend chat + local Whisper.cpp STT + local Piper TTS + authenticated voice transport + frontend voice integration.
+Core BrainOS foundation + Tasks + Reminders + Automation + Documents/RAG + Memory + Computer Agent + secure computer action authorization + provider-independent LLM architecture + SSE/token streaming + frontend chat + local Whisper.cpp STT + local Piper TTS + authenticated voice transport + frontend voice integration + frontend computer agent management dashboard.
 
 Latest Git checkpoint:
-ad6ce15 feat(security): enforce server-side computer action authorization
+eee0436 feat(web): add computer agent management dashboard
 
 Branch:
 main
@@ -1443,7 +1443,7 @@ Working tree:
 clean
 
 Remote:
-origin/main synchronized with local main at ad6ce15
+origin/main synchronized with local main at eee0436
 ```
 
 The immediate next development direction is **not to rebuild existing foundations**.
@@ -4787,3 +4787,77 @@ Computer tools (computer.tools.ts) → ComputerAgentGateway → LocalComputerAge
   - `HEAD` = `ad6ce1506aecd4626df972e3d686102b2de6b2d9`
   - `origin/main` = `ad6ce1506aecd4626df972e3d686102b2de6b2d9`
   - Working tree = clean.
+
+---
+
+# 72. ADDITIVE UPDATE — FRONTEND COMPUTER AGENT & PERMISSION MANAGEMENT DASHBOARD
+
+**Updated:** 2026-09-09
+
+This section is an additive update to the BrainOS master context. It does **not** replace, remove, or rewrite any earlier product vision, roadmap, architectural history, or completed milestones.
+
+## Mission 72 — Frontend Computer Agent & Permission Management Dashboard — COMPLETE
+
+### 1. Goal and Purpose
+
+Mission 72 introduced the frontend control-plane interface in the BrainOS web application for registered Computer Agents and their granular database-backed action permissions. Following Mission 70's server-side authorization enforcement, users now have full visibility and control over paired devices, active/revoked lifecycle states, and privileged action grants directly from the dashboard.
+
+### 2. Architecture & Additions
+
+```text
+Browser / Next.js Web App (/dashboard/computer)
+  ↓
+Clerk JWT Bearer Authentication (useAuth / getToken)
+  ↓
+BrainOS Client API (apps/web/lib/brainos-client-api.ts)
+  ↓
+Backend REST Endpoints (/api/v1/computer-agents)
+  ↓
+ComputerAgentService / ComputerAuthorizationService (Mission 70)
+  ↓
+Prisma Database (ComputerAgent, ComputerAgentPermission, ComputerAgentCredential)
+```
+
+- **Frontend Client API (`apps/web/lib/brainos-client-api.ts`)**:
+  - Added typed data models: `ComputerAgent`, `RegisteredComputerAgent`, `ComputerAgentPermission`, `ComputerAgentStatus`, `ListComputerAgentsOptions`, `CreateComputerAgentInput`.
+  - Added typed client methods:
+    - `listComputerAgents(token, options?)`
+    - `getComputerAgent(token, agentId)`
+    - `createComputerAgent(token, input)`
+    - `revokeComputerAgent(token, agentId)`
+    - `deleteComputerAgent(token, agentId)`
+    - `listComputerAgentPermissions(token, agentId)`
+    - `grantComputerAgentPermission(token, agentId, action)`
+    - `revokeComputerAgentPermission(token, agentId, action)`
+- **Dashboard Navigation (`apps/web/components/dashboard-nav.tsx`)**:
+  - Added `"computer"` to `DashboardNavKey` and `NAV_ITEMS` linking to `/dashboard/computer`.
+- **Computer Dashboard Page (`apps/web/app/dashboard/computer/page.tsx`)**:
+  - Device inventory listing with `ACTIVE` / `REVOKED` badges and filtering.
+  - Selected device details with registered timestamp and last authenticated activity.
+  - Granular toggle controls for recognized privileged actions:
+    - `computer_launch_application`
+    - `computer_write_file`
+  - Explanatory panel for safe read-only capabilities (`computer_get_status`, `computer_list_applications`, `computer_list_files`, `computer_read_file`) which remain policy-authorized without persistent database grants.
+  - Safe inline confirmation flows for `Revoke Agent` and `Delete Agent`.
+  - Agent registration modal with one-time copyable credential token and security advisory.
+
+### 3. Security Rules & Invariants
+
+- **Server-Side Authority**: Frontend UI serves solely as a control plane. Tool execution authorization continues to be strictly enforced server-side via `ComputerAuthorizationService` (Mission 70).
+- **Identity Isolation**: No client-supplied `userId` is accepted or transmitted; user identity is derived purely from verified Clerk JWT claims (`req.user.id`).
+- **Fail-Closed Protection**: When an agent status is `REVOKED`, the UI indicates that all actions fail closed and prevents granting permissions.
+- **Zero Credential Exposure**: Plaintext credentials are only returned once upon initial creation for immediate user storage. Database credential hashes are never exposed over the wire.
+
+### 4. Verification Completed
+
+- **Frontend Client API Tests**: 74/74 passed (`apps/web/lib/brainos-client-api.test.ts`).
+- **Next.js Production Build**: 12/12 routes compiled, 0 errors (`npm --prefix apps/web run build`).
+- **Backend Full Regression Suite**: 79/79 test files passed, 975/975 tests passed (0 failures) (`npm --prefix apps/backend test`).
+- **Git Diff Check**: Clean (`git diff --check`).
+
+### 5. Final Git State
+
+- **Commit**: `eee0436 feat(web): add computer agent management dashboard`
+- **Branch**: `main`
+- `HEAD` == `origin/main` (`eee0436c18b2a4134255ca418e935519f57563e0`)
+- Working tree clean.
