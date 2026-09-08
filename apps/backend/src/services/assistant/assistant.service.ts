@@ -20,6 +20,10 @@ import { ConversationRepository } from "../conversation/repositories/conversatio
 import { decideAssistantRetrieval } from "./assistant.retrieval.policy";
 import { MessageRepository } from "../conversation/repositories/message.repository";
 import { AssistantRuntime } from "./assistant.runtime";
+import {
+  ComputerAuthorizationService,
+  DefaultComputerAuthorizationService,
+} from "../computer/security/computer-authorization.service";
 
 const MAX_TOOL_ROUNDS = 5;
 const MAX_CONVERSATION_TITLE_LENGTH = 60;
@@ -34,6 +38,7 @@ export class AssistantService {
     private readonly documentRetrievalService?: DocumentRetrievalService,
     private readonly runtime: AssistantRuntime = new AssistantRuntime(),
     private readonly clock: () => Date = () => new Date(),
+    private readonly computerAuthorizationService: ComputerAuthorizationService = new DefaultComputerAuthorizationService(),
   ) {}
 
   async ask(
@@ -59,6 +64,12 @@ export class AssistantService {
 
     const userId = input.userId.trim();
     const trimmedMessage = input.message.trim();
+
+    const effectiveAuthorizedComputerActions =
+      await this.resolveEffectiveComputerActions(
+        userId,
+        input.authorizedComputerActions,
+      );
 
     const runtime = input.runtime ?? this.runtime;
 
@@ -261,7 +272,9 @@ export class AssistantService {
               {
                 userId,
                 authorizedComputerActions:
-                  input.authorizedComputerActions,
+                  effectiveAuthorizedComputerActions.length > 0
+                    ? effectiveAuthorizedComputerActions
+                    : undefined,
               },
             );
 
@@ -357,5 +370,27 @@ export class AssistantService {
 
   getRuntime(): AssistantRuntime {
     return this.runtime;
+  }
+
+  private async resolveEffectiveComputerActions(
+    userId: string,
+    requestedActions?: string[],
+  ): Promise<string[]> {
+    if (
+      !requestedActions ||
+      !Array.isArray(requestedActions) ||
+      requestedActions.length === 0
+    ) {
+      return [];
+    }
+
+    try {
+      return await this.computerAuthorizationService.resolveEffectiveActions(
+        userId,
+        requestedActions,
+      );
+    } catch {
+      return [];
+    }
   }
 }
