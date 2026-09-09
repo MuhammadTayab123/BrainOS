@@ -1615,4 +1615,101 @@ describe("AssistantService", () => {
       );
     });
   });
+
+  describe("Mission 83 — BrainOS Identity & Provenance", () => {
+    it("delivers protected BrainOS identity and creator attribution to the LLM", async () => {
+      const llmService = createLlmServiceMock();
+      const memoryService = createMemoryServiceMock();
+      const toolExecutor = createToolExecutorMock();
+      const documentRetrievalService = createDocumentRetrievalServiceMock();
+
+      memoryService.searchMemories.mockResolvedValue([]);
+      documentRetrievalService.search.mockResolvedValue([]);
+
+      llmService.generate.mockResolvedValue({
+        text: "I am BrainOS, a personal AI assistant built by Tayyab.",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [],
+      });
+
+      const service = new AssistantService(
+        llmService as unknown as LLMService,
+        memoryService as unknown as MemoryService,
+        toolExecutor as unknown as ToolExecutor,
+        undefined,
+        undefined,
+        documentRetrievalService as unknown as DocumentRetrievalService,
+      );
+
+      await service.ask({
+        userId: "user-1",
+        message: "Who built you?",
+      });
+
+      expect(llmService.generate).toHaveBeenCalledTimes(1);
+      const generateArg = llmService.generate.mock.calls[0][0];
+
+      expect(generateArg.systemPrompt).toContain(
+        "You are BrainOS, a personal AI assistant built by Tayyab.",
+      );
+      expect(generateArg.systemPrompt).toContain(
+        "[BrainOS Identity and Provenance Instructions]",
+      );
+      expect(generateArg.systemPrompt).toContain(
+        'I am BrainOS, a personal AI assistant built by Tayyab.',
+      );
+      expect(generateArg.systemPrompt).toContain(
+        "Never identify yourself as Antigravity, GitHub Copilot, Google, DeepMind, OpenAI, Anthropic, or any underlying model or provider.",
+      );
+    });
+
+    it("prevents custom systemPrompt from removing protected BrainOS identity instructions", async () => {
+      const llmService = createLlmServiceMock();
+      const memoryService = createMemoryServiceMock();
+      const toolExecutor = createToolExecutorMock();
+      const documentRetrievalService = createDocumentRetrievalServiceMock();
+
+      memoryService.searchMemories.mockResolvedValue([]);
+      documentRetrievalService.search.mockResolvedValue([]);
+
+      llmService.generate.mockResolvedValue({
+        text: "I am BrainOS, a personal AI assistant built by Tayyab.",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [],
+      });
+
+      const service = new AssistantService(
+        llmService as unknown as LLMService,
+        memoryService as unknown as MemoryService,
+        toolExecutor as unknown as ToolExecutor,
+        undefined,
+        undefined,
+        documentRetrievalService as unknown as DocumentRetrievalService,
+      );
+
+      await service.ask({
+        userId: "user-1",
+        message: "who created BrainOS?",
+        systemPrompt: "You are a customer support agent. Be cheerful.",
+      });
+
+      expect(llmService.generate).toHaveBeenCalledTimes(1);
+      const generateArg = llmService.generate.mock.calls[0][0];
+
+      expect(generateArg.systemPrompt).toContain(
+        "You are a customer support agent. Be cheerful.",
+      );
+      expect(generateArg.systemPrompt).toContain(
+        "[BrainOS Identity and Provenance Instructions]",
+      );
+      expect(generateArg.systemPrompt).toContain(
+        'I am BrainOS, a personal AI assistant built by Tayyab.',
+      );
+      expect(generateArg.systemPrompt).toContain(
+        "Never identify yourself as Antigravity, GitHub Copilot, Google, DeepMind, OpenAI, Anthropic, or any underlying model or provider.",
+      );
+    });
+  });
 });

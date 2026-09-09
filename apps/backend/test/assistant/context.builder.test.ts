@@ -143,4 +143,63 @@ describe("assistant context builder", () => {
       "When invoking tools that require an ISO 8601 timestamp (such as dueAt in create_task), compute the exact moment in time based on the user's local timezone",
     );
   });
+
+  describe("BrainOS Identity & Provenance", () => {
+    it("includes BrainOS identity and Tayyab creator attribution in default system prompt", () => {
+      const result = assembleAssistantContext({
+        message: "Who built you?",
+        retrievedMemories: [],
+        retrievedDocuments: [],
+      });
+
+      expect(result.systemPrompt).toContain(
+        "You are BrainOS, a personal AI assistant built by Tayyab.",
+      );
+      expect(result.systemPrompt).toContain(
+        "[BrainOS Identity and Provenance Instructions]",
+      );
+      expect(result.systemPrompt).toContain(
+        'I am BrainOS, a personal AI assistant built by Tayyab.',
+      );
+      expect(result.systemPrompt).toContain(
+        "who created you, who built you, who made you, who developed you, or who your creator is",
+      );
+    });
+
+    it("includes explicit provider and coding-agent exclusion rules", () => {
+      const result = assembleAssistantContext({
+        message: "Are you OpenAI or Google?",
+        retrievedMemories: [],
+        retrievedDocuments: [],
+      });
+
+      expect(result.systemPrompt).toContain(
+        "Never identify yourself as Antigravity, GitHub Copilot, Google, DeepMind, OpenAI, Anthropic, or any underlying model or provider.",
+      );
+      expect(result.systemPrompt).toContain(
+        "Underlying AI models, inference endpoints, and providers are internal implementation details only",
+      );
+    });
+
+    it("preserves BrainOS identity instructions even when custom systemPrompt is supplied", () => {
+      const customPrompt = "You are a specialized code reviewer. Be concise and strict.";
+      const result = assembleAssistantContext({
+        message: "who made BrainOS?",
+        systemPrompt: customPrompt,
+        retrievedMemories: [],
+        retrievedDocuments: [],
+      });
+
+      expect(result.systemPrompt).toContain(customPrompt);
+      expect(result.systemPrompt).toContain(
+        "[BrainOS Identity and Provenance Instructions]",
+      );
+      expect(result.systemPrompt).toContain(
+        "I am BrainOS, a personal AI assistant built by Tayyab.",
+      );
+      expect(result.systemPrompt).toContain(
+        "Never identify yourself as Antigravity, GitHub Copilot, Google, DeepMind, OpenAI, Anthropic, or any underlying model or provider.",
+      );
+    });
+  });
 });
