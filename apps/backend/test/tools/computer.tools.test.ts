@@ -108,7 +108,7 @@ describe("Computer tools DI and execution", () => {
       const tool = createGetComputerStatusTool(mockGateway);
       const result = await tool.execute({}, validContext);
 
-      expect(mockGateway.getInfo).toHaveBeenCalledTimes(1);
+      expect(mockGateway.getInfo).toHaveBeenCalledWith(validContext);
       expect(result).toEqual(info);
     });
   });
@@ -123,7 +123,7 @@ describe("Computer tools DI and execution", () => {
       const tool = createListComputerApplicationsTool(mockGateway);
       const result = await tool.execute({}, validContext);
 
-      expect(mockGateway.listApplications).toHaveBeenCalledTimes(1);
+      expect(mockGateway.listApplications).toHaveBeenCalledWith(validContext);
       expect(result).toEqual(apps);
     });
   });
@@ -140,7 +140,7 @@ describe("Computer tools DI and execution", () => {
       const tool = createLaunchComputerApplicationTool(mockGateway);
       const result = await tool.execute({ appId: "vscode" }, validContext);
 
-      expect(mockGateway.launchApplication).toHaveBeenCalledWith("vscode");
+      expect(mockGateway.launchApplication).toHaveBeenCalledWith("vscode", validContext);
       expect(result).toEqual({ success: true, appId: "vscode" });
     });
 
@@ -171,7 +171,7 @@ describe("Computer tools DI and execution", () => {
       const tool = createListComputerFilesTool(mockGateway);
       const result = await tool.execute({ path: "docs" }, validContext);
 
-      expect(mockGateway.listFiles).toHaveBeenCalledWith("docs");
+      expect(mockGateway.listFiles).toHaveBeenCalledWith("docs", validContext);
       expect(result).toEqual(entries);
     });
 
@@ -181,7 +181,7 @@ describe("Computer tools DI and execution", () => {
       const tool = createListComputerFilesTool(mockGateway);
       await tool.execute({}, validContext);
 
-      expect(mockGateway.listFiles).toHaveBeenCalledWith(undefined);
+      expect(mockGateway.listFiles).toHaveBeenCalledWith(undefined, validContext);
     });
 
     it("rejects non-string path", async () => {
@@ -211,7 +211,7 @@ describe("Computer tools DI and execution", () => {
       const tool = createReadComputerFileTool(mockGateway);
       const result = await tool.execute({ path: "notes.txt" }, validContext);
 
-      expect(mockGateway.readFile).toHaveBeenCalledWith("notes.txt");
+      expect(mockGateway.readFile).toHaveBeenCalledWith("notes.txt", validContext);
       expect(result).toEqual(fileData);
     });
 
@@ -243,6 +243,7 @@ describe("Computer tools DI and execution", () => {
       expect(mockGateway.writeFile).toHaveBeenCalledWith(
         "notes.txt",
         "New content",
+        validContext,
       );
       expect(result).toEqual(writeResult);
     });

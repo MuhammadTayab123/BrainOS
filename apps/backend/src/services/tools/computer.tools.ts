@@ -20,9 +20,9 @@ export function createGetComputerStatusTool(
 
     async execute(
       _input: unknown,
-      _context: ToolContext,
+      context: ToolContext,
     ) {
-      return gateway.getInfo();
+      return gateway.getInfo(context);
     },
   };
 }
@@ -43,9 +43,9 @@ export function createListComputerApplicationsTool(
 
     async execute(
       _input: unknown,
-      _context: ToolContext,
+      context: ToolContext,
     ) {
-      return gateway.listApplications();
+      return gateway.listApplications(context);
     },
   };
 }
@@ -73,7 +73,7 @@ export function createLaunchComputerApplicationTool(
 
     async execute(
       input: unknown,
-      _context: ToolContext,
+      context: ToolContext,
     ) {
       if (
         typeof input !== "object" ||
@@ -86,6 +86,7 @@ export function createLaunchComputerApplicationTool(
 
       return gateway.launchApplication(
         (input as Record<string, unknown>).appId as string,
+        context,
       );
     },
   };
@@ -113,7 +114,7 @@ export function createListComputerFilesTool(
 
     async execute(
       input: unknown,
-      _context: ToolContext,
+      context: ToolContext,
     ) {
       if (
         input !== undefined &&
@@ -141,6 +142,7 @@ export function createListComputerFilesTool(
 
       return gateway.listFiles(
         requestedPath,
+        context,
       );
     },
   };
@@ -169,7 +171,7 @@ export function createReadComputerFileTool(
 
     async execute(
       input: unknown,
-      _context: ToolContext,
+      context: ToolContext,
     ) {
       if (
         typeof input !== "object" ||
@@ -182,6 +184,7 @@ export function createReadComputerFileTool(
 
       return gateway.readFile(
         (input as Record<string, unknown>).path as string,
+        context,
       );
     },
   };
@@ -215,7 +218,7 @@ export function createWriteComputerFileTool(
 
     async execute(
       input: unknown,
-      _context: ToolContext,
+      context: ToolContext,
     ) {
       if (
         typeof input !== "object" ||
@@ -236,6 +239,7 @@ export function createWriteComputerFileTool(
       return gateway.writeFile(
         (input as Record<string, unknown>).path as string,
         (input as Record<string, unknown>).content as string,
+        context,
       );
     },
   };

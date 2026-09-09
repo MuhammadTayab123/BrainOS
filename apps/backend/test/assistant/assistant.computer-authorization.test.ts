@@ -190,7 +190,11 @@ describe("Assistant & Voice Computer Authorization Integration (Mission 70)", ()
       authorizedComputerActions: ["computer_write_file"],
     });
 
-    expect(mockGateway.writeFile).toHaveBeenCalledWith("notes.txt", "brainos update");
+    expect(mockGateway.writeFile).toHaveBeenCalledWith(
+      "notes.txt",
+      "brainos update",
+      expect.objectContaining({ userId: "user-1" }),
+    );
     expect(response.text).toBe("File saved.");
   });
 
@@ -322,7 +326,10 @@ describe("Assistant & Voice Computer Authorization Integration (Mission 70)", ()
     });
 
     expect(mockGateway.getInfo).toHaveBeenCalled();
-    expect(mockGateway.readFile).toHaveBeenCalledWith("README.md");
+    expect(mockGateway.readFile).toHaveBeenCalledWith(
+      "README.md",
+      expect.objectContaining({ userId: "user-1" }),
+    );
     expect(response.text).toBe("Status and content retrieved.");
   });
 
@@ -364,7 +371,11 @@ describe("Assistant & Voice Computer Authorization Integration (Mission 70)", ()
     expect(mockAuthService.resolveEffectiveActions).toHaveBeenCalledWith("user-1", [
       "computer_write_file",
     ]);
-    expect(mockGateway.writeFile).toHaveBeenCalledWith("voice-notes.txt", "spoken note");
+    expect(mockGateway.writeFile).toHaveBeenCalledWith(
+      "voice-notes.txt",
+      "spoken note",
+      expect.objectContaining({ userId: "user-1" }),
+    );
     expect(voiceResult.assistantResponse.text).toBe("Voice note written.");
   });
 
@@ -399,7 +410,10 @@ describe("Assistant & Voice Computer Authorization Integration (Mission 70)", ()
     });
 
     expect(mockAuthService.resolveEffectiveActions).toHaveBeenCalledWith("user-1", undefined);
-    expect(mockGateway.launchApplication).toHaveBeenCalledWith("notepad");
+    expect(mockGateway.launchApplication).toHaveBeenCalledWith(
+      "notepad",
+      expect.objectContaining({ userId: "user-1" }),
+    );
     expect(response.text).toBe("Notepad launched successfully.");
   });
 
@@ -470,7 +484,10 @@ describe("Assistant & Voice Computer Authorization Integration (Mission 70)", ()
     const voiceResult = await voiceService.processTurn(voiceInput);
 
     expect(mockAuthService.resolveEffectiveActions).toHaveBeenCalledWith("user-1", undefined);
-    expect(mockGateway.launchApplication).toHaveBeenCalledWith("calc");
+    expect(mockGateway.launchApplication).toHaveBeenCalledWith(
+      "calc",
+      expect.objectContaining({ userId: "user-1" }),
+    );
     expect(voiceResult.assistantResponse.text).toBe("Calculator opened.");
   });
 });

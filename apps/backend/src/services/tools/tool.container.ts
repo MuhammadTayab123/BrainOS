@@ -1,5 +1,6 @@
 import { AutomationService } from "../automation/automation.service";
 import { ComputerAgentGateway } from "../computer/agent/computer-agent.gateway";
+import { QueuedComputerAgentGateway } from "../computer/agent/queued-computer-agent.gateway";
 import { LocalComputerAgent } from "../computer/agent/local-computer-agent";
 import { MemoryService } from "../memory/memory.service";
 import { ReminderService } from "../reminders/reminder.service";
@@ -90,7 +91,10 @@ export function createToolRegistry(
 
   const computerAgentGateway =
     options.computerAgentGateway ??
-    new ComputerAgentGateway(new LocalComputerAgent());
+    new QueuedComputerAgentGateway({
+      allowLocalFallback: true,
+      localFallbackAgent: new LocalComputerAgent(),
+    });
 
   const computerTools = createComputerTools(computerAgentGateway);
   for (const tool of computerTools) {

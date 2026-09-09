@@ -3,6 +3,7 @@ import { AppError, NotFoundError } from "../../../errors";
 import { ComputerAgentRepository } from "../repositories/computer-agent.repository";
 import { ComputerAgentActionRepository } from "../repositories/computer-agent-action.repository";
 import {
+  AwaitActionCompletionOptions,
   CancelComputerActionParams,
   CompleteComputerActionParams,
   ComputerAgentActionRecord,
@@ -370,6 +371,116 @@ export class ComputerActionQueueService {
       ...options,
       userId: cleanUserId,
     });
+  }
+
+  /**
+   * Bounded database-backed waiter for an action's terminal completion.
+   * Periodically checks database state for the action owned by the authenticated user.
+   * Immediately resolves on COMPLETED, and fails closed on FAILED, CANCELLED, or TIMED_OUT.
+   */
+  async awaitActionCompletion(
+    options: AwaitActionCompletionOptions,
+  ): Promise<ComputerAgentActionRecord> {
+    const cleanUserId = this.validateUserId(options.userId);
+    const cleanActionId = this.validateId(options.actionId, "Action ID");
+    const timeoutMs = options.timeoutMs ?? DEFAULT_ACTION_TTL_MS;
+    const pollIntervalMs = options.pollIntervalMs ?? 100;
+    const deadline = this.clock().getTime() + timeoutMs;
+
+    while (true) {
+      if (options.signal?.aborted) {
+        throw new AppError({
+          message: "Action wait cancelled.",
+          statusCode: 499,
+          code: "ABORTED",
+        });
+      }
+
+      const record = await this.actionRepository.getByIdForUser(
+        cleanActionId,
+        cleanUserId,
+      );
+
+      if (!record) {
+        throw new NotFoundError(
+          "Computer agent action not found for the authenticated user.",
+        );
+      }
+
+      if (record.status === "COMPLETED") {
+        return record;
+      }
+
+      if (record.status === "FAILED") {
+        throw new AppError({
+          message: record.error ?? "Computer action execution failed on host.",
+          statusCode: 500,
+          code: "ACTION_FAILED",
+        });
+      }
+
+      if (record.status === "CANCELLED") {
+        throw new AppError({
+          message: record.error ?? "Computer action was cancelled.",
+          statusCode: 409,
+          code: "ACTION_CANCELLED",
+        });
+      }
+
+      if (record.status === "TIMED_OUT") {
+        throw new AppError({
+          message: record.error ?? "Computer action timed out before completion.",
+          statusCode: 408,
+          code: "TIMEOUT",
+        });
+      }
+
+      // Action is still PENDING or CLAIMED
+      const now = this.clock().getTime();
+      if (now >= deadline) {
+        await this.actionRepository.markExpired(this.clock());
+        throw new AppError({
+          message: `Computer action timed out waiting for remote host execution after ${timeoutMs}ms.`,
+          statusCode: 408,
+          code: "TIMEOUT",
+        });
+      }
+
+      // Safe bounded sleep
+      await new Promise<void>((resolve, reject) => {
+        let timer: NodeJS.Timeout | undefined;
+
+        const cleanup = () => {
+          if (timer) clearTimeout(timer);
+          if (options.signal) {
+            options.signal.removeEventListener("abort", onAbort);
+          }
+        };
+
+        const onAbort = () => {
+          cleanup();
+          reject(
+            new AppError({
+              message: "Action wait cancelled.",
+              statusCode: 499,
+              code: "ABORTED",
+            }),
+          );
+        };
+
+        if (options.signal) {
+          if (options.signal.aborted) {
+            return onAbort();
+          }
+          options.signal.addEventListener("abort", onAbort, { once: true });
+        }
+
+        timer = setTimeout(() => {
+          cleanup();
+          resolve();
+        }, pollIntervalMs);
+      });
+    }
   }
 
   private async resolveActionRecord(params: {

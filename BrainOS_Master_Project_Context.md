@@ -5265,3 +5265,58 @@ ComputerAgentRunner (apps/backend/src/services/computer/client/computer-agent-ru
 - **Full Backend Suite**: 84/84 test files passed, 1,112/1,112 tests passed.
 - **Backend TypeScript Validation**: Clean, 0 errors (`npm --prefix apps/backend run typecheck`).
 - **Git Diff Hygiene**: Clean (`git diff --check`).
+
+---
+
+# 81. MISSION 85 — QUEUED REMOTE COMPUTER ACTION DISPATCH BRIDGE
+
+### 1. Goal & Architecture
+Implemented the bridge connecting Assistant computer tools to the persistent `computer_actions` queue, enabling end-to-end execution of computer actions on remote host agents while preserving strict security boundaries and backwards-compatible local fallback.
+
+```text
+User Request
+  ↓
+AssistantService / ToolExecutor
+  ↓
+Computer Tools (createComputerTools)
+  ↓
+QueuedComputerAgentGateway (apps/backend/src/services/computer/agent/queued-computer-agent.gateway.ts)
+  ├── getInfo() → Resolved server-side from active agent records & database (NOT queued remotely)
+  └── dispatchQueuedAction() for 5 allowed host actions:
+        ├── Enqueue Action: ComputerActionQueueService.enqueueAction()
+        ├── Remote Execution: Runner claims via action_poll → HostActionExecutor → reports via action_result
+        └── Await Completion: ComputerActionQueueService.awaitActionCompletion() (DB source of truth)
+              ↓
+        Tool Result returned to Assistant
+```
+
+### 2. Key Components Implemented
+1. **`QueuedComputerAgentGateway`** (`apps/backend/src/services/computer/agent/queued-computer-agent.gateway.ts`):
+   - Extends `ComputerAgentGateway`.
+   - Resolves active remote agent for authenticated user via `ComputerAgentRepository.findActiveByUserId`.
+   - Resolves `getInfo()` locally from database and active agent records without unnecessary remote polling.
+   - Enqueues all 5 execution actions (`listApplications`, `launchApplication`, `listFiles`, `readFile`, `writeFile`) with correlation IDs and awaits DB completion.
+   - Converts host execution failures into descriptive tool errors (`AppError`).
+   - Supports transparent local fallback to `LocalComputerAgent` when configured or when no remote agent is registered.
+2. **`awaitActionCompletion`** (`apps/backend/src/services/computer/queue/computer-action-queue.service.ts`):
+   - Database-backed polling waiter with configurable interval (default 100ms) and timeout (default 30,000ms).
+   - Abort signal cancellation and strict tenant isolation (`userId` verification on every poll).
+   - Handles terminal states (`COMPLETED`, `FAILED`, `CANCELLED`, `TIMED_OUT`).
+3. **Context-Aware Computer Tools** (`apps/backend/src/services/tools/computer.tools.ts`):
+   - Updated tool definitions to pass `context` (`userId`, `authorizedComputerActions`) into `gateway` methods.
+4. **Tool Container Integration** (`apps/backend/src/services/tools/tool.container.ts`):
+   - Configured `QueuedComputerAgentGateway` with safe local fallback as the default computer gateway in the DI container.
+
+### 3. Security & Invariants Preserved
+- **Zero Double Authorization**: Does not introduce redundant auth layers; integrates with existing `ToolExecutor` and `ComputerAgentActionAuthorizer`.
+- **Tenant Isolation**: Strict `userId` and `agentId` isolation across queue insertion, polling, claiming, and awaiting.
+- **Fail-Closed Semantics**: Returns `AGENT_NOT_FOUND` / `TIMEOUT` errors cleanly without crashing worker processes or leaking credentials.
+- **Strict Allowlist**: Only the 5 authorized computer tools can be dispatched to remote runners.
+
+### 4. Verification
+- **Focused Unit & Integration Tests**: 30/30 passed (`queued-computer-agent.gateway.test.ts`, `computer.tools.test.ts`).
+- **Computer Subsystem Test Suite**: 308/308 passed across 15 test files (`apps/backend/test/services/computer/`).
+- **Authorization & Security Tests**: 11/11 passed (`assistant.computer-authorization.test.ts`).
+- **Local Host Agent Tests**: 4/4 passed (`local-computer-agent.test.ts`).
+- **Backend TypeScript Validation**: Clean, 0 errors (`npm --prefix apps/backend run typecheck`).
+- **Git Diff Hygiene**: Clean (`git diff --check`).

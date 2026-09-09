@@ -76,3 +76,14 @@ export interface CancelComputerActionParams {
   reason?: string;
   cancelledAt?: Date;
 }
+
+/**
+ * Options for awaiting terminal completion of a queued action.
+ */
+export interface AwaitActionCompletionOptions {
+  actionId: string;
+  userId: string;
+  timeoutMs?: number;
+  pollIntervalMs?: number;
+  signal?: AbortSignal;
+}
