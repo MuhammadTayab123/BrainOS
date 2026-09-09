@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach, beforeAll } from "vitest";
 
+let askAssistant: typeof import("./brainos-client-api").askAssistant;
 let streamAssistant: typeof import("./brainos-client-api").streamAssistant;
 let createConversation: typeof import("./brainos-client-api").createConversation;
 let listConversations: typeof import("./brainos-client-api").listConversations;
@@ -57,6 +58,7 @@ type VoiceTurnResult = import("./brainos-client-api").VoiceTurnResult;
 beforeAll(async () => {
   process.env.NEXT_PUBLIC_BRAINOS_API_URL = "http://localhost:3001";
   const mod = await import("./brainos-client-api");
+  askAssistant = mod.askAssistant;
   streamAssistant = mod.streamAssistant;
   createConversation = mod.createConversation;
   listConversations = mod.listConversations;
@@ -440,6 +442,376 @@ describe("streamAssistant (Frontend SSE Client)", () => {
 
     expect(capturedBody?.conversationId).toBe("conv-test-2");
     expect(capturedBody?.enableMemoryRetrieval).toBe(false);
+  });
+});
+
+describe("askAssistant (Authentication Recovery & Resilience)", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("1. Normal request: succeeds without invoking getFreshToken", async () => {
+    let capturedAuth = "";
+    const getFreshTokenMock = vi.fn().mockResolvedValue("fresh-token-should-not-be-called");
+
+    globalThis.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      capturedAuth = (init?.headers as Record<string, string>)?.["Authorization"] || "";
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              text: "Hello from BrainOS",
+              model: "test-model",
+              provider: "test-provider",
+              retrievedMemories: [],
+            },
+          }),
+      });
+    });
+
+    const result = await askAssistant("initial-token", "Hello", {
+      getFreshToken: getFreshTokenMock,
+    });
+
+    expect(result.text).toBe("Hello from BrainOS");
+    expect(capturedAuth).toBe("Bearer initial-token");
+    expect(getFreshTokenMock).not.toHaveBeenCalled();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("2. 401 Expired Token Recovery: obtains fresh token and retries request once successfully", async () => {
+    const authHeaders: string[] = [];
+    const getFreshTokenMock = vi.fn().mockResolvedValue("fresh-clerk-token");
+
+    globalThis.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      const auth = (init?.headers as Record<string, string>)?.["Authorization"] || "";
+      authHeaders.push(auth);
+
+      if (authHeaders.length === 1) {
+        // First attempt with expired token: returns 401
+        return Promise.resolve({
+          ok: false,
+          status: 401,
+          statusText: "Unauthorized",
+          json: () =>
+            Promise.resolve({
+              success: false,
+              error: { message: "Authentication required." },
+            }),
+        });
+      }
+
+      // Second attempt with fresh token: returns 200 success
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              text: "Recovered successfully with fresh token!",
+              model: "test-model",
+              provider: "test-provider",
+              retrievedMemories: [],
+            },
+          }),
+      });
+    });
+
+    const result = await askAssistant("expired-initial-token", "Retry test", {
+      getFreshToken: getFreshTokenMock,
+    });
+
+    expect(result.text).toBe("Recovered successfully with fresh token!");
+    expect(getFreshTokenMock).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(authHeaders).toEqual([
+      "Bearer expired-initial-token",
+      "Bearer fresh-clerk-token",
+    ]);
+  });
+
+  it("3. Second 401 Final Error: throws authentication error after retry without infinite loop", async () => {
+    const authHeaders: string[] = [];
+    const getFreshTokenMock = vi.fn().mockResolvedValue("still-invalid-token");
+
+    globalThis.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      const auth = (init?.headers as Record<string, string>)?.["Authorization"] || "";
+      authHeaders.push(auth);
+
+      return Promise.resolve({
+        ok: false,
+        status: 401,
+        statusText: "Unauthorized",
+        json: () =>
+          Promise.resolve({
+            success: false,
+            error: { message: "Authentication required." },
+          }),
+      });
+    });
+
+    await expect(
+      askAssistant("expired-token", "Loop test", {
+        getFreshToken: getFreshTokenMock,
+      }),
+    ).rejects.toThrow("Authentication required.");
+
+    expect(getFreshTokenMock).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(authHeaders).toEqual([
+      "Bearer expired-token",
+      "Bearer still-invalid-token",
+    ]);
+  });
+
+  it("4. Cancellation: respects AbortSignal during authentication retry flow", async () => {
+    const abortController = new AbortController();
+    const getFreshTokenMock = vi.fn().mockImplementation(async () => {
+      abortController.abort();
+      return "fresh-token";
+    });
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      json: () =>
+        Promise.resolve({
+          success: false,
+          error: { message: "Authentication required." },
+        }),
+    });
+
+    await expect(
+      askAssistant("expired-token", "Abort during auth recovery", {
+        signal: abortController.signal,
+        getFreshToken: getFreshTokenMock,
+      }),
+    ).rejects.toThrow();
+
+    expect(getFreshTokenMock).toHaveBeenCalledTimes(1);
+    // Fetch should not have been called a second time after abort during token retrieval
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("5. No Infinite Retry: never retries if getFreshToken returns null or is omitted", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      json: () =>
+        Promise.resolve({
+          success: false,
+          error: { message: "Authentication required." },
+        }),
+    });
+
+    // Case A: getFreshToken omitted
+    await expect(
+      askAssistant("token-without-hook", "No hook test"),
+    ).rejects.toThrow("Authentication required.");
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    // Case B: getFreshToken returns null
+    const getNullTokenMock = vi.fn().mockResolvedValue(null);
+    await expect(
+      askAssistant("token-with-null", "Null token test", {
+        getFreshToken: getNullTokenMock,
+      }),
+    ).rejects.toThrow("Authentication required.");
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2); // 1st test + 1 call for 2nd test
+  });
+});
+
+describe("streamAssistant (Authentication Recovery & Resilience)", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function createMockReadableStream(chunks: string[]): ReadableStream<Uint8Array> {
+    const encoder = new TextEncoder();
+    let index = 0;
+
+    return new ReadableStream({
+      pull(controller) {
+        if (index < chunks.length) {
+          controller.enqueue(encoder.encode(chunks[index]));
+          index++;
+        } else {
+          controller.close();
+        }
+      },
+    });
+  }
+
+  it("1. Normal stream: succeeds without invoking getFreshToken", async () => {
+    const getFreshTokenMock = vi.fn().mockResolvedValue("fresh-token-should-not-be-called");
+    const ssePayload = [
+      'event: response\ndata: {"text":"Normal stream success","model":"m","provider":"p","retrievedMemories":[]}\n\n',
+      'event: done\ndata: {}\n\n',
+    ];
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: createMockReadableStream(ssePayload),
+    });
+
+    const result = await streamAssistant("initial-token", "Normal stream", {
+      getFreshToken: getFreshTokenMock,
+    });
+
+    expect(result.text).toBe("Normal stream success");
+    expect(getFreshTokenMock).not.toHaveBeenCalled();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("2. 401 Expired Token Recovery: stream 401 fetches fresh token and retries stream successfully", async () => {
+    const authHeaders: string[] = [];
+    const getFreshTokenMock = vi.fn().mockResolvedValue("fresh-stream-token");
+    const ssePayload = [
+      'event: response\ndata: {"text":"Stream recovered with fresh token!","model":"m","provider":"p","retrievedMemories":[]}\n\n',
+      'event: done\ndata: {}\n\n',
+    ];
+
+    globalThis.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      const auth = (init?.headers as Record<string, string>)?.["Authorization"] || "";
+      authHeaders.push(auth);
+
+      if (authHeaders.length === 1) {
+        return Promise.resolve({
+          ok: false,
+          status: 401,
+          statusText: "Unauthorized",
+          json: () =>
+            Promise.resolve({
+              error: { message: "Authentication required." },
+            }),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        body: createMockReadableStream(ssePayload),
+      });
+    });
+
+    const result = await streamAssistant("expired-stream-token", "Stream retry test", {
+      getFreshToken: getFreshTokenMock,
+    });
+
+    expect(result.text).toBe("Stream recovered with fresh token!");
+    expect(getFreshTokenMock).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(authHeaders).toEqual([
+      "Bearer expired-stream-token",
+      "Bearer fresh-stream-token",
+    ]);
+  });
+
+  it("3. Second 401 Final Error: stream retry returning 401 throws auth error and halts", async () => {
+    const authHeaders: string[] = [];
+    const getFreshTokenMock = vi.fn().mockResolvedValue("still-invalid-stream-token");
+
+    globalThis.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      const auth = (init?.headers as Record<string, string>)?.["Authorization"] || "";
+      authHeaders.push(auth);
+
+      return Promise.resolve({
+        ok: false,
+        status: 401,
+        statusText: "Unauthorized",
+        json: () =>
+          Promise.resolve({
+            error: { message: "Authentication required." },
+          }),
+      });
+    });
+
+    await expect(
+      streamAssistant("expired-token", "Stream loop test", {
+        getFreshToken: getFreshTokenMock,
+      }),
+    ).rejects.toThrow("Authentication required.");
+
+    expect(getFreshTokenMock).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(authHeaders).toEqual([
+      "Bearer expired-token",
+      "Bearer still-invalid-stream-token",
+    ]);
+  });
+
+  it("4. Cancellation: respects AbortSignal during stream auth retry", async () => {
+    const abortController = new AbortController();
+    const getFreshTokenMock = vi.fn().mockImplementation(async () => {
+      abortController.abort();
+      return "fresh-token";
+    });
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      json: () =>
+        Promise.resolve({
+          error: { message: "Authentication required." },
+        }),
+    });
+
+    await expect(
+      streamAssistant("expired-token", "Stream abort during auth", {
+        signal: abortController.signal,
+        getFreshToken: getFreshTokenMock,
+      }),
+    ).rejects.toThrow();
+
+    expect(getFreshTokenMock).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("5. No Infinite Retry: stream never retries more than once", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      json: () =>
+        Promise.resolve({
+          error: { message: "Authentication required." },
+        }),
+    });
+
+    // Case A: getFreshToken omitted
+    await expect(
+      streamAssistant("token-without-hook", "No hook stream test"),
+    ).rejects.toThrow("Authentication required.");
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    // Case B: getFreshToken returns null
+    const getNullTokenMock = vi.fn().mockResolvedValue(null);
+    await expect(
+      streamAssistant("token-with-null", "Null token stream test", {
+        getFreshToken: getNullTokenMock,
+      }),
+    ).rejects.toThrow("Authentication required.");
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
 });
 

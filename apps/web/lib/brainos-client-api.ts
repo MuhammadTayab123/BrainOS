@@ -49,6 +49,17 @@ export type AssistantStreamEvent =
   | { type: "error"; data: { message: string } }
   | { type: "done"; data: Record<string, unknown> };
 
+export interface AskAssistantOptions {
+  conversationId?: string;
+  enableMemoryRetrieval?: boolean;
+  memoryLimit?: number;
+  enableDocumentRetrieval?: boolean;
+  documentLimit?: number;
+  timezone?: string;
+  signal?: AbortSignal;
+  getFreshToken?: () => Promise<string | null>;
+}
+
 export interface StreamAssistantOptions {
   conversationId?: string;
   enableMemoryRetrieval?: boolean;
@@ -58,19 +69,13 @@ export interface StreamAssistantOptions {
   timezone?: string;
   signal?: AbortSignal;
   onEvent?: (event: AssistantStreamEvent) => void;
+  getFreshToken?: () => Promise<string | null>;
 }
 
 export async function askAssistant(
   token: string,
   message: string,
-  options?: {
-    conversationId?: string;
-    enableMemoryRetrieval?: boolean;
-    memoryLimit?: number;
-    enableDocumentRetrieval?: boolean;
-    documentLimit?: number;
-    timezone?: string;
-  },
+  options?: AskAssistantOptions,
 ): Promise<AssistantResponse> {
   const clientTimezone =
     options?.timezone ??
@@ -78,21 +83,52 @@ export async function askAssistant(
       ? Intl.DateTimeFormat().resolvedOptions().timeZone
       : undefined);
 
-  const response = await fetch(
+  const { signal, getFreshToken, ...requestOptions } = options ?? {};
+
+  const payload = JSON.stringify({
+    message: message.trim(),
+    timezone: clientTimezone,
+    ...requestOptions,
+  });
+
+  let currentToken = token;
+  let response = await fetch(
     `${API_URL}/api/v1/assistant/ask`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${currentToken}`,
       },
-      body: JSON.stringify({
-        message: message.trim(),
-        timezone: clientTimezone,
-        ...options,
-      }),
+      body: payload,
+      signal,
     },
   );
+
+  if (response.status === 401 && getFreshToken) {
+    if (signal?.aborted) {
+      throw new DOMException("The user aborted a request.", "AbortError");
+    }
+    const freshToken = await getFreshToken();
+    if (freshToken) {
+      if (signal?.aborted) {
+        throw new DOMException("The user aborted a request.", "AbortError");
+      }
+      currentToken = freshToken;
+      response = await fetch(
+        `${API_URL}/api/v1/assistant/ask`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${currentToken}`,
+          },
+          body: payload,
+          signal,
+        },
+      );
+    }
+  }
 
   return parseResponse<AssistantResponse>(response);
 }
@@ -108,25 +144,54 @@ export async function streamAssistant(
       ? Intl.DateTimeFormat().resolvedOptions().timeZone
       : undefined);
 
-  const { signal, onEvent, ...requestOptions } = options ?? {};
+  const { signal, onEvent, getFreshToken, ...requestOptions } = options ?? {};
 
-  const response = await fetch(
+  const payload = JSON.stringify({
+    message: message.trim(),
+    timezone: clientTimezone,
+    ...requestOptions,
+  });
+
+  let currentToken = token;
+  let response = await fetch(
     `${API_URL}/api/v1/assistant/stream`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${currentToken}`,
       },
-      body: JSON.stringify({
-        message: message.trim(),
-        timezone: clientTimezone,
-        ...requestOptions,
-      }),
+      body: payload,
       signal,
     },
   );
+
+  if (response.status === 401 && getFreshToken) {
+    if (signal?.aborted) {
+      throw new DOMException("The user aborted a request.", "AbortError");
+    }
+    const freshToken = await getFreshToken();
+    if (freshToken) {
+      if (signal?.aborted) {
+        throw new DOMException("The user aborted a request.", "AbortError");
+      }
+      currentToken = freshToken;
+      response = await fetch(
+        `${API_URL}/api/v1/assistant/stream`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+            Authorization: `Bearer ${currentToken}`,
+          },
+          body: payload,
+          signal,
+        },
+      );
+    }
+  }
 
   if (!response.ok) {
     let errorMessage = `BrainOS stream request failed: ${response.status} ${response.statusText}`;
@@ -1391,6 +1456,7 @@ export type VoiceStreamEvent =
 export interface StreamVoiceTurnOptions extends VoiceTurnOptions {
   signal?: AbortSignal;
   onEvent?: (event: VoiceStreamEvent) => void;
+  getFreshToken?: () => Promise<string | null>;
 }
 
 export async function createVoiceSession(
@@ -1480,18 +1546,44 @@ export async function streamVoiceTurn(
   token: string,
   options: StreamVoiceTurnOptions,
 ): Promise<VoiceTurnResult> {
-  const { signal, onEvent, ...requestOptions } = options ?? {};
+  const { signal, onEvent, getFreshToken, ...requestOptions } = options ?? {};
 
-  const response = await fetch(`${API_URL}/api/v1/voice/turn/stream`, {
+  const payload = JSON.stringify(requestOptions);
+
+  let currentToken = token;
+  let response = await fetch(`${API_URL}/api/v1/voice/turn/stream`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${currentToken}`,
     },
-    body: JSON.stringify(requestOptions),
+    body: payload,
     signal,
   });
+
+  if (response.status === 401 && getFreshToken) {
+    if (signal?.aborted) {
+      throw new DOMException("The user aborted a request.", "AbortError");
+    }
+    const freshToken = await getFreshToken();
+    if (freshToken) {
+      if (signal?.aborted) {
+        throw new DOMException("The user aborted a request.", "AbortError");
+      }
+      currentToken = freshToken;
+      response = await fetch(`${API_URL}/api/v1/voice/turn/stream`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+          Authorization: `Bearer ${currentToken}`,
+        },
+        body: payload,
+        signal,
+      });
+    }
+  }
 
   if (!response.ok) {
     let errorMessage = `BrainOS voice stream request failed: ${response.status} ${response.statusText}`;

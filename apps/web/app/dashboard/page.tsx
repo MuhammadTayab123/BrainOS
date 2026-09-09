@@ -377,6 +377,7 @@ export default function Home() {
           },
           synthesizeSpeech: true,
           signal: abortController.signal,
+          getFreshToken: () => getToken({ skipCache: true }),
           onEvent: (event) => {
             if (event.type === "state_changed") {
               const state = event.data.state;
@@ -455,7 +456,14 @@ export default function Home() {
         ) {
           setError("Voice request was cancelled.");
         } else {
-          setError(err instanceof Error ? err.message : "Voice processing failed.");
+          const rawMessage = err instanceof Error ? err.message : "Voice processing failed.";
+          if (rawMessage.includes("timed out waiting for remote host execution")) {
+            setError(
+              `${rawMessage} (Make sure the Computer Agent host daemon is running via 'npm run agent:start')`
+            );
+          } else {
+            setError(rawMessage);
+          }
         }
       } finally {
         abortControllerRef.current = null;
@@ -521,6 +529,7 @@ export default function Home() {
         {
           conversationId: conversation.id,
           signal: abortController.signal,
+          getFreshToken: () => getToken({ skipCache: true }),
           onEvent: (event) => {
             if (event.type === "state_changed") {
               const state = event.data.state;
@@ -584,11 +593,14 @@ export default function Home() {
         setError("Request was cancelled.");
       } else {
         setMessage(userMessage);
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Something went wrong.",
-        );
+        const rawMessage = err instanceof Error ? err.message : "Something went wrong.";
+        if (rawMessage.includes("timed out waiting for remote host execution")) {
+          setError(
+            `${rawMessage} (Make sure the Computer Agent host daemon is running via 'npm run agent:start')`
+          );
+        } else {
+          setError(rawMessage);
+        }
       }
     } finally {
       abortControllerRef.current = null;
