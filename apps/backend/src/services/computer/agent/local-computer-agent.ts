@@ -25,18 +25,49 @@ import {
 
 const execFileAsync = promisify(execFile);
 
+export type ProcessRunner = (
+  file: string,
+  args: string[],
+  options?: { windowsHide?: boolean },
+) => Promise<{ stdout: string; stderr: string }>;
+
+export interface LocalComputerAgentOptions {
+  execRunner?: ProcessRunner;
+  platform?: NodeJS.Platform;
+}
+
+const defaultExecRunner: ProcessRunner = async (file, args, opts) => {
+  const result = await execFileAsync(file, args, {
+    ...opts,
+    encoding: "utf8",
+  });
+
+  return {
+    stdout: result.stdout,
+    stderr: result.stderr,
+  };
+};
+
 export class LocalComputerAgent
   implements ComputerAgent
 {
+  private readonly execRunner: ProcessRunner;
+  private readonly platform: NodeJS.Platform;
+
+  constructor(options: LocalComputerAgentOptions = {}) {
+    this.execRunner = options.execRunner ?? defaultExecRunner;
+    this.platform = options.platform ?? os.platform();
+  }
+
   async getInfo(): Promise<ComputerAgentInfo> {
     return {
       agentId: `local-${os.hostname()}`,
       status: "ONLINE",
-      platform: os.platform(),
+      platform: this.platform,
       architecture: os.arch(),
       capabilities: {
         status: true,
-        applications: os.platform() === "win32",
+        applications: this.platform === "win32",
         files: true,
         browser: false,
       },
@@ -65,14 +96,15 @@ export class LocalComputerAgent
   }
 
   async listApplications(): Promise<ComputerApplication[]> {
-    if (os.platform() !== "win32") {
+    if (this.platform !== "win32") {
       return [];
     }
 
-    const { stdout } = await execFileAsync(
+    const { stdout } = await this.execRunner(
       "powershell.exe",
       [
         "-NoProfile",
+        "-NonInteractive",
         "-Command",
         "Get-StartApps | Select-Object Name, AppID | ConvertTo-Json -Compress",
       ],
@@ -108,7 +140,7 @@ export class LocalComputerAgent
   async launchApplication(
     appId: string,
   ): Promise<{ success: boolean; appId: string }> {
-    if (os.platform() !== "win32") {
+    if (this.platform !== "win32") {
       return {
         success: false,
         appId,
@@ -121,27 +153,55 @@ export class LocalComputerAgent
     ) {
       return {
         success: false,
-        appId,
+        appId: typeof appId === "string" ? appId : "",
       };
     }
 
-    await execFileAsync(
-      "powershell.exe",
-      [
-        "-NoProfile",
-        "-Command",
-        "Start-Process explorer.exe -ArgumentList ('shell:AppsFolder\\' + $args[0])",
-        appId,
-      ],
-      {
-        windowsHide: true,
-      },
-    );
+    const cleanAppId = appId.trim();
 
-    return {
-      success: true,
-      appId,
-    };
+    // Enforce strict character allowlist for Windows AppIDs, AUMIDs, and application paths
+    // Reject any shell metacharacters (; & | ` $ " ' < > \n \r \0) and newlines
+    if (!/^[a-zA-Z0-9_.!:\\ {}\-()]+$/.test(cleanAppId)) {
+      return {
+        success: false,
+        appId: cleanAppId,
+      };
+    }
+
+    const isAbsolutePath =
+      /^[a-zA-Z]:[\\/]/.test(cleanAppId) ||
+      cleanAppId.startsWith("\\\\") ||
+      path.win32.isAbsolute(cleanAppId);
+
+    const script = isAbsolutePath
+      ? `Start-Process -FilePath "${cleanAppId}"`
+      : `Start-Process explorer.exe -ArgumentList "shell:AppsFolder\\${cleanAppId}"`;
+    const encodedCommand = Buffer.from(script, "utf16le").toString("base64");
+
+    try {
+      await this.execRunner(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-EncodedCommand",
+          encodedCommand,
+        ],
+        {
+          windowsHide: true,
+        },
+      );
+
+      return {
+        success: true,
+        appId: cleanAppId,
+      };
+    } catch {
+      return {
+        success: false,
+        appId: cleanAppId,
+      };
+    }
   }
 
   async readFile(
