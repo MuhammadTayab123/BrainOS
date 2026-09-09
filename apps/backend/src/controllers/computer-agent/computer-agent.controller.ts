@@ -16,6 +16,7 @@ import {
   ComputerAgentHttpTransportService,
   InMemoryEnvelopeReplayGuard,
 } from "../../services/computer/transport";
+import { ComputerActionQueueService } from "../../services/computer/queue/computer-action-queue.service";
 
 const computerAgentRepository = new ComputerAgentRepository();
 let computerAgentService = new ComputerAgentService(computerAgentRepository);
@@ -37,6 +38,7 @@ const defaultDispatcher = new DefaultComputerAgentActionDispatcher({
   authorizer: defaultAuthorizer,
   handler: defaultActionHandler,
 });
+const defaultQueueService = new ComputerActionQueueService();
 
 let computerAgentHttpTransportService = new ComputerAgentHttpTransportService({
   authenticator: {
@@ -65,6 +67,7 @@ let computerAgentHttpTransportService = new ComputerAgentHttpTransportService({
   },
   replayGuard: defaultReplayGuard,
   dispatcher: defaultDispatcher,
+  queueService: defaultQueueService,
 });
 
 export function setComputerAgentHttpTransportService(
