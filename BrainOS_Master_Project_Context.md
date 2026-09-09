@@ -5112,3 +5112,117 @@ Response Envelope Validation (validateProtocolResponseEnvelope)
 - **Branch**: `main`
 - `HEAD` == `origin/main` (`ba020c56de16456b634853b98dbc76e6cfd7db80`)
 - Working tree clean.
+
+---
+
+# 77. ADDITIVE UPDATE — MASTER PROJECT CONTEXT SYNCHRONIZATION
+
+### 1. Goal and Purpose
+
+Mission 77 synchronized the Master Project Context with verified repository milestones, documenting Missions 74 through 76 in full fidelity:
+- **Mission 74**: Rich Chat Markdown & Safe Code Rendering (Prism syntax highlighting, safe token rendering, zero `dangerouslySetInnerHTML`, strict link sanitization, copy code button, 28/28 focused tests, commit `f7da32c`).
+- **Mission 75**: Assistant Multi-Round Tool Execution (clean production registry, multi-round loop coverage with `document_search` → `create_task` → final response, server-derived `userId` context, 18/18 focused tests, 79 files / 985 tests full suite, commits `a3da30f` and `f545d67`).
+- **Mission 76**: Standalone Authenticated Computer Agent Client (`ComputerAgentClient`, protocol envelopes, timeout/abort, response validation, zero credential leakage, 23/23 focused tests, 80 files / 1,008 tests full suite, commit `ba020c5`).
+
+### 2. Verification Completed
+
+- **Git Status & History**: Verified clean working tree against `origin/main`.
+- **Git Diff Hygiene**: Clean (`git diff --check`).
+
+### 3. Final Git State
+
+- **Commit**: `21daaf7 docs(context): update master context through mission 76`
+- **Branch**: `main`
+- `HEAD` == `origin/main` (`21daaf72a297906d4e8c15858cf09886a111a87c`)
+- Working tree clean.
+
+---
+
+# 78. ADDITIVE UPDATE — STANDALONE COMPUTER AGENT HOST RUNNER
+
+### 1. Goal and Purpose
+
+Mission 78 implemented the standalone `ComputerAgentRunner` in `apps/backend/src/services/computer/client/` to manage host agent lifecycle, automated authentication, and periodic heartbeat pings on top of `ComputerAgentClient`.
+
+### 2. Architecture & Additions
+
+```text
+Host / Daemon Process (fromEnv / config)
+  ↓
+ComputerAgentRunner (apps/backend/src/services/computer/client/computer-agent-runner.ts)
+  ├── start({ signal?, skipImmediatePing? }) → immediate authenticated ping()
+  ├── scheduleNextHeartbeat() → periodic ping() via recursive setTimeout
+  ├── stop() → idempotent graceful shutdown & timer/listener cleanup
+  ├── fromEnv() → parse interval from BRAINOS_AGENT_HEARTBEAT_INTERVAL_MS
+  └── getState() / toJSON() → sanitized runtime metrics (zero credential exposure)
+  ↓
+ComputerAgentClient (apps/backend/src/services/computer/client/computer-agent-client.ts)
+  ↓
+Authenticated HTTP Transport (POST /api/v1/computer-agents/protocol/messages)
+```
+
+- **Host Runner Implementation (`apps/backend/src/services/computer/client/`)**:
+  - **`computer-agent-runner.types.ts`**: Defined `ComputerAgentRunnerStatus`, `ComputerAgentRunnerConfig`, `ComputerAgentRunnerStartOptions`, `ComputerAgentRunnerState`, `HeartbeatSuccessEvent`, and `HeartbeatErrorEvent`.
+  - **`computer-agent-runner.ts`**: Implemented `ComputerAgentRunner`:
+    - `fromEnv(env?, options?, fetch?)` factory initializing runner from environment variables.
+    - Lifecycle management (`start()`, `stop()`, restart support).
+    - Immediate authenticated `ping()` on startup with fail-closed error propagation.
+    - Periodic heartbeat scheduling using recursive `setTimeout` with configurable interval (`heartbeatIntervalMs`, default 30,000ms, minimum 100ms enforced).
+    - Overlap prevention: Next heartbeat is only scheduled after the active heartbeat promise resolves.
+    - Graceful cancellation and abort handling via `AbortController` and external `AbortSignal`.
+    - Complete cleanup of active timers, abort controllers, and external signal listeners on `stop()`.
+    - Duplicate-start protection throwing `ALREADY_RUNNING` (409) if already active.
+    - Isolated callback execution (`onHeartbeatSuccess`, `onHeartbeatError`, `onStatusChange`) wrapped in `try/catch` so consumer callback errors never disrupt the heartbeat loop.
+    - Credential masking: `getState()`, `toJSON()`, and custom inspect representations strictly omit credentials and secrets.
+  - **`index.ts`**: Exported `ComputerAgentRunner` and runner type definitions.
+
+### 3. Security Rules & Invariants
+
+- **Lifecycle + Heartbeat Boundary**: The runner strictly implements lifecycle and authenticated ping heartbeats. It does NOT execute remote actions, does NOT invoke `LocalComputerAgent`, and does NOT contain shell or command execution.
+- **No Duplicated Authorization**: All authentication and permission validation remain strictly enforced by backend services.
+- **Fail-Closed Startup**: If initial authenticated ping fails during `start()`, the runner transitions to `ERROR`, cleans up resources, and throws the error.
+- **Zero Credential Exposure**: Plaintext tokens are never stored on runner state or emitted in logs, inspection strings, or JSON representations.
+
+### 4. Verification Completed
+
+- **Dedicated Runner Unit Tests**: 17/17 passed (`apps/backend/test/services/computer/client/computer-agent-runner.test.ts`), covering config validation, `fromEnv`, lifecycle transitions, interval ticks, error recovery, signal abort, listener cleanup, and credential protection.
+- **Total Client/Runner Tests**: 40/40 passed (`apps/backend/test/services/computer/client/`).
+- **Computer Subsystem Suite**: 228/228 passed across 11 test files (`apps/backend/test/services/computer/`).
+- **Full Backend Regression Suite**: 81/81 test files passed, 1,025/1,025 tests passed (0 failures) (`npm --prefix apps/backend test`).
+- **Backend TypeScript Validation**: Clean, 0 errors (`npm --prefix apps/backend run typecheck`).
+- **Git Diff Hygiene**: Clean (`git diff --check`).
+
+### 5. Final Git State
+
+- **Commit**: `8651e8f feat(computer): add agent host runner heartbeat`
+- **Branch**: `main`
+- `HEAD` == `origin/main` (`8651e8f1a6dbed6355f973d3d1dc68576dd6fa58`)
+- Working tree clean.
+
+---
+
+# 79. ARCHITECTURAL ANALYSIS & ROADMAP — REMOTE COMPUTER ACTION DISPATCH MODEL
+
+### 1. Ingress vs Egress Asymmetry (NAT & Firewalls)
+
+External Computer Agent runners typically operate on user workstations and personal laptops located behind home/office NAT routers, firewalls, and dynamic IP addresses. Consequently:
+- External agents can only initiate **outbound** HTTP connections to the BrainOS backend server.
+- The BrainOS server cannot make direct inbound HTTP requests to remote host runners.
+
+### 2. Protocol Capabilities & Boundaries
+
+The current Computer Agent Protocol (`POST /api/v1/computer-agents/protocol/messages`) supports:
+- Agent-to-Server authentication, timestamp verification, and replay protection.
+- Agent-initiated `ping` requests receiving server acknowledgements.
+- Agent-initiated `action_request` messages dispatched to server-local execution.
+
+### 3. Requirements for Future Remote Execution
+
+For BrainOS assistant tools (`computer_read_file`, `computer_write_file`, `computer_launch_application`, etc.) to execute actions on remote user machines, the architecture requires a **pull-based action dispatch model**:
+1. **Action Queue / Dispatch Bridge**: When `ToolExecutor` targets a remote agent, BrainOS queues the action request.
+2. **Pull Delivery via Heartbeat / Long-Poll**: The remote host runner retrieves pending action envelopes via periodic heartbeat responses or dedicated polling.
+3. **Local Host Execution**: The runner executes the action on the host machine (e.g. using `LocalComputerAgent` on the host side) with host OS sandboxing.
+4. **Result Ingestion**: The runner posts the action result envelope back to the BrainOS server, resolving the pending tool call.
+
+> [!NOTE]
+> Remote action routing is NOT yet implemented in Mission 78/79. The current client runner remains strictly bounded to authenticated heartbeat and lifecycle management.
