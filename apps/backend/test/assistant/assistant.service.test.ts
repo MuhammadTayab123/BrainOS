@@ -46,7 +46,7 @@ describe("AssistantService", () => {
 
   function createDocumentRetrievalServiceMock() {
     return {
-      search: vi.fn(),
+      search: vi.fn().mockResolvedValue([]),
     };
   }
 
@@ -943,7 +943,7 @@ describe("AssistantService", () => {
       model: "test-model",
       provider: "test",
       retrievedMemories: [],
-      retrievedDocuments: [],
+      retrievedDocuments: sampleChunks,
     });
   });
 
@@ -1337,5 +1337,282 @@ describe("AssistantService", () => {
     expect(result.text).toBe(
       "I searched the architecture documents and created the follow-up task.",
     );
+  });
+
+  describe("Mission 82 — Context-First Assistant Retrieval", () => {
+    it("enables both document and memory retrieval by default and passes user-scoped queries", async () => {
+      const llmService = createLlmServiceMock();
+      const memoryService = createMemoryServiceMock();
+      const toolExecutor = createToolExecutorMock();
+      const documentRetrievalService = createDocumentRetrievalServiceMock();
+
+      const retrievedMemories = [
+        {
+          id: "mem-1",
+          content: "User works as a Software Architect.",
+          similarity: 0.91,
+          importance: 0.9,
+        },
+      ];
+
+      const retrievedDocuments = [
+        {
+          id: "chunk-1",
+          documentId: "doc-1",
+          documentTitle: "Resume.pdf",
+          sourceType: "UPLOAD",
+          source: "Resume.pdf",
+          chunkIndex: 0,
+          content: "10 years experience in distributed systems.",
+          similarity: 0.88,
+        },
+      ];
+
+      memoryService.searchMemories.mockResolvedValue(retrievedMemories);
+      documentRetrievalService.search.mockResolvedValue(retrievedDocuments);
+
+      llmService.generate.mockResolvedValue({
+        text: "You are a Software Architect with 10 years experience.",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [],
+      });
+
+      const service = new AssistantService(
+        llmService as unknown as LLMService,
+        memoryService as unknown as MemoryService,
+        toolExecutor as unknown as ToolExecutor,
+        undefined,
+        undefined,
+        documentRetrievalService as unknown as DocumentRetrievalService,
+      );
+
+      const result = await service.ask({
+        userId: "user-tenant-1",
+        message: "What is my professional background?",
+      });
+
+      // Assert retrieval receives authenticated userId and query by default without explicit flags
+      expect(memoryService.searchMemories).toHaveBeenCalledWith({
+        userId: "user-tenant-1",
+        query: "What is my professional background?",
+        limit: undefined,
+      });
+
+      expect(documentRetrievalService.search).toHaveBeenCalledWith({
+        userId: "user-tenant-1",
+        query: "What is my professional background?",
+        limit: undefined,
+      });
+
+      // Assert LLM receives formatted memories, documents, and reference instructions
+      expect(llmService.generate).toHaveBeenCalledTimes(1);
+      const generateArg = llmService.generate.mock.calls[0][0];
+
+      expect(generateArg.systemPrompt).toContain("[Relevant Context from Memory]");
+      expect(generateArg.systemPrompt).toContain("User works as a Software Architect.");
+      expect(generateArg.systemPrompt).toContain("[Relevant Context from Documents]");
+      expect(generateArg.systemPrompt).toContain("Title: Resume.pdf");
+      expect(generateArg.systemPrompt).toContain("10 years experience in distributed systems.");
+
+      expect(result.retrievedMemories).toEqual(retrievedMemories);
+      expect(result.retrievedDocuments).toEqual(retrievedDocuments);
+      expect(result.text).toBe("You are a Software Architect with 10 years experience.");
+    });
+
+    it("respects explicit enableDocumentRetrieval: false opt-out", async () => {
+      const llmService = createLlmServiceMock();
+      const memoryService = createMemoryServiceMock();
+      const toolExecutor = createToolExecutorMock();
+      const documentRetrievalService = createDocumentRetrievalServiceMock();
+
+      memoryService.searchMemories.mockResolvedValue([]);
+      llmService.generate.mockResolvedValue({
+        text: "Response without docs.",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [],
+      });
+
+      const service = new AssistantService(
+        llmService as unknown as LLMService,
+        memoryService as unknown as MemoryService,
+        toolExecutor as unknown as ToolExecutor,
+        undefined,
+        undefined,
+        documentRetrievalService as unknown as DocumentRetrievalService,
+      );
+
+      const result = await service.ask({
+        userId: "user-1",
+        message: "Hello world",
+        enableDocumentRetrieval: false,
+      });
+
+      expect(memoryService.searchMemories).toHaveBeenCalledTimes(1);
+      expect(documentRetrievalService.search).not.toHaveBeenCalled();
+      expect(result.retrievedDocuments).toEqual([]);
+    });
+
+    it("respects explicit enableMemoryRetrieval: false opt-out", async () => {
+      const llmService = createLlmServiceMock();
+      const memoryService = createMemoryServiceMock();
+      const toolExecutor = createToolExecutorMock();
+      const documentRetrievalService = createDocumentRetrievalServiceMock();
+
+      documentRetrievalService.search.mockResolvedValue([]);
+      llmService.generate.mockResolvedValue({
+        text: "Response without memories.",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [],
+      });
+
+      const service = new AssistantService(
+        llmService as unknown as LLMService,
+        memoryService as unknown as MemoryService,
+        toolExecutor as unknown as ToolExecutor,
+        undefined,
+        undefined,
+        documentRetrievalService as unknown as DocumentRetrievalService,
+      );
+
+      const result = await service.ask({
+        userId: "user-1",
+        message: "Search documents only",
+        enableMemoryRetrieval: false,
+      });
+
+      expect(memoryService.searchMemories).not.toHaveBeenCalled();
+      expect(documentRetrievalService.search).toHaveBeenCalledTimes(1);
+      expect(result.retrievedMemories).toEqual([]);
+    });
+
+    it("uses previous user context for multi-turn follow-up queries like 'tell me more about it'", async () => {
+      const llmService = createLlmServiceMock();
+      const memoryService = createMemoryServiceMock();
+      const toolExecutor = createToolExecutorMock();
+      const documentRetrievalService = createDocumentRetrievalServiceMock();
+      const conversationRepository = createConversationRepositoryMock();
+      const messageRepository = createMessageRepositoryMock();
+
+      conversationRepository.findByIdForUser.mockResolvedValue({
+        id: "conv-101",
+        userId: "user-owner",
+        title: "Career Discussion",
+      });
+
+      messageRepository.listByConversation.mockResolvedValue([
+        {
+          id: "m-1",
+          conversationId: "conv-101",
+          role: "USER",
+          content: "What is John Doe's resume and job history?",
+          createdAt: new Date("2026-09-09T08:00:00.000Z"),
+        },
+        {
+          id: "m-2",
+          conversationId: "conv-101",
+          role: "ASSISTANT",
+          content: "John Doe is a Senior Engineer at Acme Corp.",
+          createdAt: new Date("2026-09-09T08:00:05.000Z"),
+        },
+      ]);
+
+      memoryService.searchMemories.mockResolvedValue([]);
+      documentRetrievalService.search.mockResolvedValue([
+        {
+          id: "chunk-2",
+          documentId: "doc-2",
+          documentTitle: "CV.pdf",
+          sourceType: "UPLOAD",
+          source: "CV.pdf",
+          chunkIndex: 1,
+          content: "John worked on high-throughput microservices and Kubernetes.",
+          similarity: 0.93,
+        },
+      ]);
+
+      llmService.generate.mockResolvedValue({
+        text: "John led several microservices projects on Kubernetes.",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [],
+      });
+
+      const service = new AssistantService(
+        llmService as unknown as LLMService,
+        memoryService as unknown as MemoryService,
+        toolExecutor as unknown as ToolExecutor,
+        conversationRepository as unknown as ConversationRepository,
+        messageRepository as unknown as MessageRepository,
+        documentRetrievalService as unknown as DocumentRetrievalService,
+      );
+
+      const result = await service.ask({
+        userId: "user-owner",
+        conversationId: "conv-101",
+        message: "tell me more about it",
+      });
+
+      // The retrieval query should include the prior user turn to resolve the anaphora
+      const expectedContextualQuery =
+        "What is John Doe's resume and job history? tell me more about it";
+
+      expect(memoryService.searchMemories).toHaveBeenCalledWith({
+        userId: "user-owner",
+        query: expectedContextualQuery,
+        limit: undefined,
+      });
+
+      expect(documentRetrievalService.search).toHaveBeenCalledWith({
+        userId: "user-owner",
+        query: expectedContextualQuery,
+        limit: undefined,
+      });
+
+      // The actual prompt passed to LLM must remain the user's literal message
+      const generateArg = llmService.generate.mock.calls[0][0];
+      expect(generateArg.prompt).toBe("tell me more about it");
+
+      expect(result.text).toBe("John led several microservices projects on Kubernetes.");
+    });
+
+    it("works normally and gracefully when memory and document searches return empty results", async () => {
+      const llmService = createLlmServiceMock();
+      const memoryService = createMemoryServiceMock();
+      const toolExecutor = createToolExecutorMock();
+      const documentRetrievalService = createDocumentRetrievalServiceMock();
+
+      memoryService.searchMemories.mockResolvedValue([]);
+      documentRetrievalService.search.mockResolvedValue([]);
+
+      llmService.generate.mockResolvedValue({
+        text: "I do not have any specific documents or memories about that topic.",
+        model: "test-model",
+        provider: "test",
+        toolCalls: [],
+      });
+
+      const service = new AssistantService(
+        llmService as unknown as LLMService,
+        memoryService as unknown as MemoryService,
+        toolExecutor as unknown as ToolExecutor,
+        undefined,
+        undefined,
+        documentRetrievalService as unknown as DocumentRetrievalService,
+      );
+
+      const result = await service.ask({
+        userId: "user-1",
+        message: "Tell me about quantum computing.",
+      });
+
+      expect(result.retrievedMemories).toEqual([]);
+      expect(result.retrievedDocuments).toEqual([]);
+      expect(result.text).toBe(
+        "I do not have any specific documents or memories about that topic.",
+      );
+    });
   });
 });

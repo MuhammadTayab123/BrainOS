@@ -25,6 +25,31 @@ import {
   DefaultComputerAuthorizationService,
 } from "../computer/security/computer-authorization.service";
 
+export function buildContextualRetrievalQuery(
+  currentMessage: string,
+  conversationHistory: LLMMessage[],
+): string {
+  const previousUserMessages = conversationHistory.filter(
+    (msg) =>
+      msg.role === "user" &&
+      typeof msg.content === "string" &&
+      msg.content.trim().length > 0,
+  );
+
+  if (previousUserMessages.length === 0) {
+    return currentMessage;
+  }
+
+  const lastUserMessage =
+    previousUserMessages[previousUserMessages.length - 1].content.trim();
+
+  if (!lastUserMessage || lastUserMessage === currentMessage) {
+    return currentMessage;
+  }
+
+  return `${lastUserMessage} ${currentMessage}`;
+}
+
 const MAX_TOOL_ROUNDS = 5;
 const MAX_CONVERSATION_TITLE_LENGTH = 60;
 
@@ -74,37 +99,6 @@ export class AssistantService {
     const runtime = input.runtime ?? this.runtime;
 
     runtime.setState("THINKING");
-
-    const retrievedMemories: MemorySearchResult[] = [];
-    const retrievedDocuments: SearchDocumentChunkResult[] = [];
-
-    const retrievalPolicy =
-      decideAssistantRetrieval(input);
-
-    if (retrievalPolicy.memory) {
-      const memories =
-        await this.memoryService.searchMemories({
-          userId,
-          query: trimmedMessage,
-          limit: input.memorySearchLimit,
-        });
-
-      retrievedMemories.push(...memories);
-    }
-
-    if (
-      retrievalPolicy.documents &&
-      this.documentRetrievalService
-    ) {
-      const documents =
-        await this.documentRetrievalService.search({
-          userId,
-          query: trimmedMessage,
-          limit: input.documentSearchLimit,
-        });
-
-      retrievedDocuments.push(...documents);
-    }
 
     let conversationHistory: LLMMessage[] =
       input.conversationHistory ?? [];
@@ -176,6 +170,42 @@ export class AssistantService {
           title,
         );
       }
+    }
+
+    const retrievalQuery = buildContextualRetrievalQuery(
+      trimmedMessage,
+      conversationHistory,
+    );
+
+    const retrievedMemories: MemorySearchResult[] = [];
+    const retrievedDocuments: SearchDocumentChunkResult[] = [];
+
+    const retrievalPolicy =
+      decideAssistantRetrieval(input);
+
+    if (retrievalPolicy.memory) {
+      const memories =
+        await this.memoryService.searchMemories({
+          userId,
+          query: retrievalQuery,
+          limit: input.memorySearchLimit,
+        });
+
+      retrievedMemories.push(...memories);
+    }
+
+    if (
+      retrievalPolicy.documents &&
+      this.documentRetrievalService
+    ) {
+      const documents =
+        await this.documentRetrievalService.search({
+          userId,
+          query: retrievalQuery,
+          limit: input.documentSearchLimit,
+        });
+
+      retrievedDocuments.push(...documents);
     }
 
     const now = input.now ?? this.clock();

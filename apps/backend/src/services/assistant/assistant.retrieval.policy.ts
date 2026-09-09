@@ -13,6 +13,6 @@ export function decideAssistantRetrieval(
 ): AssistantRetrievalPolicy {
   return {
     memory: input.enableMemoryRetrieval ?? true,
-    documents: input.enableDocumentRetrieval ?? false,
+    documents: input.enableDocumentRetrieval ?? true,
   };
 }
