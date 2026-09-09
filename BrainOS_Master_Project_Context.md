@@ -5320,3 +5320,53 @@ QueuedComputerAgentGateway (apps/backend/src/services/computer/agent/queued-comp
 - **Local Host Agent Tests**: 4/4 passed (`local-computer-agent.test.ts`).
 - **Backend TypeScript Validation**: Clean, 0 errors (`npm --prefix apps/backend run typecheck`).
 - **Git Diff Hygiene**: Clean (`git diff --check`).
+
+---
+
+# 82. MISSION 86 — COMPUTER AGENT HOST DAEMON CLI & PROCESS LIFECYCLE
+
+### 1. Goal & Architecture
+Implemented the standalone executable CLI and process lifecycle management wrapper for the BrainOS Computer Agent Host Daemon, allowing users and services to configure, launch, and operate `ComputerAgentRunner` with zero extra dependencies and graceful OS process handling.
+
+```text
+Terminal / Package Script
+  ↓
+npm run agent:start / npm run agent -- [options]
+  ↓
+Executable CLI Entrypoint (apps/backend/src/cli/computer-agent.cli.ts)
+  ↓
+CLI Engine & Config Parser (apps/backend/src/services/computer/client/computer-agent-cli.ts)
+  ├── Argument Parsing: Native node:util parseArgs (-a, -u, -c, --heartbeat-interval, --poll-interval, --disable-polling, --help, --version)
+  ├── Environment Resolution: Fallback to BRAINOS_AGENT_ID, BRAINOS_API_URL, BRAINOS_AGENT_CREDENTIAL
+  ├── Signal Handling: SIGINT (Ctrl+C), SIGTERM, SIGHUP with bounded graceful shutdown (5,000ms timeout)
+  └── Safe Redacted Console Logging: Heartbeat events, action claims, and lifecycle transitions without secret leakage
+        ↓
+ComputerAgentRunner (Host Execution Loop)
+```
+
+### 2. Key Components Implemented
+1. **`computer-agent-cli.ts` & `computer-agent-cli.types.ts`** (`apps/backend/src/services/computer/client/`):
+   - Native Node.js `util.parseArgs` CLI parser supporting full flags and short aliases (`-a`, `-u`, `-c`, `-t`, `-k`, `-h`, `-v`, `--backend-url`, `--heartbeat-interval`, `--poll-interval`, `--disable-polling`, `--timeout`).
+   - Strict validation for URLs (must be HTTP/HTTPS), integer intervals (minimum 100ms), and required credentials.
+   - Formatted help and version output.
+   - `runComputerAgentCli` daemon runner attaching lifecycle transitions, heartbeat telemetry, and action status reporting.
+   - Signal management for `SIGINT`, `SIGTERM`, and `SIGHUP` triggering bounded `runner.stop()`.
+2. **`computer-agent.cli.ts`** (`apps/backend/src/cli/`):
+   - Executable entrypoint loading local `.env` and executing the CLI runner with clean exit codes.
+3. **`package.json` Scripts**:
+   - Added `"agent": "tsx src/cli/computer-agent.cli.ts"` and `"agent:start": "tsx src/cli/computer-agent.cli.ts"`.
+4. **Client Exports**:
+   - Exported CLI functions and types from `apps/backend/src/services/computer/client/index.ts`.
+
+### 3. Security & Invariants Preserved
+- **Zero Credential Exposure**: Plaintext secret keys, tokens, and authorization headers are never logged or printed in stdout/stderr.
+- **Fail-Closed Pre-flight Validation**: Rejects missing or invalid URLs, agent IDs, and credentials before starting the runner.
+- **Strict Protocol Bounds**: Maintains existing HMAC/token signing and 5-action allowlist without modifying underlying agent contracts or authorizing shell execution.
+
+### 4. Verification
+- **Focused CLI Unit & Lifecycle Tests**: 23/23 passed (`apps/backend/test/services/computer/client/computer-agent-cli.test.ts`).
+- **Computer Client Subsystem Suite**: 72/72 passed across 3 test files (`apps/backend/test/services/computer/client/`).
+- **Computer Subsystem Test Suite**: 331/331 passed across 16 test files (`apps/backend/test/services/computer/`).
+- **Full Backend Regression Suite**: 86/86 test files passed, 1,150/1,150 tests passed (`npm --prefix apps/backend test -- --run`).
+- **Backend TypeScript Validation**: Clean, 0 errors (`npm --prefix apps/backend run typecheck`).
+- **Git Diff Hygiene**: Clean (`git diff --check`).

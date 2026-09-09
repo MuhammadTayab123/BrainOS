@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit",
     "start": "node dist/src/server.js",
     "test": "vitest --passWithNoTests",
-    "test:run": "vitest run --passWithNoTests"
+    "test:run": "vitest run --passWithNoTests",
+    "agent": "tsx src/cli/computer-agent.cli.ts",
+    "agent:start": "tsx src/cli/computer-agent.cli.ts"
   },
   "keywords": [],
   "author": "",
