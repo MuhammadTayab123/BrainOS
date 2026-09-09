@@ -74,6 +74,15 @@ enum ComputerAgentStatus {
   REVOKED
 }
 
+enum ComputerAgentActionStatus {
+  PENDING
+  CLAIMED
+  COMPLETED
+  FAILED
+  CANCELLED
+  TIMED_OUT
+}
+
 model User {
   id        String  @id @default(cuid())
   clerkId   String  @unique
@@ -83,16 +92,17 @@ model User {
   imageUrl  String?
   isActive  Boolean @default(true)
 
-  conversations Conversation[]
-  memories      Memory[]
-  tasks         Task[]
-  reminders     Reminder[]
-  documents      Document[]
-  automations    Automation[]
-  computerAgents ComputerAgent[]
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  deletedAt      DateTime?
+  conversations        Conversation[]
+  memories             Memory[]
+  tasks                Task[]
+  reminders            Reminder[]
+  documents            Document[]
+  automations          Automation[]
+  computerAgents       ComputerAgent[]
+  computerAgentActions ComputerAgentAction[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  deletedAt            DateTime?
 }
 
 model Conversation {
@@ -309,6 +319,7 @@ model ComputerAgent {
 
   credentials ComputerAgentCredential[]
   permissions ComputerAgentPermission[]
+  actions     ComputerAgentAction[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -348,4 +359,35 @@ model ComputerAgentPermission {
   @@index([agentId])
   @@index([agentId, action])
   @@index([agentId, deletedAt])
+}
+
+model ComputerAgentAction {
+  id String @id @default(cuid())
+
+  agentId String
+  agent   ComputerAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  correlationId String @unique
+  actionName    String
+  params        Json?
+
+  status ComputerAgentActionStatus @default(PENDING)
+
+  result Json?
+  error  String?
+
+  claimedAt   DateTime?
+  completedAt DateTime?
+  expiresAt   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agentId, status])
+  @@index([userId, status])
+  @@index([expiresAt, status])
+  @@index([agentId, expiresAt, status])
 }
