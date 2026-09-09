@@ -31,6 +31,51 @@ export interface HeartbeatErrorEvent {
 }
 
 /**
+ * Host-side action executor abstraction.
+ * Executes claimed actions locally on the host machine.
+ */
+export interface HostActionExecutor {
+  executeAction(
+    actionName: string,
+    params?: unknown,
+  ): Promise<unknown>;
+}
+
+/**
+ * Event data emitted when action polling completes.
+ */
+export interface ActionPollSuccessEvent {
+  timestamp: number;
+  agentId: string;
+  hasAction: boolean;
+  actionId?: string;
+  actionName?: string;
+}
+
+/**
+ * Event data emitted when action polling encounters an error.
+ */
+export interface ActionPollErrorEvent {
+  timestamp: number;
+  agentId: string;
+  error: Error;
+}
+
+/**
+ * Event data emitted when a local host action execution completes and reports back.
+ */
+export interface ActionExecutionCompleteEvent {
+  timestamp: number;
+  agentId: string;
+  actionId: string;
+  correlationId: string;
+  actionName: string;
+  success: boolean;
+  result?: unknown;
+  error?: string;
+}
+
+/**
  * Configuration options for creating a ComputerAgentRunner.
  */
 export interface ComputerAgentRunnerConfig {
@@ -45,6 +90,21 @@ export interface ComputerAgentRunnerConfig {
   heartbeatIntervalMs?: number;
 
   /**
+   * Action polling interval in milliseconds (default: 3,000ms, minimum: 100ms).
+   */
+  actionPollingIntervalMs?: number;
+
+  /**
+   * Whether action polling loop is enabled (default: true).
+   */
+  actionPollingEnabled?: boolean;
+
+  /**
+   * Host-side action executor responsible for local execution.
+   */
+  actionExecutor?: HostActionExecutor;
+
+  /**
    * Callback invoked when a heartbeat ping completes successfully.
    */
   onHeartbeatSuccess?: (event: HeartbeatSuccessEvent) => void;
@@ -53,6 +113,21 @@ export interface ComputerAgentRunnerConfig {
    * Callback invoked when a heartbeat ping fails.
    */
   onHeartbeatError?: (event: HeartbeatErrorEvent) => void;
+
+  /**
+   * Callback invoked when an action poll completes.
+   */
+  onActionPollSuccess?: (event: ActionPollSuccessEvent) => void;
+
+  /**
+   * Callback invoked when an action poll fails.
+   */
+  onActionPollError?: (event: ActionPollErrorEvent) => void;
+
+  /**
+   * Callback invoked when an action is executed and reported.
+   */
+  onActionExecutionComplete?: (event: ActionExecutionCompleteEvent) => void;
 
   /**
    * Callback invoked whenever runner lifecycle status changes.
@@ -92,4 +167,11 @@ export interface ComputerAgentRunnerState {
   consecutiveSuccesses: number;
   consecutiveFailures: number;
   lastError: string | null;
+  actionPollingEnabled: boolean;
+  actionPollingIntervalMs: number;
+  isActionExecuting: boolean;
+  lastActionAt: number | null;
+  totalActionsExecuted: number;
+  totalActionsSucceeded: number;
+  totalActionsFailed: number;
 }

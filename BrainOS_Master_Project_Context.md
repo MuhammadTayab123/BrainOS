@@ -5226,3 +5226,42 @@ For BrainOS assistant tools (`computer_read_file`, `computer_write_file`, `compu
 
 > [!NOTE]
 > Remote action routing is NOT yet implemented in Mission 78/79. The current client runner remains strictly bounded to authenticated heartbeat and lifecycle management.
+
+---
+
+# 80. MISSION 84 — COMPUTER AGENT HOST ACTION EXECUTION LOOP
+
+### 1. Goal & Architecture
+Extended `ComputerAgentRunner` to support automated host-side action polling and local execution loops:
+1. **Poll**: Short-polls BrainOS for queued actions assigned to the authenticated host agent (`action_poll`).
+2. **Execute**: Dispatches claimed actions strictly through `HostActionExecutor` (`DefaultHostActionExecutor` delegating to `LocalComputerAgent`).
+3. **Report**: Submits execution outcome (`action_result`) with correlation and action IDs back to BrainOS.
+4. **Reschedule**: Safely schedules subsequent poll intervals with overlap prevention and abort signal cancellation.
+
+```text
+Host Daemon Loop
+  ↓
+ComputerAgentRunner (apps/backend/src/services/computer/client/computer-agent-runner.ts)
+  ├── Heartbeat Loop (scheduleNextHeartbeat() → ping())
+  └── Action Polling Loop (scheduleNextActionPoll() → performActionPoll())
+        ├── Poll Claim: ComputerAgentClient.pollAction()
+        ├── Local Host Execution: HostActionExecutor.executeAction(actionName, params)
+        │     └── DefaultHostActionExecutor → LocalComputerAgent
+        ├── Result Reporting: ComputerAgentClient.reportActionResult(payload)
+        └── Safe Rescheduling & Overlap Deferral
+```
+
+### 2. Security & Guardrails Enforced
+- **Strict Allowlist of 5 Computer Actions**: `computer_list_applications`, `computer_launch_application`, `computer_list_files`, `computer_read_file`, `computer_write_file`.
+- **Fails Closed on Unknown Actions**: Arbitrary command execution or unrecognized tool names are rejected immediately.
+- **Overlap Prevention**: In-flight actions prevent subsequent polling until complete.
+- **Fail-Safe Result Reporting**: Any unexpected local execution error is sanitized into `success: false` with a clean error message and reported to server.
+- **Zero Credential Exposure**: Plaintext tokens never appear in state, JSON serialization, logs, or error callbacks.
+- **Lifecycle & Abort Protection**: Full cancellation support via `AbortController` / external `AbortSignal`.
+
+### 3. Verification
+- **Focused Runner Tests**: 23/23 tests passed (`apps/backend/test/services/computer/client/computer-agent-runner.test.ts`).
+- **Computer Subsystem Suite**: 293/293 tests passed across 14 test files (`apps/backend/test/services/computer/`).
+- **Full Backend Suite**: 84/84 test files passed, 1,112/1,112 tests passed.
+- **Backend TypeScript Validation**: Clean, 0 errors (`npm --prefix apps/backend run typecheck`).
+- **Git Diff Hygiene**: Clean (`git diff --check`).
