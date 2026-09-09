@@ -147,6 +147,17 @@ export class ComputerActionQueueService {
       });
     }
 
+    if (
+      params.correlationId &&
+      record.correlationId !== params.correlationId.trim()
+    ) {
+      throw new AppError({
+        message: "Action correlation ID mismatch.",
+        statusCode: 400,
+        code: "CORRELATION_MISMATCH",
+      });
+    }
+
     if (record.status === "COMPLETED") {
       // Idempotent completion check
       return record;
@@ -211,6 +222,17 @@ export class ComputerActionQueueService {
         message: "Action does not belong to the authenticated agent.",
         statusCode: 403,
         code: "AGENT_MISMATCH",
+      });
+    }
+
+    if (
+      params.correlationId &&
+      record.correlationId !== params.correlationId.trim()
+    ) {
+      throw new AppError({
+        message: "Action correlation ID mismatch.",
+        statusCode: 400,
+        code: "CORRELATION_MISMATCH",
       });
     }
 

@@ -13,6 +13,8 @@ import {
   isSupportedProtocolVersion,
   ProtocolErrorCode,
   SUPPORTED_PROTOCOL_VERSIONS,
+  validateActionPollPayload,
+  validateActionResultPayload,
   validateProtocolRequestEnvelope,
   validateProtocolResponseEnvelope,
 } from "../../../../src/services/computer/protocol";
@@ -380,6 +382,88 @@ describe("Computer Agent Protocol Contract", () => {
       expect(id1).toMatch(
         /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i,
       );
+    });
+  });
+
+  describe("Action Payload Validators", () => {
+    describe("validateActionPollPayload", () => {
+      it("accepts valid action_poll payload or empty/null payload", () => {
+        expect(validateActionPollPayload({})).toEqual({});
+        expect(validateActionPollPayload(null)).toEqual({});
+        expect(validateActionPollPayload(undefined)).toEqual({});
+        expect(
+          validateActionPollPayload({
+            capabilities: ["computer_launch_application"],
+          }),
+        ).toEqual({ capabilities: ["computer_launch_application"] });
+      });
+
+      it("rejects non-object or malformed capabilities in action_poll", () => {
+        expect(() => validateActionPollPayload("string")).toThrow(
+          "Action poll payload must be a valid JSON object.",
+        );
+        expect(() => validateActionPollPayload([])).toThrow(
+          "Action poll payload must be a valid JSON object.",
+        );
+        expect(() =>
+          validateActionPollPayload({ capabilities: [123] }),
+        ).toThrow("capabilities must be an array of strings.");
+      });
+    });
+
+    describe("validateActionResultPayload", () => {
+      it("accepts valid successful and failed action_result payloads", () => {
+        const successPayload = {
+          actionId: "act-1",
+          correlationId: "corr-1",
+          success: true,
+          result: { value: "done" },
+        };
+        expect(validateActionResultPayload(successPayload)).toEqual(
+          successPayload,
+        );
+
+        const failPayload = {
+          actionId: "act-2",
+          correlationId: "corr-2",
+          success: false,
+          error: "Process crashed",
+        };
+        expect(validateActionResultPayload(failPayload)).toEqual(failPayload);
+      });
+
+      it("rejects missing actionId, correlationId, or non-boolean success", () => {
+        expect(() => validateActionResultPayload(null)).toThrow(
+          "Action result payload must be a valid JSON object.",
+        );
+        expect(() =>
+          validateActionResultPayload({
+            correlationId: "corr-1",
+            success: true,
+          }),
+        ).toThrow("actionId must be a non-empty string.");
+        expect(() =>
+          validateActionResultPayload({
+            actionId: "act-1",
+            success: true,
+          }),
+        ).toThrow("correlationId must be a non-empty string.");
+        expect(() =>
+          validateActionResultPayload({
+            actionId: "act-1",
+            correlationId: "corr-1",
+            success: "true",
+          }),
+        ).toThrow("success must be a boolean.");
+        expect(() =>
+          validateActionResultPayload({
+            actionId: "act-1",
+            correlationId: "corr-1",
+            success: false,
+            error: 12345,
+          }),
+        ).toThrow("error must be a string.");
+      });
     });
   });
 });

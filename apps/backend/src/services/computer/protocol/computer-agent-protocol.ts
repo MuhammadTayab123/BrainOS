@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import { AppError } from "../../../errors";
 import {
+  ActionPollPayload,
+  ActionResultPayload,
   COMPUTER_AGENT_PROTOCOL_VERSION,
   ComputerAgentProtocolError,
   ComputerAgentRequestEnvelope,
@@ -350,5 +352,93 @@ export function validateProtocolResponseEnvelope<TData = unknown>(
     ...(obj.error !== undefined
       ? { error: obj.error as ComputerAgentProtocolError }
       : {}),
+  };
+}
+
+/**
+ * Validates payload for "action_poll" envelopes.
+ */
+export function validateActionPollPayload(
+  candidate: unknown,
+): ActionPollPayload {
+  if (candidate === undefined || candidate === null) {
+    return {};
+  }
+
+  if (typeof candidate !== "object" || Array.isArray(candidate)) {
+    throw new ComputerAgentProtocolException({
+      message: "Action poll payload must be a valid JSON object.",
+      code: ProtocolErrorCode.INVALID_ENVELOPE,
+    });
+  }
+
+  const obj = candidate as Record<string, unknown>;
+  if (obj.capabilities !== undefined) {
+    if (
+      !Array.isArray(obj.capabilities) ||
+      !obj.capabilities.every((c) => typeof c === "string")
+    ) {
+      throw new ComputerAgentProtocolException({
+        message: "capabilities must be an array of strings.",
+        code: ProtocolErrorCode.INVALID_ENVELOPE,
+      });
+    }
+  }
+
+  return candidate as ActionPollPayload;
+}
+
+/**
+ * Validates payload for "action_result" envelopes.
+ */
+export function validateActionResultPayload(
+  candidate: unknown,
+): ActionResultPayload {
+  if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) {
+    throw new ComputerAgentProtocolException({
+      message: "Action result payload must be a valid JSON object.",
+      code: ProtocolErrorCode.INVALID_ENVELOPE,
+    });
+  }
+
+  const obj = candidate as Record<string, unknown>;
+
+  if (typeof obj.actionId !== "string" || obj.actionId.trim().length === 0) {
+    throw new ComputerAgentProtocolException({
+      message: "actionId must be a non-empty string.",
+      code: ProtocolErrorCode.INVALID_ENVELOPE,
+    });
+  }
+
+  if (
+    typeof obj.correlationId !== "string" ||
+    obj.correlationId.trim().length === 0
+  ) {
+    throw new ComputerAgentProtocolException({
+      message: "correlationId must be a non-empty string.",
+      code: ProtocolErrorCode.INVALID_ENVELOPE,
+    });
+  }
+
+  if (typeof obj.success !== "boolean") {
+    throw new ComputerAgentProtocolException({
+      message: "success must be a boolean.",
+      code: ProtocolErrorCode.INVALID_ENVELOPE,
+    });
+  }
+
+  if (obj.error !== undefined && typeof obj.error !== "string") {
+    throw new ComputerAgentProtocolException({
+      message: "error must be a string.",
+      code: ProtocolErrorCode.INVALID_ENVELOPE,
+    });
+  }
+
+  return {
+    actionId: obj.actionId.trim(),
+    correlationId: obj.correlationId.trim(),
+    success: obj.success,
+    ...(obj.result !== undefined ? { result: obj.result } : {}),
+    ...(obj.error !== undefined ? { error: obj.error } : {}),
   };
 }

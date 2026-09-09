@@ -4,6 +4,10 @@ import {
   validateProtocolResponseEnvelope,
 } from "../protocol/computer-agent-protocol";
 import {
+  ActionPollPayload,
+  ActionPollResponseData,
+  ActionResultPayload,
+  ActionResultResponseData,
   ComputerAgentRequestEnvelope,
   ComputerAgentResponseEnvelope,
   ProtocolErrorCode,
@@ -211,6 +215,71 @@ export class ComputerAgentClient {
 
     return this.sendEnvelope<typeof payload, TResult>(
       "action_request",
+      payload,
+      options,
+    );
+  }
+
+  /**
+   * Polls the BrainOS queue for the next pending action assigned to this agent.
+   */
+  async pollAction(
+    options?: ComputerAgentClientOptions,
+  ): Promise<ComputerAgentResponseEnvelope<ActionPollResponseData>> {
+    return this.sendEnvelope<ActionPollPayload, ActionPollResponseData>(
+      "action_poll",
+      {},
+      options,
+    );
+  }
+
+  /**
+   * Reports the execution result of a claimed action to the BrainOS backend.
+   */
+  async reportActionResult(
+    payload: ActionResultPayload,
+    options?: ComputerAgentClientOptions,
+  ): Promise<ComputerAgentResponseEnvelope<ActionResultResponseData>> {
+    if (!payload || typeof payload !== "object") {
+      throw new ComputerAgentClientError({
+        message: "Action result payload is required.",
+        code: ProtocolErrorCode.INVALID_ENVELOPE,
+        statusCode: 400,
+      });
+    }
+
+    if (
+      typeof payload.actionId !== "string" ||
+      payload.actionId.trim().length === 0
+    ) {
+      throw new ComputerAgentClientError({
+        message: "actionId is required.",
+        code: ProtocolErrorCode.INVALID_ENVELOPE,
+        statusCode: 400,
+      });
+    }
+
+    if (
+      typeof payload.correlationId !== "string" ||
+      payload.correlationId.trim().length === 0
+    ) {
+      throw new ComputerAgentClientError({
+        message: "correlationId is required.",
+        code: ProtocolErrorCode.INVALID_ENVELOPE,
+        statusCode: 400,
+      });
+    }
+
+    if (typeof payload.success !== "boolean") {
+      throw new ComputerAgentClientError({
+        message: "success must be a boolean.",
+        code: ProtocolErrorCode.INVALID_ENVELOPE,
+        statusCode: 400,
+      });
+    }
+
+    return this.sendEnvelope<ActionResultPayload, ActionResultResponseData>(
+      "action_result",
       payload,
       options,
     );

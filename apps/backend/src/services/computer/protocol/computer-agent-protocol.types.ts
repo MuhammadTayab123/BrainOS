@@ -22,6 +22,10 @@ export const ProtocolErrorCode = {
   AGENT_NOT_FOUND: "AGENT_NOT_FOUND",
   AGENT_INACTIVE: "AGENT_INACTIVE",
   ACTION_FAILED: "ACTION_FAILED",
+  ACTION_NOT_FOUND: "ACTION_NOT_FOUND",
+  INVALID_STATUS_TRANSITION: "INVALID_STATUS_TRANSITION",
+  CORRELATION_MISMATCH: "CORRELATION_MISMATCH",
+  AGENT_MISMATCH: "AGENT_MISMATCH",
   TIMEOUT: "TIMEOUT",
   PROTOCOL_ERROR: "PROTOCOL_ERROR",
   INTERNAL_ERROR: "INTERNAL_ERROR",
@@ -96,4 +100,51 @@ export interface ComputerAgentResponseEnvelope<TData = unknown> {
   timestamp: number;
   data?: TData;
   error?: ComputerAgentProtocolError;
+}
+
+/**
+ * Payload for "action_poll" request envelope.
+ */
+export interface ActionPollPayload {
+  capabilities?: string[];
+}
+
+/**
+ * Claimed action metadata presented in action_poll response data.
+ * Security guarantee: userId is never exposed to the external client.
+ */
+export interface ClaimedActionData {
+  id: string;
+  correlationId: string;
+  actionName: string;
+  params?: unknown;
+  expiresAt: string | Date;
+}
+
+/**
+ * Response data for "action_poll" envelope.
+ */
+export interface ActionPollResponseData {
+  hasAction: boolean;
+  action?: ClaimedActionData | null;
+}
+
+/**
+ * Payload for "action_result" request envelope.
+ */
+export interface ActionResultPayload {
+  actionId: string;
+  correlationId: string;
+  success: boolean;
+  result?: unknown;
+  error?: string;
+}
+
+/**
+ * Response data for "action_result" envelope.
+ */
+export interface ActionResultResponseData {
+  actionId: string;
+  status: string;
+  completedAt: string | Date;
 }

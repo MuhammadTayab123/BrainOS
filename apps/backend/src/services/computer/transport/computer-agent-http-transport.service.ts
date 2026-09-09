@@ -1,4 +1,7 @@
 import {
+  ActionPollResponseData,
+  ActionResultPayload,
+  ActionResultResponseData,
   ComputerAgentAuthContext,
   ComputerAgentProtocolException,
   ComputerAgentRequestEnvelope,
@@ -7,6 +10,8 @@ import {
   createProtocolSuccessResponse,
   generateEnvelopeId,
   ProtocolErrorCode,
+  validateActionPollPayload,
+  validateActionResultPayload,
   validateProtocolRequestEnvelope,
 } from "../protocol";
 import {
@@ -14,6 +19,8 @@ import {
   ComputerAgentActionContext,
   ComputerAgentActionDispatcher,
 } from "../dispatch";
+import { ComputerActionQueueService } from "../queue/computer-action-queue.service";
+import { AppError, NotFoundError } from "../../../errors";
 import { EnvelopeReplayGuard } from "./envelope-replay-guard.interface";
 
 export const DEFAULT_MAX_TIMESTAMP_DRIFT_MS = 60_000; // ±60 seconds
@@ -44,6 +51,7 @@ export interface ComputerAgentHttpTransportOptions {
   authenticator: ComputerAgentAuthenticator;
   replayGuard: EnvelopeReplayGuard;
   dispatcher?: ComputerAgentActionDispatcher;
+  queueService?: ComputerActionQueueService;
   clock?: () => number;
   maxDriftMs?: number;
 }
@@ -67,6 +75,7 @@ export class ComputerAgentHttpTransportService {
   private readonly authenticator: ComputerAgentAuthenticator;
   private readonly replayGuard: EnvelopeReplayGuard;
   private readonly dispatcher?: ComputerAgentActionDispatcher;
+  private readonly queueService?: ComputerActionQueueService;
   private readonly clock: () => number;
   private readonly maxDriftMs: number;
 
@@ -74,6 +83,7 @@ export class ComputerAgentHttpTransportService {
     this.authenticator = options.authenticator;
     this.replayGuard = options.replayGuard;
     this.dispatcher = options.dispatcher;
+    this.queueService = options.queueService;
     this.clock = options.clock ?? (() => Date.now());
     this.maxDriftMs = options.maxDriftMs ?? DEFAULT_MAX_TIMESTAMP_DRIFT_MS;
   }
@@ -299,7 +309,234 @@ export class ComputerAgentHttpTransportService {
       }
     }
 
-    // 8. Return safe protocol acknowledgement for non-action messages (e.g. ping)
+    // 8. Poll queued actions if envelope.type === "action_poll"
+    if (envelope.type === "action_poll") {
+      if (!this.queueService) {
+        return {
+          statusCode: 200,
+          envelope: createProtocolErrorResponse({
+            id: envelope.id,
+            timestamp: now,
+            error: {
+              code: ProtocolErrorCode.ACTION_FAILED,
+              message: "Queue service is not configured.",
+            },
+          }),
+        };
+      }
+
+      try {
+        validateActionPollPayload(envelope.payload);
+      } catch (err: unknown) {
+        if (err instanceof ComputerAgentProtocolException) {
+          return {
+            statusCode: 400,
+            envelope: createProtocolErrorResponse({
+              id: envelope.id,
+              timestamp: now,
+              error: err,
+            }),
+          };
+        }
+
+        return {
+          statusCode: 400,
+          envelope: createProtocolErrorResponse({
+            id: envelope.id,
+            timestamp: now,
+            error: {
+              code: ProtocolErrorCode.INVALID_ENVELOPE,
+              message: "Invalid action_poll payload.",
+            },
+          }),
+        };
+      }
+
+      try {
+        const claimed = await this.queueService.claimNextAction(
+          authContext.agentId,
+        );
+
+        if (claimed) {
+          return {
+            statusCode: 200,
+            envelope: createProtocolSuccessResponse<ActionPollResponseData>({
+              id: envelope.id,
+              timestamp: now,
+              data: {
+                hasAction: true,
+                action: {
+                  id: claimed.id,
+                  correlationId: claimed.correlationId,
+                  actionName: claimed.actionName,
+                  params: claimed.params,
+                  expiresAt:
+                    claimed.expiresAt instanceof Date
+                      ? claimed.expiresAt.toISOString()
+                      : claimed.expiresAt,
+                },
+              },
+            }),
+          };
+        }
+
+        return {
+          statusCode: 200,
+          envelope: createProtocolSuccessResponse<ActionPollResponseData>({
+            id: envelope.id,
+            timestamp: now,
+            data: {
+              hasAction: false,
+              action: null,
+            },
+          }),
+        };
+      } catch (err: unknown) {
+        return {
+          statusCode: 200,
+          envelope: createProtocolErrorResponse({
+            id: envelope.id,
+            timestamp: now,
+            error: {
+              code: ProtocolErrorCode.ACTION_FAILED,
+              message:
+                err instanceof Error
+                  ? err.message
+                  : "Failed to poll action queue.",
+            },
+          }),
+        };
+      }
+    }
+
+    // 9. Report action result if envelope.type === "action_result"
+    if (envelope.type === "action_result") {
+      if (!this.queueService) {
+        return {
+          statusCode: 200,
+          envelope: createProtocolErrorResponse({
+            id: envelope.id,
+            timestamp: now,
+            error: {
+              code: ProtocolErrorCode.ACTION_FAILED,
+              message: "Queue service is not configured.",
+            },
+          }),
+        };
+      }
+
+      let resultPayload: ActionResultPayload;
+      try {
+        resultPayload = validateActionResultPayload(envelope.payload);
+      } catch (err: unknown) {
+        if (err instanceof ComputerAgentProtocolException) {
+          return {
+            statusCode: 400,
+            envelope: createProtocolErrorResponse({
+              id: envelope.id,
+              timestamp: now,
+              error: err,
+            }),
+          };
+        }
+
+        return {
+          statusCode: 400,
+          envelope: createProtocolErrorResponse({
+            id: envelope.id,
+            timestamp: now,
+            error: {
+              code: ProtocolErrorCode.INVALID_ENVELOPE,
+              message: "Invalid action_result payload.",
+            },
+          }),
+        };
+      }
+
+      try {
+        const completedAt = new Date(now);
+        let updatedRecord;
+
+        if (resultPayload.success) {
+          updatedRecord = await this.queueService.completeAction({
+            actionId: resultPayload.actionId,
+            correlationId: resultPayload.correlationId,
+            agentId: authContext.agentId,
+            result: resultPayload.result,
+            completedAt,
+          });
+        } else {
+          updatedRecord = await this.queueService.failAction({
+            actionId: resultPayload.actionId,
+            correlationId: resultPayload.correlationId,
+            agentId: authContext.agentId,
+            error: resultPayload.error ?? "Action execution failed.",
+            completedAt,
+          });
+        }
+
+        return {
+          statusCode: 200,
+          envelope: createProtocolSuccessResponse<ActionResultResponseData>({
+            id: envelope.id,
+            timestamp: now,
+            data: {
+              actionId: updatedRecord.id,
+              status: updatedRecord.status,
+              completedAt:
+                updatedRecord.completedAt instanceof Date
+                  ? updatedRecord.completedAt.toISOString()
+                  : (updatedRecord.completedAt ?? completedAt.toISOString()),
+            },
+          }),
+        };
+      } catch (err: unknown) {
+        if (err instanceof NotFoundError) {
+          return {
+            statusCode: 200,
+            envelope: createProtocolErrorResponse({
+              id: envelope.id,
+              timestamp: now,
+              error: {
+                code: ProtocolErrorCode.ACTION_NOT_FOUND,
+                message: err.message,
+              },
+            }),
+          };
+        }
+
+        if (err instanceof AppError) {
+          return {
+            statusCode: 200,
+            envelope: createProtocolErrorResponse({
+              id: envelope.id,
+              timestamp: now,
+              error: {
+                code: err.code ?? ProtocolErrorCode.ACTION_FAILED,
+                message: err.message,
+              },
+            }),
+          };
+        }
+
+        return {
+          statusCode: 200,
+          envelope: createProtocolErrorResponse({
+            id: envelope.id,
+            timestamp: now,
+            error: {
+              code: ProtocolErrorCode.ACTION_FAILED,
+              message:
+                err instanceof Error
+                  ? err.message
+                  : "Failed to record action result.",
+            },
+          }),
+        };
+      }
+    }
+
+    // 10. Return safe protocol acknowledgement for non-action messages (e.g. ping)
     // Uses incoming envelope.id as response envelope id; preserves protocol contract without adding requestId.
     return {
       statusCode: 200,

@@ -474,4 +474,127 @@ describe("ComputerAgentClient", () => {
       expect((json.details as any).nested.info).toBe("key [REDACTED]");
     });
   });
+
+  describe("Action Polling and Result Submission (Mission 81)", () => {
+    it("pollAction() transmits well-formed action_poll envelope", async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        createMockResponse({
+          id: "res-poll-1",
+          version: "1.0",
+          success: true,
+          timestamp: Date.now(),
+          data: {
+            hasAction: true,
+            action: {
+              id: "act-1",
+              correlationId: "corr-1",
+              actionName: "computer_write_file",
+              params: { path: "test.txt" },
+              expiresAt: new Date().toISOString(),
+            },
+          },
+        }),
+      );
+
+      const client = new ComputerAgentClient({
+        ...validConfig,
+        fetch: mockFetch,
+      });
+
+      const res = await client.pollAction();
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url, init] = mockFetch.mock.calls[0];
+      expect(url).toBe("https://brainos.test:3001/api/v1/computer-agents/protocol/messages");
+      expect(init.headers["x-agent-id"]).toBe("agent-test-123");
+      expect(init.headers["x-agent-credential"]).toBe("ca_sec_test_secret_credential_token_999");
+
+      const body = JSON.parse(init.body);
+      expect(body.type).toBe("action_poll");
+      expect(body.agentId).toBe("agent-test-123");
+      expect(body.version).toBe("1.0");
+
+      expect(res.success).toBe(true);
+      expect(res.data?.hasAction).toBe(true);
+      expect(res.data?.action?.id).toBe("act-1");
+    });
+
+    it("reportActionResult() transmits valid action_result envelope for success", async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        createMockResponse({
+          id: "res-rep-1",
+          version: "1.0",
+          success: true,
+          timestamp: Date.now(),
+          data: {
+            actionId: "act-1",
+            status: "COMPLETED",
+            completedAt: new Date().toISOString(),
+          },
+        }),
+      );
+
+      const client = new ComputerAgentClient({
+        ...validConfig,
+        fetch: mockFetch,
+      });
+
+      const res = await client.reportActionResult({
+        actionId: "act-1",
+        correlationId: "corr-1",
+        success: true,
+        result: { written: true },
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [, init] = mockFetch.mock.calls[0];
+      const body = JSON.parse(init.body);
+
+      expect(body.type).toBe("action_result");
+      expect(body.agentId).toBe("agent-test-123");
+      expect(body.payload).toEqual({
+        actionId: "act-1",
+        correlationId: "corr-1",
+        success: true,
+        result: { written: true },
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.data?.status).toBe("COMPLETED");
+    });
+
+    it("reportActionResult() validates required fields before network transmission", async () => {
+      const mockFetch = vi.fn();
+      const client = new ComputerAgentClient({
+        ...validConfig,
+        fetch: mockFetch,
+      });
+
+      await expect(
+        client.reportActionResult({
+          actionId: "",
+          correlationId: "corr-1",
+          success: true,
+        }),
+      ).rejects.toThrowError(/actionId is required/);
+
+      await expect(
+        client.reportActionResult({
+          actionId: "act-1",
+          correlationId: "",
+          success: true,
+        }),
+      ).rejects.toThrowError(/correlationId is required/);
+
+      await expect(
+        client.reportActionResult({
+          actionId: "act-1",
+          correlationId: "corr-1",
+          success: "true" as any,
+        }),
+      ).rejects.toThrowError(/success must be a boolean/);
+
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
 });
