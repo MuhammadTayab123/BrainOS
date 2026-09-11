@@ -43,6 +43,11 @@ export interface UserCalendarConnectionRepository {
     userId: string,
   ): Promise<StoredConnectionRecord | null>;
 
+  findStoredRecord(
+    id: string,
+    userId: string,
+  ): Promise<StoredConnectionRecord | null>;
+
   listForUser(userId: string): Promise<UserCalendarConnection[]>;
 
   update(
@@ -150,6 +155,13 @@ export class InMemoryUserCalendarConnectionRepository
     }
 
     return this.cloneRecord(record);
+  }
+
+  async findStoredRecord(
+    id: string,
+    userId: string,
+  ): Promise<StoredConnectionRecord | null> {
+    return this.findWithCredentials(id, userId);
   }
 
   async listForUser(userId: string): Promise<UserCalendarConnection[]> {
