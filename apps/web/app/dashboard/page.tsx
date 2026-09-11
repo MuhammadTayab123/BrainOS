@@ -20,6 +20,8 @@ import {
   listMessages,
   listComputerAgents,
   listComputerAgentPermissions,
+  listCalendarEvents,
+  type CalendarEvent,
   type ComputerAgent,
   type ComputerAgentPermission,
   type Conversation,
@@ -58,6 +60,8 @@ export default function Home() {
   const audioPlaybackRef = useRef<AudioPlaybackController | null>(null);
   const [activeAgent, setActiveAgent] = useState<ComputerAgent | null>(null);
   const [agentPermissions, setAgentPermissions] = useState<ComputerAgentPermission[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
+  const [loadingUpcomingEvents, setLoadingUpcomingEvents] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -159,6 +163,30 @@ export default function Home() {
           }
         } catch {
           // Non-blocking device status
+        }
+
+        try {
+          if (!cancelled) {
+            setLoadingUpcomingEvents(true);
+          }
+          const events = await listCalendarEvents(
+            token,
+            {
+              from: new Date().toISOString(),
+              limit: 3,
+              status: "CONFIRMED",
+              getFreshToken: () => getToken(),
+            },
+          );
+          if (!cancelled) {
+            setUpcomingEvents(events);
+          }
+        } catch {
+          // Non-blocking upcoming events status
+        } finally {
+          if (!cancelled) {
+            setLoadingUpcomingEvents(false);
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -682,6 +710,49 @@ export default function Home() {
             <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-3">
               {/* Navigation Stack */}
               <DashboardNav current="chat" orientation="vertical" showUserButton={false} />
+
+              <div className="border-t border-zinc-800/80 my-2" />
+
+              {/* Upcoming Calendar Events Widget */}
+              <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/50 p-2.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                    <svg className="h-3.5 w-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span>Upcoming Events</span>
+                  </div>
+                  <Link
+                    href="/dashboard/calendar"
+                    className="text-[10px] font-medium text-blue-400 hover:text-blue-300 hover:underline transition"
+                  >
+                    View all →
+                  </Link>
+                </div>
+
+                {loadingUpcomingEvents ? (
+                  <p className="text-[11px] text-zinc-500 py-1">Loading events...</p>
+                ) : upcomingEvents.length === 0 ? (
+                  <p className="text-[11px] text-zinc-500 py-0.5">No upcoming events scheduled</p>
+                ) : (
+                  <div className="space-y-1.5 pt-0.5">
+                    {upcomingEvents.slice(0, 3).map((event) => (
+                      <Link
+                        key={event.id}
+                        href="/dashboard/calendar"
+                        className="block rounded-lg p-2 bg-zinc-900/60 hover:bg-zinc-800/60 border border-zinc-800/60 transition group"
+                      >
+                        <p className="truncate text-xs font-medium text-zinc-200 group-hover:text-white">
+                          {event.title}
+                        </p>
+                        <p className="text-[10px] text-zinc-400 mt-0.5">
+                          {new Date(event.startTime).toLocaleDateString(undefined, { month: "short", day: "numeric" })} • {new Date(event.startTime).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                        </p>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div className="border-t border-zinc-800/80 my-2" />
 

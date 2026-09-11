@@ -1927,3 +1927,335 @@ export async function revokeComputerAgentPermission(
     response,
   );
 }
+
+// ==========================
+// Calendar API (Mission 89)
+// ==========================
+
+export type CalendarEventStatus = "CONFIRMED" | "TENTATIVE" | "CANCELLED";
+
+export interface CalendarEvent {
+  id: string;
+  userId: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  startTime: string;
+  endTime: string;
+  isAllDay: boolean;
+  timezone: string;
+  status: CalendarEventStatus;
+  recurrenceRule: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CalendarRequestOptions {
+  getFreshToken?: () => Promise<string | null>;
+  signal?: AbortSignal;
+}
+
+export interface CreateCalendarEventInput extends CalendarRequestOptions {
+  title: string;
+  startTime: string | Date;
+  endTime: string | Date;
+  description?: string | null;
+  location?: string | null;
+  isAllDay?: boolean;
+  timezone?: string;
+  status?: CalendarEventStatus;
+  recurrenceRule?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface UpdateCalendarEventInput extends CalendarRequestOptions {
+  title?: string;
+  description?: string | null;
+  location?: string | null;
+  startTime?: string | Date;
+  endTime?: string | Date;
+  isAllDay?: boolean;
+  timezone?: string;
+  status?: CalendarEventStatus;
+  recurrenceRule?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface ListCalendarEventsOptions extends CalendarRequestOptions {
+  rangeStart?: string | Date;
+  rangeEnd?: string | Date;
+  from?: string | Date;
+  status?: CalendarEventStatus;
+  limit?: number;
+}
+
+async function calendarFetch(
+  url: string,
+  init: RequestInit,
+  token: string,
+  options?: CalendarRequestOptions,
+): Promise<Response> {
+  let currentToken = token;
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${currentToken}`);
+
+  let response = await fetch(url, {
+    ...init,
+    headers,
+    signal: options?.signal,
+  });
+
+  if (response.status === 401 && options?.getFreshToken) {
+    if (options.signal?.aborted) {
+      throw new DOMException("The user aborted a request.", "AbortError");
+    }
+    const freshToken = await options.getFreshToken();
+    if (freshToken) {
+      if (options.signal?.aborted) {
+        throw new DOMException("The user aborted a request.", "AbortError");
+      }
+      currentToken = freshToken;
+      const retryHeaders = new Headers(init.headers);
+      retryHeaders.set("Authorization", `Bearer ${currentToken}`);
+      response = await fetch(url, {
+        ...init,
+        headers: retryHeaders,
+        signal: options.signal,
+      });
+    }
+  }
+
+  return response;
+}
+
+export async function listCalendarEvents(
+  token: string,
+  options?: ListCalendarEventsOptions,
+): Promise<CalendarEvent[]> {
+  const { getFreshToken, signal, rangeStart, rangeEnd, from, status, limit } =
+    options ?? {};
+
+  const params = new URLSearchParams();
+
+  if (limit !== undefined) {
+    params.set("limit", String(limit));
+  }
+
+  if (status) {
+    params.set("status", status);
+  }
+
+  let startIso: string | undefined;
+  let endIso: string | undefined;
+
+  if (rangeStart !== undefined) {
+    startIso =
+      rangeStart instanceof Date ? rangeStart.toISOString() : rangeStart;
+    params.set("rangeStart", startIso);
+  }
+
+  if (rangeEnd !== undefined) {
+    endIso = rangeEnd instanceof Date ? rangeEnd.toISOString() : rangeEnd;
+    params.set("rangeEnd", endIso);
+  }
+
+  if (startIso && endIso) {
+    if (new Date(startIso).getTime() >= new Date(endIso).getTime()) {
+      throw new Error("rangeStart must be before rangeEnd");
+    }
+  }
+
+  if (from !== undefined) {
+    params.set(
+      "from",
+      from instanceof Date ? from.toISOString() : from,
+    );
+  }
+
+  const queryString = params.toString();
+  const url = queryString
+    ? `${API_URL}/api/v1/calendar/events?${queryString}`
+    : `${API_URL}/api/v1/calendar/events`;
+
+  const response = await calendarFetch(
+    url,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    },
+    token,
+    { getFreshToken, signal },
+  );
+
+  return parseResponse<CalendarEvent[]>(response);
+}
+
+export async function createCalendarEvent(
+  token: string,
+  input: CreateCalendarEventInput,
+): Promise<CalendarEvent> {
+  const { getFreshToken, signal, ...eventData } = input;
+
+  if (!eventData.title || eventData.title.trim().length === 0) {
+    throw new Error("Title is required.");
+  }
+
+  const startIso =
+    eventData.startTime instanceof Date
+      ? eventData.startTime.toISOString()
+      : eventData.startTime;
+  const endIso =
+    eventData.endTime instanceof Date
+      ? eventData.endTime.toISOString()
+      : eventData.endTime;
+
+  if (new Date(startIso).getTime() >= new Date(endIso).getTime()) {
+    throw new Error("Start time must be before end time.");
+  }
+
+  const payload: Record<string, unknown> = {
+    title: eventData.title.trim(),
+    startTime: startIso,
+    endTime: endIso,
+    description:
+      eventData.description === null
+        ? null
+        : eventData.description?.trim(),
+    location:
+      eventData.location === null
+        ? null
+        : eventData.location?.trim(),
+    isAllDay: eventData.isAllDay ?? false,
+    timezone: eventData.timezone ? eventData.timezone.trim() : "UTC",
+    status: eventData.status ?? "CONFIRMED",
+    recurrenceRule: eventData.recurrenceRule,
+    metadata: eventData.metadata,
+  };
+
+  const response = await calendarFetch(
+    `${API_URL}/api/v1/calendar/events`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    token,
+    { getFreshToken, signal },
+  );
+
+  return parseResponse<CalendarEvent>(response);
+}
+
+export async function getCalendarEvent(
+  token: string,
+  eventId: string,
+  options?: CalendarRequestOptions,
+): Promise<CalendarEvent> {
+  const response = await calendarFetch(
+    `${API_URL}/api/v1/calendar/events/${encodeURIComponent(eventId.trim())}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    },
+    token,
+    options,
+  );
+
+  return parseResponse<CalendarEvent>(response);
+}
+
+export async function updateCalendarEvent(
+  token: string,
+  eventId: string,
+  input: UpdateCalendarEventInput,
+): Promise<CalendarEvent> {
+  const { getFreshToken, signal, ...updateData } = input;
+
+  let startIso: string | undefined;
+  let endIso: string | undefined;
+
+  if (updateData.startTime !== undefined) {
+    startIso =
+      updateData.startTime instanceof Date
+        ? updateData.startTime.toISOString()
+        : updateData.startTime;
+  }
+
+  if (updateData.endTime !== undefined) {
+    endIso =
+      updateData.endTime instanceof Date
+        ? updateData.endTime.toISOString()
+        : updateData.endTime;
+  }
+
+  if (startIso && endIso) {
+    if (new Date(startIso).getTime() >= new Date(endIso).getTime()) {
+      throw new Error("Start time must be before end time.");
+    }
+  }
+
+  const payload: Record<string, unknown> = {
+    title:
+      updateData.title !== undefined ? updateData.title.trim() : undefined,
+    description:
+      updateData.description === null
+        ? null
+        : updateData.description?.trim(),
+    location:
+      updateData.location === null
+        ? null
+        : updateData.location?.trim(),
+    startTime: startIso,
+    endTime: endIso,
+    isAllDay: updateData.isAllDay,
+    timezone:
+      updateData.timezone !== undefined ? updateData.timezone.trim() : undefined,
+    status: updateData.status,
+    recurrenceRule: updateData.recurrenceRule,
+    metadata: updateData.metadata,
+  };
+
+  const response = await calendarFetch(
+    `${API_URL}/api/v1/calendar/events/${encodeURIComponent(eventId.trim())}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    token,
+    { getFreshToken, signal },
+  );
+
+  return parseResponse<CalendarEvent>(response);
+}
+
+export async function deleteCalendarEvent(
+  token: string,
+  eventId: string,
+  options?: CalendarRequestOptions,
+): Promise<{ id: string }> {
+  const response = await calendarFetch(
+    `${API_URL}/api/v1/calendar/events/${encodeURIComponent(eventId.trim())}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    },
+    token,
+    options,
+  );
+
+  return parseResponse<{ id: string }>(response);
+}

@@ -8,6 +8,7 @@ export type DashboardNavKey =
   | "chat"
   | "tasks"
   | "reminders"
+  | "calendar"
   | "documents"
   | "memories"
   | "automations"
@@ -23,6 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: "chat", label: "Chat", href: "/dashboard" },
   { key: "tasks", label: "Tasks", href: "/dashboard/tasks" },
   { key: "reminders", label: "Reminders", href: "/dashboard/reminders" },
+  { key: "calendar", label: "Calendar", href: "/dashboard/calendar" },
   { key: "documents", label: "Documents", href: "/dashboard/documents" },
   { key: "memories", label: "Memories", href: "/dashboard/memories" },
   { key: "automations", label: "Automations", href: "/dashboard/automations" },

@@ -5445,3 +5445,43 @@ Integrated the Calendar domain core into the BrainOS application layer across bo
 - **Focused Calendar Test Suite**: 76/76 unit, API, and tool tests passed across 4 test files (`test/calendar/calendar.api.test.ts`, `test/tools/calendar.tools.test.ts`, `test/validators/calendar.validator.test.ts`, `test/services/calendar/calendar.service.test.ts`).
 - **Backend TypeScript Validation**: Clean, 0 errors (`npm --prefix apps/backend run typecheck`).
 - **Git Diff Hygiene**: Clean (`git diff --check`).
+
+---
+
+# 85. MISSION 89 — CALENDAR WEB CLIENT API & DASHBOARD UI
+
+### 1. Goal & Architecture
+Delivered the frontend Calendar subsystem for BrainOS, implementing Option A (Agenda & Date-Range View) aligned with established Task, Reminder, and Automation patterns:
+- Strongly typed TypeScript models and client API methods (`createCalendarEvent`, `listCalendarEvents`, `getCalendarEvent`, `updateCalendarEvent`, `deleteCalendarEvent`) in `apps/web/lib/brainos-client-api.ts`.
+- Preserved authenticated client fetch patterns with automatic 401 token refresh via `getFreshToken` retry support without storing tokens in browser storage or exposing `userId`.
+- Created an interactive agenda/date-range Calendar management page at `apps/web/app/dashboard/calendar/page.tsx` with date navigation presets (Upcoming, Today, Next 7 Days, Next 30 Days, All, Custom), status filters (`CONFIRMED`, `TENTATIVE`, `CANCELLED`), create/edit forms with client-side start < end validation, browser IANA timezone detection, destructive delete confirmations, and loading/empty/error states.
+- Integrated Calendar navigation item in `apps/web/components/dashboard-nav.tsx`.
+- Added a small, responsive upcoming-events widget to the overview dashboard in `apps/web/app/dashboard/page.tsx`.
+
+### 2. Key Components Implemented
+1. **Web Client API & Models** (`apps/web/lib/brainos-client-api.ts`):
+   - Types: `CalendarEvent`, `CalendarEventStatus`, `CreateCalendarEventInput`, `UpdateCalendarEventInput`, `ListCalendarEventsOptions`, `CalendarRequestOptions`.
+   - Methods: `createCalendarEvent`, `listCalendarEvents`, `getCalendarEvent`, `updateCalendarEvent`, `deleteCalendarEvent`.
+   - `calendarFetch` helper with Bearer token authentication and transparent `getFreshToken` retry on 401.
+2. **Calendar Dashboard Page** (`apps/web/app/dashboard/calendar/page.tsx`):
+   - Agenda/date-range interface with customizable temporal views and status filters.
+   - Event creation and editing modals with start/end time validation (`startTime < endTime`), title, description, location, timezone, and status inputs.
+   - Safe confirmation modal for destructive event deletion.
+   - Automatic browser timezone detection via `Intl.DateTimeFormat().resolvedOptions().timeZone`.
+3. **Navigation Integration** (`apps/web/components/dashboard-nav.tsx`):
+   - Added Calendar entry (`/dashboard/calendar`) with calendar icon to unified navigation stack.
+4. **Dashboard Overview Widget** (`apps/web/app/dashboard/page.tsx`):
+   - Lightweight upcoming calendar events widget fetching confirmed upcoming events asynchronously.
+   - Quick links directly to the Calendar dashboard.
+
+### 3. Security & Invariants Preserved
+- **Zero Client Identity Authority**: The frontend never supplies or overrides `userId` for authorization; ownership remains strictly enforced by the backend session.
+- **Token Hygiene**: Clerk authentication tokens are never stored in localStorage, sessionStorage, or logged to console.
+- **Fail-Closed Validation**: Client-side validation prevents invalid inverted date intervals (`startTime >= endTime`) prior to REST dispatch.
+- **No External Sync Leaks**: No third-party OAuth, external calendar sync providers, or RRULE expansion added, preserving private, provider-independent BrainOS architecture.
+
+### 4. Verification
+- **Focused Client API & Component Tests**: 125/125 passed across `brainos-client-api.test.ts` (97/97 tests) and `chat-message-markdown.test.tsx` (28/28 tests).
+- **Frontend TypeScript Validation**: Clean, 0 errors (`node apps/web/node_modules/typescript/bin/tsc --noEmit -p apps/web/tsconfig.json`).
+- **Frontend Production Build**: Clean build, static route `○ /dashboard/calendar` compiled successfully (`npm --prefix apps/web run build`).
+- **Git Diff Hygiene**: Clean (`git diff --check`).

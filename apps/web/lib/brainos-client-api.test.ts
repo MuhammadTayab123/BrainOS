@@ -51,6 +51,11 @@ let deleteComputerAgent: typeof import("./brainos-client-api").deleteComputerAge
 let listComputerAgentPermissions: typeof import("./brainos-client-api").listComputerAgentPermissions;
 let grantComputerAgentPermission: typeof import("./brainos-client-api").grantComputerAgentPermission;
 let revokeComputerAgentPermission: typeof import("./brainos-client-api").revokeComputerAgentPermission;
+let listCalendarEvents: typeof import("./brainos-client-api").listCalendarEvents;
+let createCalendarEvent: typeof import("./brainos-client-api").createCalendarEvent;
+let getCalendarEvent: typeof import("./brainos-client-api").getCalendarEvent;
+let updateCalendarEvent: typeof import("./brainos-client-api").updateCalendarEvent;
+let deleteCalendarEvent: typeof import("./brainos-client-api").deleteCalendarEvent;
 type AssistantStreamEvent = import("./brainos-client-api").AssistantStreamEvent;
 type VoiceStreamEvent = import("./brainos-client-api").VoiceStreamEvent;
 type VoiceTurnResult = import("./brainos-client-api").VoiceTurnResult;
@@ -109,6 +114,11 @@ beforeAll(async () => {
   listComputerAgentPermissions = mod.listComputerAgentPermissions;
   grantComputerAgentPermission = mod.grantComputerAgentPermission;
   revokeComputerAgentPermission = mod.revokeComputerAgentPermission;
+  listCalendarEvents = mod.listCalendarEvents;
+  createCalendarEvent = mod.createCalendarEvent;
+  getCalendarEvent = mod.getCalendarEvent;
+  updateCalendarEvent = mod.updateCalendarEvent;
+  deleteCalendarEvent = mod.deleteCalendarEvent;
 });
 
 describe("streamAssistant (Frontend SSE Client)", () => {
@@ -3172,6 +3182,261 @@ describe("Computer Agent API (Mission 72)", () => {
 
       expect(capturedAuthHeader).toBe(`Bearer ${freshToken}`);
       expect(conversation.title).toBe("whatsapp open karo");
+    });
+  });
+
+  describe("Calendar API (Mission 89)", () => {
+    const mockEvent = {
+      id: "evt-123",
+      userId: "user-1",
+      title: "Team Sync",
+      description: "Weekly sync meeting",
+      location: "Room 101",
+      startTime: "2026-10-01T10:00:00.000Z",
+      endTime: "2026-10-01T11:00:00.000Z",
+      isAllDay: false,
+      timezone: "UTC",
+      status: "CONFIRMED",
+      recurrenceRule: null,
+      metadata: null,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      updatedAt: "2026-09-01T00:00:00.000Z",
+    };
+
+    it("listCalendarEvents fetches events and constructs correct query params", async () => {
+      let capturedUrl = "";
+      let capturedAuth = "";
+
+      globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        capturedUrl = url;
+        const headers = (init?.headers as Headers | undefined);
+        capturedAuth = headers?.get("Authorization") ?? "";
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: [mockEvent],
+            }),
+        });
+      });
+
+      const events = await listCalendarEvents("test-token", {
+        rangeStart: "2026-10-01T00:00:00.000Z",
+        rangeEnd: "2026-10-02T00:00:00.000Z",
+        status: "CONFIRMED",
+        limit: 10,
+      });
+
+      expect(capturedUrl).toBe(
+        "http://localhost:3001/api/v1/calendar/events?limit=10&status=CONFIRMED&rangeStart=2026-10-01T00%3A00%3A00.000Z&rangeEnd=2026-10-02T00%3A00%3A00.000Z",
+      );
+      expect(capturedAuth).toBe("Bearer test-token");
+      expect(events).toEqual([mockEvent]);
+    });
+
+    it("listCalendarEvents validates that rangeStart is before rangeEnd", async () => {
+      await expect(
+        listCalendarEvents("test-token", {
+          rangeStart: "2026-10-02T00:00:00.000Z",
+          rangeEnd: "2026-10-01T00:00:00.000Z",
+        }),
+      ).rejects.toThrow("rangeStart must be before rangeEnd");
+    });
+
+    it("listCalendarEvents retries with fresh token on 401", async () => {
+      let callCount = 0;
+      let lastAuth = "";
+
+      globalThis.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+        callCount++;
+        const headers = (init?.headers as Headers | undefined);
+        lastAuth = headers?.get("Authorization") ?? "";
+
+        if (callCount === 1) {
+          return Promise.resolve({
+            ok: false,
+            status: 401,
+            statusText: "Unauthorized",
+            json: () => Promise.resolve({ success: false, error: { message: "Token expired" } }),
+          });
+        }
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ success: true, data: [mockEvent] }),
+        });
+      });
+
+      const getFreshToken = vi.fn().mockResolvedValue("fresh-token-xyz");
+
+      const events = await listCalendarEvents("expired-token", { getFreshToken });
+
+      expect(callCount).toBe(2);
+      expect(getFreshToken).toHaveBeenCalledTimes(1);
+      expect(lastAuth).toBe("Bearer fresh-token-xyz");
+      expect(events).toHaveLength(1);
+    });
+
+    it("createCalendarEvent sends POST with serialized payload and auth header", async () => {
+      let capturedMethod = "";
+      let capturedBody = "";
+      let capturedAuth = "";
+
+      globalThis.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+        capturedMethod = init?.method ?? "";
+        capturedBody = init?.body as string;
+        const headers = (init?.headers as Headers | undefined);
+        capturedAuth = headers?.get("Authorization") ?? "";
+
+        return Promise.resolve({
+          ok: true,
+          status: 201,
+          json: () => Promise.resolve({ success: true, data: mockEvent }),
+        });
+      });
+
+      const event = await createCalendarEvent("test-token", {
+        title: "  Sprint Review  ",
+        startTime: new Date("2026-10-01T10:00:00.000Z"),
+        endTime: new Date("2026-10-01T11:00:00.000Z"),
+        location: "Room 101",
+        timezone: "America/New_York",
+      });
+
+      expect(capturedMethod).toBe("POST");
+      expect(capturedAuth).toBe("Bearer test-token");
+      const parsed = JSON.parse(capturedBody);
+      expect(parsed.title).toBe("Sprint Review");
+      expect(parsed.startTime).toBe("2026-10-01T10:00:00.000Z");
+      expect(parsed.endTime).toBe("2026-10-01T11:00:00.000Z");
+      expect(parsed.timezone).toBe("America/New_York");
+      expect(event).toEqual(mockEvent);
+    });
+
+    it("createCalendarEvent validates that title is non-empty", async () => {
+      await expect(
+        createCalendarEvent("token", {
+          title: "   ",
+          startTime: "2026-10-01T10:00:00.000Z",
+          endTime: "2026-10-01T11:00:00.000Z",
+        }),
+      ).rejects.toThrow("Title is required.");
+    });
+
+    it("createCalendarEvent validates that startTime is before endTime", async () => {
+      await expect(
+        createCalendarEvent("token", {
+          title: "Event",
+          startTime: "2026-10-01T12:00:00.000Z",
+          endTime: "2026-10-01T11:00:00.000Z",
+        }),
+      ).rejects.toThrow("Start time must be before end time.");
+    });
+
+    it("createCalendarEvent handles backend API error", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        statusText: "Bad Request",
+        json: () =>
+          Promise.resolve({
+            success: false,
+            error: { message: "Invalid timezone" },
+          }),
+      });
+
+      await expect(
+        createCalendarEvent("token", {
+          title: "Test",
+          startTime: "2026-10-01T10:00:00.000Z",
+          endTime: "2026-10-01T11:00:00.000Z",
+          timezone: "Invalid/Zone",
+        }),
+      ).rejects.toThrow("Invalid timezone");
+    });
+
+    it("getCalendarEvent fetches single event by ID", async () => {
+      let capturedUrl = "";
+
+      globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+        capturedUrl = url;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ success: true, data: mockEvent }),
+        });
+      });
+
+      const event = await getCalendarEvent("token", "evt-123");
+
+      expect(capturedUrl).toBe("http://localhost:3001/api/v1/calendar/events/evt-123");
+      expect(event).toEqual(mockEvent);
+    });
+
+    it("updateCalendarEvent sends PATCH and validates date order when both dates provided", async () => {
+      let capturedMethod = "";
+      let capturedBody = "";
+
+      globalThis.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+        capturedMethod = init?.method ?? "";
+        capturedBody = init?.body as string;
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: { ...mockEvent, title: "Updated Title" },
+            }),
+        });
+      });
+
+      const updated = await updateCalendarEvent("token", "evt-123", {
+        title: "Updated Title",
+        status: "TENTATIVE",
+      });
+
+      expect(capturedMethod).toBe("PATCH");
+      const parsed = JSON.parse(capturedBody);
+      expect(parsed.title).toBe("Updated Title");
+      expect(parsed.status).toBe("TENTATIVE");
+      expect(updated.title).toBe("Updated Title");
+    });
+
+    it("updateCalendarEvent rejects when updated startTime is after endTime", async () => {
+      await expect(
+        updateCalendarEvent("token", "evt-123", {
+          startTime: "2026-10-01T15:00:00.000Z",
+          endTime: "2026-10-01T14:00:00.000Z",
+        }),
+      ).rejects.toThrow("Start time must be before end time.");
+    });
+
+    it("deleteCalendarEvent sends DELETE request and returns id", async () => {
+      let capturedMethod = "";
+      let capturedUrl = "";
+
+      globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        capturedUrl = url;
+        capturedMethod = init?.method ?? "";
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ success: true, data: { id: "evt-123" } }),
+        });
+      });
+
+      const result = await deleteCalendarEvent("token", "evt-123");
+
+      expect(capturedMethod).toBe("DELETE");
+      expect(capturedUrl).toBe("http://localhost:3001/api/v1/calendar/events/evt-123");
+      expect(result).toEqual({ id: "evt-123" });
     });
   });
 });
