@@ -89,6 +89,13 @@ enum CalendarEventStatus {
   CANCELLED
 }
 
+enum CalendarConnectionStatus {
+  CONNECTED
+  NEEDS_REAUTH
+  DISCONNECTED
+  ERROR
+}
+
 model User {
   id        String  @id @default(cuid())
   clerkId   String  @unique
@@ -107,6 +114,7 @@ model User {
   computerAgents       ComputerAgent[]
   computerAgentActions ComputerAgentAction[]
   calendarEvents       CalendarEvent[]
+  calendarConnections  CalendarConnection[]
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   deletedAt            DateTime?
@@ -424,5 +432,32 @@ model CalendarEvent {
 
   @@index([userId, startTime])
   @@index([userId, endTime])
+  @@index([userId, status])
+}
+
+model CalendarConnection {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  providerId String
+  status     CalendarConnectionStatus @default(CONNECTED)
+
+  accountEmail String?
+  displayName  String?
+  metadata     Json?
+
+  ciphertext String
+  iv         String
+  authTag    String
+  algorithm  String @default("aes-256-gcm")
+  keyVersion Int    @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, providerId])
   @@index([userId, status])
 }
