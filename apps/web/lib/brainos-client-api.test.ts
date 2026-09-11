@@ -3102,4 +3102,76 @@ describe("Computer Agent API (Mission 72)", () => {
       });
     });
   });
+
+  describe("Post-Stream Follow-Up Calls (Authentication & Fresh Token)", () => {
+    it("listMessages uses the refreshed follow-up token after a stream turn", async () => {
+      let capturedAuthHeader = "";
+      globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        const headers = (init?.headers ?? {}) as Record<string, string>;
+        capturedAuthHeader = headers["Authorization"] ?? "";
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: [
+                {
+                  id: "msg-1",
+                  conversationId: "conv-1",
+                  role: "USER",
+                  content: "whatsapp open karo",
+                  createdAt: "2026-09-11T00:00:00.000Z",
+                  updatedAt: "2026-09-11T00:00:00.000Z",
+                },
+                {
+                  id: "msg-2",
+                  conversationId: "conv-1",
+                  role: "ASSISTANT",
+                  content: "WhatsApp opened.",
+                  createdAt: "2026-09-11T00:00:05.000Z",
+                  updatedAt: "2026-09-11T00:00:05.000Z",
+                },
+              ],
+            }),
+        });
+      });
+
+      const freshToken = "refreshed-clerk-token-after-action";
+      const messages = await listMessages(freshToken, "conv-1");
+
+      expect(capturedAuthHeader).toBe(`Bearer ${freshToken}`);
+      expect(messages).toHaveLength(2);
+      expect(messages[1].content).toBe("WhatsApp opened.");
+    });
+
+    it("getConversation uses the refreshed follow-up token after a stream turn", async () => {
+      let capturedAuthHeader = "";
+      globalThis.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        const headers = (init?.headers ?? {}) as Record<string, string>;
+        capturedAuthHeader = headers["Authorization"] ?? "";
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: {
+                id: "conv-1",
+                userId: "user-1",
+                title: "whatsapp open karo",
+                createdAt: "2026-09-11T00:00:00.000Z",
+                updatedAt: "2026-09-11T00:00:05.000Z",
+              },
+            }),
+        });
+      });
+
+      const freshToken = "refreshed-clerk-token-after-action";
+      const conversation = await getConversation(freshToken, "conv-1");
+
+      expect(capturedAuthHeader).toBe(`Bearer ${freshToken}`);
+      expect(conversation.title).toBe("whatsapp open karo");
+    });
+  });
 });

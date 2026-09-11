@@ -414,7 +414,8 @@ export default function Home() {
           },
         });
 
-        const updatedMessages = await listMessages(token, conversation.id);
+        const followUpToken = (await getToken()) ?? token;
+        const updatedMessages = await listMessages(followUpToken, conversation.id);
         setMessages(updatedMessages);
         setStreamingMessage(null);
 
@@ -434,7 +435,7 @@ export default function Home() {
         }
 
         try {
-          const updatedConversation = await getConversation(token, conversation.id);
+          const updatedConversation = await getConversation(followUpToken, conversation.id);
           if (updatedConversation) {
             setConversation((current) =>
               current?.id === conversation.id ? updatedConversation : current,
@@ -555,8 +556,9 @@ export default function Home() {
         },
       );
 
+      const followUpToken = (await getToken()) ?? token;
       const updatedMessages = await listMessages(
-        token,
+        followUpToken,
         conversation.id,
       );
 
@@ -565,7 +567,7 @@ export default function Home() {
 
       try {
         const updatedConversation = await getConversation(
-          token,
+          followUpToken,
           conversation.id,
         );
         if (updatedConversation) {
