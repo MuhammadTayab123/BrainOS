@@ -83,6 +83,12 @@ enum ComputerAgentActionStatus {
   TIMED_OUT
 }
 
+enum CalendarEventStatus {
+  CONFIRMED
+  TENTATIVE
+  CANCELLED
+}
+
 model User {
   id        String  @id @default(cuid())
   clerkId   String  @unique
@@ -100,6 +106,7 @@ model User {
   automations          Automation[]
   computerAgents       ComputerAgent[]
   computerAgentActions ComputerAgentAction[]
+  calendarEvents       CalendarEvent[]
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   deletedAt            DateTime?
@@ -390,4 +397,32 @@ model ComputerAgentAction {
   @@index([userId, status])
   @@index([expiresAt, status])
   @@index([agentId, expiresAt, status])
+}
+
+model CalendarEvent {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  location    String?
+
+  startTime DateTime
+  endTime   DateTime
+
+  isAllDay Boolean             @default(false)
+  timezone String              @default("UTC")
+  status   CalendarEventStatus @default(CONFIRMED)
+
+  recurrenceRule String?
+  metadata       Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, startTime])
+  @@index([userId, endTime])
+  @@index([userId, status])
 }

@@ -5370,3 +5370,43 @@ ComputerAgentRunner (Host Execution Loop)
 - **Full Backend Regression Suite**: 86/86 test files passed, 1,150/1,150 tests passed (`npm --prefix apps/backend test -- --run`).
 - **Backend TypeScript Validation**: Clean, 0 errors (`npm --prefix apps/backend run typecheck`).
 - **Git Diff Hygiene**: Clean (`git diff --check`).
+
+---
+
+# 83. MISSION 87 — CALENDAR CORE: DATABASE, REPOSITORY & DOMAIN SERVICE
+
+### 1. Goal & Architecture
+Implemented the foundational Calendar core for BrainOS following established Task, Reminder, and Automation subsystem conventions:
+- Prisma schema additions: `CalendarEventStatus` enum (`CONFIRMED`, `TENTATIVE`, `CANCELLED`), `CalendarEvent` model with cascade delete on User relation, composite indexes on `[userId, startTime]`, `[userId, endTime]`, and `[userId, status]`.
+- Database migration applied via standard Prisma migration conventions.
+- Domain types and `CalendarEventRepository` interface.
+- `PrismaCalendarEventRepository` with strict user-scoping on all queries (`create`, `findByIdForUser`, `findByDateRange`, `findUpcoming`, `updateForUser`, `deleteForUser`).
+- `CalendarService` domain service implementing validation (title, IANA timezone, start/end time order, final effective date pairing on updates, and standard overlap rule: `event.startTime < rangeEnd AND event.endTime > rangeStart`).
+- Zod validation schemas matching project conventions in `apps/backend/src/validators/calendar.validator.ts`.
+
+### 2. Key Components Implemented
+1. **Schema & Migration** (`apps/backend/prisma/schema.prisma`, `apps/backend/prisma/migrations/20260911061415_add_calendar_core/migration.sql`):
+   - `CalendarEventStatus` enum and `CalendarEvent` table with user-indexed temporal ranges.
+2. **Domain Types & Interface** (`apps/backend/src/services/calendar/calendar.types.ts`):
+   - `CalendarEventRepository` interface, typed inputs, options, and `isValidIanaTimezone` validator.
+3. **Repository** (`apps/backend/src/services/calendar/repositories/calendar.repository.ts`):
+   - `PrismaCalendarEventRepository` implementing `CalendarEventRepository`.
+   - Direct database-level enforcement of both `id` and `userId` on `updateForUser` and `deleteForUser`.
+   - Strict `userId` scoping across all queries including `findUpcoming`.
+4. **Domain Service** (`apps/backend/src/services/calendar/calendar.service.ts`):
+   - Domain operations (`create`, `get`, `list`, `update`, `delete`, `findByDateRange`, `findUpcoming`) with fail-closed validation.
+   - Effective date pair evaluation preventing inverted intervals on partial updates.
+5. **Zod Validation** (`apps/backend/src/validators/calendar.validator.ts`, `apps/backend/src/validators/index.ts`):
+   - Full request schemas and body/query/param schemas.
+
+### 3. Security & Invariants Preserved
+- **Strict Tenant Isolation**: All queries require and filter on `userId`. Cross-user accesses strictly behave as not found.
+- **Database-Level Authorization**: `updateForUser` and `deleteForUser` filter on both `id` and `userId` directly in SQL `updateMany`/`deleteMany`.
+- **Fail-Closed Validation**: Rejects invalid timezones, empty titles, and invalid date ranges before database operations.
+- **Prisma Boundary**: All Prisma access is encapsulated in the repository layer.
+
+### 4. Verification
+- **Focused Calendar Test Suite**: 47/47 passed across 3 test files (`test/validators/calendar.validator.test.ts`, `test/services/calendar/calendar.service.test.ts`, `test/calendar/calendar.integration.test.ts`).
+- **Full Backend Regression Suite**: 89/89 test files passed, 1,197/1,197 tests passed (`npm run test:run`).
+- **TypeScript Typecheck**: Clean, 0 errors (`npm run typecheck`).
+- **Git Diff Hygiene**: Clean, only intended files changed.
