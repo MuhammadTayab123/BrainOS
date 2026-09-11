@@ -5410,3 +5410,38 @@ Implemented the foundational Calendar core for BrainOS following established Tas
 - **Full Backend Regression Suite**: 89/89 test files passed, 1,197/1,197 tests passed (`npm run test:run`).
 - **TypeScript Typecheck**: Clean, 0 errors (`npm run typecheck`).
 - **Git Diff Hygiene**: Clean, only intended files changed.
+
+---
+
+# 84. MISSION 88 — CALENDAR APPLICATION INTEGRATION: REST API & ASSISTANT TOOLS
+
+### 1. Goal & Architecture
+Integrated the Calendar domain core into the BrainOS application layer across both REST API transport and LLM Assistant tool mechanisms:
+- Thin `CalendarController` delegating directly to `CalendarService` without database access or duplicated domain logic.
+- Protected REST routes mounted at `/api/v1/calendar` with `requireAuth` (`POST /events`, `GET /events`, `GET /events/:id`, `PATCH /events/:id`, `DELETE /events/:id`).
+- Strict server-side user extraction: `req.user.id` is the single source of truth; client-supplied `userId` fields in body/query/params are completely ignored.
+- Assistant Calendar tools (`create_calendar_event`, `list_calendar_events`, `get_calendar_event`, `update_calendar_event`, `delete_calendar_event`) with fail-closed `ToolContext.userId` resolution and DI container integration in `tool.container.ts`.
+
+### 2. Key Components Implemented
+1. **REST Controller** (`apps/backend/src/controllers/calendar/calendar.controller.ts`):
+   - Handlers for `createCalendarEvent`, `listCalendarEvents`, `getCalendarEventById`, `updateCalendarEvent`, and `deleteCalendarEvent`.
+   - Zod validation and domain error mapping (`NotFoundError` -> 404, `ValidationError` -> 400).
+2. **REST Routes & Mounting** (`apps/backend/src/routes/calendar.routes.ts`, `apps/backend/src/app.ts`):
+   - Authenticated Express router mounted at `/api/v1/calendar` with `requireAuth`.
+3. **Assistant Tools** (`apps/backend/src/services/tools/calendar.tools.ts`):
+   - Tool definitions with JSON parameter schemas for `create_calendar_event`, `list_calendar_events`, `get_calendar_event`, `update_calendar_event`, `delete_calendar_event`.
+   - Factory functions (`createCalendarTools(service)`) and singleton instances.
+   - Enforces `assertContextUser` so LLM tool arguments cannot override ownership.
+4. **Tool Container Wiring** (`apps/backend/src/services/tools/tool.container.ts`):
+   - Added `calendarService` to `ToolContainerOptions` and registered calendar tools into `ToolRegistry`.
+
+### 3. Security & Invariants Preserved
+- **Authentication & Identity**: All Calendar endpoints require authenticated sessions; identity strictly derived from `req.user.id` or `ToolContext.userId`.
+- **Fail-Closed Authorization**: Missing or whitespace user context aborts immediately; cross-user requests return 404 Not Found.
+- **Layer Boundary**: Controller and tool functions contain zero Prisma queries, maintaining repository abstraction.
+- **Provider Independence**: Preserved native BrainOS architecture without external sync dependencies.
+
+### 4. Verification
+- **Focused Calendar Test Suite**: 76/76 unit, API, and tool tests passed across 4 test files (`test/calendar/calendar.api.test.ts`, `test/tools/calendar.tools.test.ts`, `test/validators/calendar.validator.test.ts`, `test/services/calendar/calendar.service.test.ts`).
+- **Backend TypeScript Validation**: Clean, 0 errors (`npm --prefix apps/backend run typecheck`).
+- **Git Diff Hygiene**: Clean (`git diff --check`).

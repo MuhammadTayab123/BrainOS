@@ -1,4 +1,5 @@
 import { AutomationService } from "../automation/automation.service";
+import { CalendarService } from "../calendar/calendar.service";
 import { ComputerAgentGateway } from "../computer/agent/computer-agent.gateway";
 import { QueuedComputerAgentGateway } from "../computer/agent/queued-computer-agent.gateway";
 import { LocalComputerAgent } from "../computer/agent/local-computer-agent";
@@ -12,6 +13,14 @@ import {
   createListAutomationsTool,
   createUpdateAutomationTool,
 } from "./automation.tools";
+import {
+  createCalendarTools,
+  createCreateCalendarEventTool,
+  createDeleteCalendarEventTool,
+  createGetCalendarEventTool,
+  createListCalendarEventsTool,
+  createUpdateCalendarEventTool,
+} from "./calendar.tools";
 import { createComputerTools } from "./computer.tools";
 import { DocumentRetrievalService } from "../documents/retrieval/document-retrieval.service";
 import { DocumentService } from "../documents/document.service";
@@ -52,6 +61,7 @@ import {
 
 export interface ToolContainerOptions {
   automationService?: AutomationService;
+  calendarService?: CalendarService;
   computerAgentGateway?: ComputerAgentGateway;
   documentRetrievalService?: DocumentRetrievalService;
   documentService?: DocumentService;
@@ -139,6 +149,20 @@ export function createToolRegistry(
       ];
 
   for (const tool of automationTools) {
+    registry.register(tool);
+  }
+
+  const calendarTools = options.calendarService
+    ? createCalendarTools(options.calendarService)
+    : [
+        createCreateCalendarEventTool(),
+        createListCalendarEventsTool(),
+        createGetCalendarEventTool(),
+        createUpdateCalendarEventTool(),
+        createDeleteCalendarEventTool(),
+      ];
+
+  for (const tool of calendarTools) {
     registry.register(tool);
   }
 
