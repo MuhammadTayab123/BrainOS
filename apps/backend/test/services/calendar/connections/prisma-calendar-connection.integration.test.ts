@@ -5,6 +5,7 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from "vitest";
 
 import { Prisma } from "@prisma/client";
@@ -396,6 +397,132 @@ describe("PrismaUserCalendarConnectionRepository PostgreSQL integration", () => 
       const intactAlice = await repository.findById(aliceConn.id, userA.id);
       expect(intactAlice).not.toBeNull();
       expect(intactAlice?.status).toBe("CONNECTED");
+    });
+  });
+
+  describe("atomic user-scoped mutation queries", () => {
+    it("proves update, updateStatus, and updateCredentials execute user-scoped mutation queries with { id, userId }", async () => {
+      const encrypted = await vault.encrypt({ accessToken: "mutation-query-token" });
+
+      const conn = await repository.create(userA.id, {
+        providerId: "mock",
+        accountEmail: "query-scope@example.com",
+        displayName: "Initial Scope",
+        status: "CONNECTED",
+        metadata: { initial: true },
+        encryptedCredentials: encrypted,
+      });
+
+      const updateManySpy = vi.spyOn(prisma.calendarConnection, "updateMany");
+
+      try {
+        // 1. Proves update() scopes mutation query with { id, userId }
+        const updateResult = await repository.update(conn.id, userA.id, {
+          displayName: "Mutated Scope",
+        });
+        expect(updateResult).not.toBeNull();
+        expect(updateResult?.displayName).toBe("Mutated Scope");
+        expect(updateManySpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: {
+              id: conn.id,
+              userId: userA.id,
+            },
+            data: expect.objectContaining({
+              displayName: "Mutated Scope",
+            }),
+          }),
+        );
+
+        // 2. Proves updateStatus() scopes mutation query with { id, userId }
+        const statusResult = await repository.updateStatus(conn.id, userA.id, "NEEDS_REAUTH");
+        expect(statusResult).not.toBeNull();
+        expect(statusResult?.status).toBe("NEEDS_REAUTH");
+        expect(updateManySpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: {
+              id: conn.id,
+              userId: userA.id,
+            },
+            data: {
+              status: "NEEDS_REAUTH",
+            },
+          }),
+        );
+
+        // 3. Proves updateCredentials() scopes mutation query with { id, userId }
+        const freshEncrypted = await vault.encrypt({ accessToken: "rotated-scope-token" });
+        const credResult = await repository.updateCredentials(
+          conn.id,
+          userA.id,
+          freshEncrypted,
+          "CONNECTED",
+        );
+        expect(credResult).not.toBeNull();
+        expect(credResult?.status).toBe("CONNECTED");
+        expect(updateManySpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: {
+              id: conn.id,
+              userId: userA.id,
+            },
+            data: expect.objectContaining({
+              ciphertext: freshEncrypted.ciphertext,
+              status: "CONNECTED",
+            }),
+          }),
+        );
+
+        // 4. Cross-user attempts: proves mutation queries execute with User B's userId and fail closed
+        updateManySpy.mockClear();
+
+        const crossUpdate = await repository.update(conn.id, userB.id, { displayName: "Hijack" });
+        expect(crossUpdate).toBeNull();
+        expect(updateManySpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: {
+              id: conn.id,
+              userId: userB.id,
+            },
+          }),
+        );
+
+        const crossStatus = await repository.updateStatus(conn.id, userB.id, "DISCONNECTED");
+        expect(crossStatus).toBeNull();
+        expect(updateManySpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: {
+              id: conn.id,
+              userId: userB.id,
+            },
+          }),
+        );
+
+        const evilEncrypted = await vault.encrypt({ accessToken: "evil-token" });
+        const crossCreds = await repository.updateCredentials(conn.id, userB.id, evilEncrypted);
+        expect(crossCreds).toBeNull();
+        expect(updateManySpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: {
+              id: conn.id,
+              userId: userB.id,
+            },
+          }),
+        );
+
+        // 5. Non-existent IDs: mutation query executes and returns null
+        expect(await repository.update("non-existent-id", userA.id, { displayName: "Ghost" })).toBeNull();
+        expect(await repository.updateStatus("non-existent-id", userA.id, "ERROR")).toBeNull();
+        expect(await repository.updateCredentials("non-existent-id", userA.id, evilEncrypted)).toBeNull();
+
+        // 6. Verify User A's row was never modified by any cross-user mutation
+        const stored = await repository.findWithCredentials(conn.id, userA.id);
+        expect(stored?.displayName).toBe("Mutated Scope");
+        expect(stored?.status).toBe("CONNECTED");
+        expect(stored?.encryptedCredentials.ciphertext).toBe(freshEncrypted.ciphertext);
+      } finally {
+        updateManySpy.mockRestore();
+      }
     });
   });
 

@@ -5485,3 +5485,94 @@ Delivered the frontend Calendar subsystem for BrainOS, implementing Option A (Ag
 - **Frontend TypeScript Validation**: Clean, 0 errors (`node apps/web/node_modules/typescript/bin/tsc --noEmit -p apps/web/tsconfig.json`).
 - **Frontend Production Build**: Clean build, static route `○ /dashboard/calendar` compiled successfully (`npm --prefix apps/web run build`).
 - **Git Diff Hygiene**: Clean (`git diff --check`).
+
+---
+
+# 86. MISSION 90 — EXTERNAL CALENDAR PROVIDER ABSTRACTION
+
+### 1. Goal & Architecture
+Established a provider-independent integration contract for external calendar services (Google Calendar, Microsoft Outlook/Graph, Apple/CalDAV) while preserving native BrainOS Calendar core:
+- Domain provider interfaces (`CalendarProvider`, `CalendarProviderCapabilities`) and registries (`CalendarProviderRegistry`).
+- Provider metadata and runtime contract separation: drivers declare capabilities (`canSyncEvents`, `canManageWebhooks`, `canWatchChanges`) without hardcoded vendor logic.
+- Mock provider implementation for deterministic offline testing.
+
+### 2. Verification
+- Complete provider unit test coverage (`test/services/calendar/providers/calendar-provider.test.ts`).
+- Backend TypeScript validation: Clean, 0 errors.
+
+---
+
+# 87. MISSION 91 — USER-SCOPED CALENDAR ACCOUNT & PROVIDER BINDING ARCHITECTURE
+
+### 1. Goal & Architecture
+Architected user-scoped external calendar accounts, connection abstractions, and credential vaulting:
+- `CalendarConnectionManager` coordinating provider binding, account states, and credential lifecycle.
+- In-memory repository contract (`UserCalendarConnectionRepository`, `InMemoryUserCalendarConnectionRepository`).
+- `AesGcmCredentialVault`: Authenticated AES-256-GCM encryption with 96-bit random IVs and 128-bit authentication tags, ensuring raw OAuth access and refresh tokens are encrypted at rest.
+
+### 2. Verification
+- Comprehensive connection manager and credential vault tests (`test/services/calendar/connections/calendar-connection.test.ts`).
+- Backend TypeScript validation: Clean, 0 errors.
+
+---
+
+# 88. MISSION 92 — CALENDAR CONNECTION PERSISTENCE
+
+### 1. Goal & Architecture
+Introduced database persistence for external calendar connections:
+- Prisma migration creating `CalendarConnection` model with `userId` foreign key to `User` with `onDelete: Cascade`.
+- `CalendarConnectionStatus` enum (`CONNECTED`, `NEEDS_REAUTH`, `DISCONNECTED`, `ERROR`).
+- Dedicated encrypted envelope storage columns (`ciphertext`, `iv`, `authTag`, `algorithm`, `keyVersion`) with compound indexes on `[userId]`, `[userId, providerId]`, `[userId, status]`. Zero plaintext credential columns.
+
+### 2. Verification
+- PostgreSQL schema migration applied cleanly.
+- Backend TypeScript validation: Clean, 0 errors.
+
+---
+
+# 89. MISSION 93 — PERSISTENT CALENDAR CONNECTION REPOSITORY & MANAGER INTEGRATION
+
+### 1. Goal & Architecture
+Implemented the persistent Prisma repository and wired it to `CalendarConnectionManager`:
+- `PrismaUserCalendarConnectionRepository` implementing `UserCalendarConnectionRepository`.
+- Projection hygiene: `PUBLIC_METADATA_SELECT` strictly omits `ciphertext`, `iv`, `authTag`, `algorithm`, `keyVersion` from standard reads and listings.
+- Dedicated internal credential retrieval path `findWithCredentials` (`findStoredRecord`) for provider binding.
+- Strict multi-tenant isolation enforcing `userId` on every lookup and mutation.
+
+### 2. Verification
+- PostgreSQL integration test suite (`test/services/calendar/connections/prisma-calendar-connection.integration.test.ts`).
+- Backend regression suite: Clean pass.
+
+---
+
+# 90. MISSION 94 — CALENDAR CONNECTION REST API & LIFECYCLE MANAGEMENT
+
+### 1. Goal & Architecture
+Exposed authenticated REST endpoints for managing external calendar connection lifecycles and discovering registered providers:
+- Authenticated endpoints mounted at `/api/v1/calendar`:
+  - `GET /connections`: List all calendar connections owned by the authenticated user.
+  - `GET /connections/:id`: Get metadata for a specific owned connection.
+  - `PATCH /connections/:id`: Update connection metadata (`displayName`, `accountEmail`, `metadata`) or lifecycle status.
+  - `DELETE /connections/:id`: Permanently delete an owned connection record.
+  - `GET /providers`: Authenticated provider discovery listing registered providers and capabilities from `CalendarProviderRegistry.list()`.
+- Production controller default injects `CalendarConnectionManager` backed by `PrismaUserCalendarConnectionRepository` and `AesGcmCredentialVault`, with dependency injection setters for isolated testing.
+- Preserved existing native Calendar Event API behavior without alteration.
+
+### 2. Key Validation & Security Invariants
+- **Calendar Connection Statuses**: Supported statuses are `CONNECTED`, `NEEDS_REAUTH`, `DISCONNECTED`, and `ERROR`.
+- **Connection ID Validation**: Connection ID route parameter validation requires a non-empty trimmed string (`calendarConnectionIdParamSchema`); it does not require UUID format.
+- **Update Validation Schema**: The Zod update schema (`updateCalendarConnectionBodySchema`) validates optional `displayName`, `accountEmail`, `metadata`, and `status`; the update object does not use `.strict()`.
+- **Strict Server-Side Identity**: Authenticated identity comes only from `req.user.id`. Any client-supplied or LLM-supplied `userId` query parameter or body property is never trusted and is ignored.
+- **Fail-Closed Isolation**: Cross-user connection access and mutation attempts fail closed with 404 Not Found.
+- **Projection & Credential Hygiene**: Credential and cryptographic fields (`ciphertext`, `iv`, `authTag`, `algorithm`, `keyVersion`, `accessToken`, `refreshToken`) are never exposed through REST responses.
+- **Omission of Direct Ingestion**: `POST /calendar/connections` is intentionally not implemented; connection creation remains an internal service flow for future OAuth callback integration.
+- **Separate Mission 93 Repository Remediation**: Refactored `update`, `updateStatus`, and `updateCredentials` in `PrismaUserCalendarConnectionRepository` to execute atomic user-scoped `updateMany({ where: { id: id.trim(), userId: userId.trim() }, data: ... })` mutations directly in the SQL statement (`UPDATE ... WHERE id = $1 AND "userId" = $2`), eliminating the two-step TOCTOU gap and ensuring database-level user isolation.
+
+### 3. Verification
+- **Mission 94 API Integration Tests**: 20/20 passed (`test/calendar/calendar-connection.api.test.ts`).
+- **Prisma Connection Integration Tests**: 11/11 passed (`test/services/calendar/connections/prisma-calendar-connection.integration.test.ts`).
+- **Connection Unit Tests**: 23/23 passed (`test/services/calendar/connections/calendar-connection.test.ts`).
+- **Calendar Core Integration & Event API Tests**: 27/27 passed (`test/calendar/calendar.integration.test.ts`, `test/calendar/calendar.api.test.ts`).
+- **Full Backend Regression Suite**: 95/95 test files passed, 1,324/1,324 tests passed.
+- **TypeScript Typecheck**: Clean, 0 errors (`npm --prefix apps/backend run typecheck`).
+- **Git Diff Hygiene**: Clean (`git diff --check`).

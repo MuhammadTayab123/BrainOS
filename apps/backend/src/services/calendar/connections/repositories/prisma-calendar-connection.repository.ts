@@ -211,20 +211,7 @@ export class PrismaUserCalendarConnectionRepository
       return null;
     }
 
-    // Compound ownership check fails closed for cross-user attempts
-    const existing = await this.db.calendarConnection.findFirst({
-      where: {
-        id: id.trim(),
-        userId: userId.trim(),
-      },
-      select: { id: true },
-    });
-
-    if (!existing) {
-      return null;
-    }
-
-    const updateData: Prisma.CalendarConnectionUpdateInput = {};
+    const updateData: Prisma.CalendarConnectionUpdateManyMutationInput = {};
 
     if (data.accountEmail !== undefined) {
       updateData.accountEmail = data.accountEmail ? data.accountEmail.trim() : null;
@@ -238,15 +225,24 @@ export class PrismaUserCalendarConnectionRepository
         : Prisma.JsonNull;
     }
 
-    const updated = await this.db.calendarConnection.update({
+    if (Object.keys(updateData).length === 0) {
+      return this.findById(id.trim(), userId.trim());
+    }
+
+    // Atomic user-scoped mutation enforcing { id, userId } directly
+    const result = await this.db.calendarConnection.updateMany({
       where: {
         id: id.trim(),
+        userId: userId.trim(),
       },
       data: updateData,
-      select: PUBLIC_METADATA_SELECT,
     });
 
-    return this.mapToPublicConnection(updated);
+    if (result.count === 0) {
+      return null;
+    }
+
+    return this.findById(id.trim(), userId.trim());
   }
 
   async updateStatus(
@@ -265,29 +261,22 @@ export class PrismaUserCalendarConnectionRepository
       return null;
     }
 
-    const existing = await this.db.calendarConnection.findFirst({
+    // Atomic user-scoped status mutation enforcing { id, userId } directly
+    const result = await this.db.calendarConnection.updateMany({
       where: {
         id: id.trim(),
         userId: userId.trim(),
       },
-      select: { id: true },
-    });
-
-    if (!existing) {
-      return null;
-    }
-
-    const updated = await this.db.calendarConnection.update({
-      where: {
-        id: id.trim(),
-      },
       data: {
         status,
       },
-      select: PUBLIC_METADATA_SELECT,
     });
 
-    return this.mapToPublicConnection(updated);
+    if (result.count === 0) {
+      return null;
+    }
+
+    return this.findById(id.trim(), userId.trim());
   }
 
   async updateCredentials(
@@ -307,24 +296,12 @@ export class PrismaUserCalendarConnectionRepository
       return null;
     }
 
-    const existing = await this.db.calendarConnection.findFirst({
-      where: {
-        id: id.trim(),
-        userId: userId.trim(),
-      },
-      select: { id: true },
-    });
-
-    if (!existing) {
-      return null;
-    }
-
     const keyVersionNum =
       typeof encryptedCredentials.keyVersion === "string"
         ? parseInt(encryptedCredentials.keyVersion.replace(/\D/g, ""), 10) || 1
         : 1;
 
-    const updateData: Prisma.CalendarConnectionUpdateInput = {
+    const updateData: Prisma.CalendarConnectionUpdateManyMutationInput = {
       ciphertext: encryptedCredentials.ciphertext,
       iv: encryptedCredentials.iv,
       authTag: encryptedCredentials.authTag,
@@ -336,15 +313,20 @@ export class PrismaUserCalendarConnectionRepository
       updateData.status = status;
     }
 
-    const updated = await this.db.calendarConnection.update({
+    // Atomic user-scoped credential mutation enforcing { id, userId } directly
+    const result = await this.db.calendarConnection.updateMany({
       where: {
         id: id.trim(),
+        userId: userId.trim(),
       },
       data: updateData,
-      select: PUBLIC_METADATA_SELECT,
     });
 
-    return this.mapToPublicConnection(updated);
+    if (result.count === 0) {
+      return null;
+    }
+
+    return this.findById(id.trim(), userId.trim());
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
