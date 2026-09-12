@@ -650,7 +650,17 @@ export class VoiceController {
       }
     };
 
-    req.on("close", cleanup);
+    req.on?.("close", () => {
+      if (!("complete" in req) || !req.complete) {
+        cleanup();
+      }
+    });
+
+    res.on?.("close", () => {
+      if (!res.writableEnded) {
+        cleanup();
+      }
+    });
 
     const data = validation.data;
     const audioChunk: AudioChunk | undefined = data.audio

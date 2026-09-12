@@ -25,6 +25,24 @@ export function errorHandler(
     });
   }
 
+  if (
+    ("type" in err && (err as any).type === "entity.too.large") ||
+    ("status" in err && (err as any).status === 413)
+  ) {
+    logger.warn("Payload too large rejected", {
+      path: req.originalUrl,
+      method: req.method,
+    });
+
+    return res.status(413).json({
+      success: false,
+      error: {
+        code: "PAYLOAD_TOO_LARGE",
+        message: "Request payload exceeds size limit.",
+      },
+    });
+  }
+
   logger.error("Unexpected server error", err);
 
   return res.status(500).json({

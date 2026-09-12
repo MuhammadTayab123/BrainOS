@@ -39,14 +39,17 @@ app.use(
   }),
 );
 
+// Request logging
+app.use(requestLogger);
+
 // Clerk webhooks
 app.use("/webhooks", express.raw({ type: "application/json" }), webhookRoutes);
 
-// JSON parser
-app.use(express.json());
+// Voice routes (uses route-level auth and dedicated turn JSON parser with controlled limit)
+app.use("/api/v1/voice", voiceRoutes);
 
-// Request logging
-app.use(requestLogger);
+// Global JSON parser for all non-voice routes (strictly limited to standard 100kb)
+app.use(express.json());
 
 // Home route
 app.get("/", (req, res) => {
@@ -66,9 +69,6 @@ app.use("/api/v1/memories", memoryRoutes);
 app.use("/api/v1/documents", documentRoutes);
 // Assistant routes
 app.use("/api/v1/assistant", assistantRoutes);
-
-// Voice routes
-app.use("/api/v1/voice", voiceRoutes);
 
 // Conversation routes
 app.use("/api/v1/conversations", conversationRoutes);

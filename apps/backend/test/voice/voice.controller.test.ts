@@ -19,6 +19,7 @@ import {
 } from "../../src/services/voice";
 import { AssistantService } from "../../src/services/assistant/assistant.service";
 import { AssistantResponse } from "../../src/services/assistant/assistant.types";
+import { errorHandler } from "../../src/middleware/error.middleware";
 
 describe("Voice Controller & Transport Layer (Mission 68)", () => {
   function createAssistantServiceMock(defaultText = "BrainOS response.") {
@@ -559,9 +560,8 @@ describe("Voice Controller & Transport Layer (Mission 68)", () => {
   });
 
   describe("Router & Supertest End-to-End Transport", () => {
-    function createTestApp() {
+    function createTestApp(options?: { turnLimit?: string; standardLimit?: string }) {
       const app = express();
-      app.use(express.json());
 
       const testAuthMiddleware = (req: any, res: any, next: any) => {
         const authHeader = req.headers.authorization;
@@ -592,8 +592,15 @@ describe("Voice Controller & Transport Layer (Mission 68)", () => {
       };
 
       const voiceService = createTestVoiceService();
-      const voiceRouter = createVoiceRouter(voiceService, testAuthMiddleware as any);
+      const voiceRouter = createVoiceRouter(voiceService, testAuthMiddleware as any, options);
       app.use("/api/v1/voice", voiceRouter);
+      app.use(express.json());
+
+      app.post("/api/v1/non-voice", (req, res) => {
+        res.status(200).json({ success: true, size: JSON.stringify(req.body).length });
+      });
+
+      app.use(errorHandler);
 
       return { app, voiceService };
     }
@@ -682,6 +689,126 @@ describe("Voice Controller & Transport Layer (Mission 68)", () => {
 
       expect(bobRes.status).toBe(404);
       expect(bobRes.body.error.code).toBe("SESSION_NOT_FOUND");
+    });
+
+    it("accepts a ~147 KB base64 audio payload on authenticated POST /turn", async () => {
+      const { app } = createTestApp();
+
+      // 110 KB raw bytes -> ~147 KB base64 string
+      const audioBuffer = Buffer.alloc(110 * 1024, 0x41);
+      const largeAudioBase64 = audioBuffer.toString("base64");
+      expect(largeAudioBase64.length).toBeGreaterThan(140 * 1024);
+
+      const turnRes = await request(app)
+        .post("/api/v1/voice/turn")
+        .set("Authorization", "Bearer user-token")
+        .send({
+          audio: {
+            data: largeAudioBase64,
+            mimeType: "audio/webm",
+          },
+          synthesizeSpeech: true,
+        });
+
+      expect(turnRes.status).toBe(200);
+      expect(turnRes.body.success).toBe(true);
+      expect(turnRes.body.data.transcript).toBeDefined();
+    });
+
+    it("accepts a ~147 KB base64 audio payload on authenticated POST /turn/stream", async () => {
+      const { app } = createTestApp();
+
+      const audioBuffer = Buffer.alloc(110 * 1024, 0x41);
+      const largeAudioBase64 = audioBuffer.toString("base64");
+
+      const streamRes = await request(app)
+        .post("/api/v1/voice/turn/stream")
+        .set("Authorization", "Bearer user-token")
+        .send({
+          audio: {
+            data: largeAudioBase64,
+            mimeType: "audio/webm",
+          },
+          synthesizeSpeech: true,
+        });
+
+      expect(streamRes.status).toBe(200);
+      expect(streamRes.headers["content-type"]).toContain("text/event-stream");
+    });
+
+    it("rejects unauthenticated large payloads with 401 before body parsing", async () => {
+      const { app } = createTestApp();
+
+      const audioBuffer = Buffer.alloc(110 * 1024, 0x41);
+      const largeAudioBase64 = audioBuffer.toString("base64");
+
+      const res = await request(app)
+        .post("/api/v1/voice/turn")
+        .send({
+          audio: {
+            data: largeAudioBase64,
+            mimeType: "audio/webm",
+          },
+        });
+
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe("UNAUTHORIZED");
+    });
+
+    it("enforces 100 KB limit on voice sessions endpoint", async () => {
+      const { app } = createTestApp();
+
+      // Payload > 100 KB sent to /sessions
+      const largeString = "a".repeat(110 * 1024);
+
+      const res = await request(app)
+        .post("/api/v1/voice/sessions")
+        .set("Authorization", "Bearer user-token")
+        .send({ conversationId: largeString });
+
+      expect(res.status).toBe(413);
+      expect(res.body.error.code).toBe("PAYLOAD_TOO_LARGE");
+    });
+
+    it("enforces 100 KB limit on non-voice APIs while allowing normal payloads", async () => {
+      const { app } = createTestApp();
+
+      // 1. Normal payload (< 100 KB) succeeds
+      const normalRes = await request(app)
+        .post("/api/v1/non-voice")
+        .send({ message: "hello world" });
+
+      expect(normalRes.status).toBe(200);
+      expect(normalRes.body.success).toBe(true);
+
+      // 2. Large payload (> 100 KB) rejected with 413
+      const largePayload = { data: "x".repeat(110 * 1024) };
+      const largeRes = await request(app)
+        .post("/api/v1/non-voice")
+        .send(largePayload);
+
+      expect(largeRes.status).toBe(413);
+      expect(largeRes.body.error.code).toBe("PAYLOAD_TOO_LARGE");
+    });
+
+    it("rejects voice turn payloads exceeding the configured turn limit", async () => {
+      // Configure a small 200kb limit to verify upper bound rejection
+      const { app } = createTestApp({ turnLimit: "200kb" });
+
+      const excessivePayload = Buffer.alloc(250 * 1024, 0x41).toString("base64");
+
+      const res = await request(app)
+        .post("/api/v1/voice/turn")
+        .set("Authorization", "Bearer user-token")
+        .send({
+          audio: {
+            data: excessivePayload,
+            mimeType: "audio/webm",
+          },
+        });
+
+      expect(res.status).toBe(413);
+      expect(res.body.error.code).toBe("PAYLOAD_TOO_LARGE");
     });
   });
 });
